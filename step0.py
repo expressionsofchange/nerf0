@@ -1,3 +1,4 @@
+# coding=utf-8
 from hashlib import sha256
 from binascii import hexlify, unhexlify
 
@@ -50,7 +51,20 @@ class TreeNode(object):
         self.children = children
 
     def __repr__(self):
-        return "(" + ", ".join(repr(c) for c in self.children) + ")"
+        return self.pp_flat()
+
+    def pp_flat(self):
+        return "(" + " ".join(c.pp_flat() for c in self.children) + ")"
+
+    def pp_2(self, indentation):
+        if len(self.children) <= 2:
+            return u"(" + u" ".join(repr(c) for c in self.children) + u")"
+
+        my_arg_0 = u"(" + self.children[0].pp_flat()  # ...
+        next_indentation = indentation + len(my_arg_0) + len(u" ")
+
+        return (my_arg_0 + u" " + self.children[1].pp_2(next_indentation) + u"\n" +
+                u"\n".join((u" " * next_indentation) + c.pp_2(next_indentation) for c in self.children[2:]) + u")")
 
     def as_bytes(self):
         return TREE_NODE + to_vlq(len(self.children)) + b''.join([c.to_bytes() for c in self.children])
@@ -64,9 +78,51 @@ class TreeText(object):
     def __repr__(self):
         return self.unicode_.encode("utf-8")
 
+    def pp_flat(self):
+        return self.unicode_
+
+    def pp_2(self, indentation):
+        return self.unicode_
+
     def as_bytes(self):
         utf8 = self.unicode_.encode('utf-8')
         return TREE_TEXT + to_vlq(len(utf8)) + utf8
+
+
+pp_test = TreeNode([
+    TreeText("if"),
+    TreeNode([
+        TreeText("="),
+        TreeText('1'),
+        TreeText('2'),
+    ]),
+    TreeNode([
+        TreeNode([
+            TreeText("+"),
+            TreeText('23'),
+            TreeText("34"),
+        ]),
+        TreeText('1'),
+        TreeNode([
+            TreeText("+"),
+            TreeText(u'uro sign (€) is the cu'),
+            TreeText("14"),
+        ]),
+        TreeText("foo"),
+    ]),
+    TreeNode([
+        TreeText("list"),
+        TreeText('3'),
+        TreeNode([
+            TreeText("+"),
+            TreeText('7'),
+            TreeText("8"),
+        ]),
+        TreeText("bar"),
+    ]),
+])
+
+print pp_test.__repr__()
 
 
 # ## Binary encoding of nouts
