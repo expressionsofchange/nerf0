@@ -47,7 +47,10 @@ class Hash(object):
 
 class TreeNode(object):
 
-    def __init__(self, children):
+    def __init__(self, children, histories=None):
+        if histories is None:
+            histories = []  # hack to keep the pp-code around for a bit
+        self.histories = histories
         self.children = children
 
     def __repr__(self):
@@ -178,7 +181,7 @@ class BecomeNode(object):
         return NOTE_NODE_BECOME
 
     def apply_(self, structure):
-        return TreeNode([])
+        return TreeNode([], [])
 
     @staticmethod
     def from_stream(byte_stream):
@@ -196,9 +199,13 @@ class Insert(object):
         return "(INSERT " + repr(self.index) + " " + repr(self.nout_hash) + ")"
 
     def apply_(self, structure):
+        h = structure.histories[:]
+        h.insert(self.index, self.nout_hash)
+
         l = structure.children[:]
         l.insert(self.index, play(possible_timelines.get(self.nout_hash)))
-        return TreeNode(l)
+
+        return TreeNode(l, h)
 
     def as_bytes(self):
         return NOTE_NODE_INSERT + to_vlq(self.index) + self.nout_hash.as_bytes()
@@ -218,9 +225,12 @@ class Delete(object):
         return "(DELETE " + repr(self.index) + ")"
 
     def apply_(self, structure):
+        h = structure.histories[:]
+        del h[self.index]
+
         l = structure.children[:]
-        l.remove(self.index)
-        return TreeNode(l)
+        del l[self.index]
+        return TreeNode(l, h)
 
     def as_bytes(self):
         return NOTE_NODE_DELETE + to_vlq(self.index)
@@ -241,9 +251,12 @@ class Replace(object):
         return "(REPLACE " + repr(self.index) + " " + repr(self.nout_hash) + ")"
 
     def apply_(self, structure):
+        h = structure.histories[:]
+        h[self.index] = self.nout_hash
+
         l = structure.children[:]
         l[self.index] = play(possible_timelines.get(self.nout_hash))
-        return TreeNode(l)
+        return TreeNode(l, h)
 
     def as_bytes(self):
         return NOTE_NODE_REPLACE + to_vlq(self.index) + self.nout_hash.as_bytes()
@@ -303,6 +316,8 @@ class HashStore(object):
         return hash_
 
     def get(self, hash_):
+        if hash_.as_bytes() not in self.d:
+            raise KeyError(repr(hash_))
         return self.parser(iter(self.d[hash_.as_bytes()]))
 
     def guess(self, human_readable_hash):
@@ -314,7 +329,6 @@ class HashStore(object):
 
 
 def play(edge_nout):
-
     if edge_nout == NoutBegin():
         # Does it make sense to allow for the "playing" of "begin only"?
         # Only if you think "nothing" is a thing; let's build a version which doesn't do that first.
@@ -332,28 +346,184 @@ def play(edge_nout):
 
 
 possible_timelines = HashStore(parse_nout)
-actual_timeline = []
+
+
+def edit_text(text_node):
+    print text_node.unicode_
+    print '=' * 80
+    text = unicode(raw_input(">>> "), 'utf-8')
+
+    # In the most basic version of the editor text has no history, which is why the editing of text spawns a new
+    # (extremely brief) history
+    # THE ABOVE IS A LIE
+    # we could just as well choose to have history (just a history of full replaces) at the level of the text nodes
+    # I have chosen against it for now, but we can always do it
+    begin = imagine(NoutBegin())
+    return imagine(NoutBlock(TextBecome(text), begin))
+
+
+def edit_node(possible_timelines, present_nout):
+    original_present_nout = present_nout
+
+    while True:
+        present_tree = play(possible_timelines.get(present_nout))
+        print present_tree.pp_2(0)
+        print '=' * 80
+
+        choice = None
+        while choice not in ['x', 'w', 'e', 'd', 'i', 'a', 's', '>', '<']:
+            # DONE:
+            # print "[E]dit"
+            # print "[D]elete"
+            # print "[I]nsert"
+            # print "e[X]it without saving"
+            # print "Exit and save (W)"
+
+            # UNDO?
+            # Save w/o exit?
+            # Reload? (i.e. full undo?)
+
+            # Simply "Add"
+            # Create wrapping node
+            # Collapse to index
+
+            choice = getch()
+
+        if choice in 'xw':
+            if choice == 'x':
+                return original_present_nout
+            return present_nout
+
+        if choice == 'a':  # append node
+            begin = imagine(NoutBegin())  # meh... this recurring imagining of begin is stupid; let's make it global
+            inserted_nout = imagine(NoutBlock(BecomeNode(), begin))
+            present_nout = imagine(NoutBlock(Insert(len(present_tree.children), inserted_nout), present_nout))
+
+        if choice == 's':  # append text
+            text = unicode(raw_input(">>> "), 'utf-8')
+            begin = imagine(NoutBegin())  # meh... this recurring imagining of begin is stupid; let's make it global
+            inserted_nout = imagine(NoutBlock(TextBecome(text), begin))
+            present_nout = imagine(NoutBlock(Insert(len(present_tree.children), inserted_nout), present_nout))
+
+        if choice == '>':  # surround yourself with a new node
+            begin = imagine(NoutBegin())  # meh... this recurring imagining of begin is stupid; let's make it global
+            wrapping_nout = imagine(NoutBlock(BecomeNode(), begin))
+            present_nout = imagine(NoutBlock(Insert(0, present_nout), wrapping_nout))
+
+        # Note (TODO): edit & delete presume an existing node; insertion can happen at the end too.
+        # i.e. check indexes
+        if choice in 'edi':
+            index = int(raw_input("Index>>> "))
+
+        # I am not sure yet on how to model the opposite
+        # WIP
+        if choice == '<':  # surround yourself with a new node
+            begin = imagine(NoutBegin())  # meh... this recurring imagining of begin is stupid; let's make it global
+            wrapping_nout = imagine(NoutBlock(BecomeNode(), begin))
+            present_nout = imagine(NoutBlock(Insert(0, present_nout), wrapping_nout))
+
+        if choice == 'e':
+            # Where do we distinguish the type? perhaps actually here, based on what we see.
+            subject = present_tree.children[index]
+
+            if isinstance(subject, TreeNode):
+                old_nout = present_tree.histories[index]
+                new_nout = edit_node(possible_timelines, old_nout)
+
+                if new_nout != old_nout:
+                    present_nout = imagine(NoutBlock(Replace(index, new_nout), present_nout))
+
+            else:
+                present_nout = imagine(NoutBlock(Replace(index, edit_text(subject)), present_nout))
+
+        if choice == 'i':
+            type_choice = None
+            while type_choice not in ['n', 't']:
+                print "Choose type (n/t)"
+                type_choice = getch()
+
+            if type_choice == 't':
+                text = unicode(raw_input(">>> "), 'utf-8')
+                begin = imagine(NoutBegin())  # meh... this recurring imagining of begin is stupid; let's make it global
+                inserted_nout = imagine(NoutBlock(TextBecome(text), begin))
+
+            else:  # type_choice == 'n'
+                begin = imagine(NoutBegin())  # meh... this recurring imagining of begin is stupid; let's make it global
+                inserted_nout = imagine(NoutBlock(BecomeNode(), begin))
+
+            present_nout = imagine(NoutBlock(Insert(index, inserted_nout), present_nout))
+
+        if choice == 'd':
+            present_nout = imagine(NoutBlock(Delete(index), present_nout))
 
 
 def imagine(nout):
     return possible_timelines.add(nout.as_bytes())
 
 
-# Here is some example usage:
-begin = imagine(NoutBegin())
-new_node = imagine(NoutBlock(BecomeNode(), begin))
+def initialize():
+    # Here is some example usage:
+    begin = imagine(NoutBegin())
+    root_nout = imagine(NoutBlock(BecomeNode(), begin))
 
-aap = imagine(NoutBlock(TextBecome(u'aap'), begin))
-noot = imagine(NoutBlock(TextBecome(u'noot'), begin))
-
-aap_in_tree = imagine(NoutBlock(Insert(0, aap), new_node))
-shifted_down = imagine(NoutBlock(Replace(0, aap_in_tree), aap_in_tree))
-
-print play(possible_timelines.get(aap_in_tree))
-print play(possible_timelines.get(shifted_down))
-
-# that_happend v.s. _a particular history_
-# Stack-like behavior that exploits that difference
+    # TODO: 'save' at the highest level must be implemented here.
+    # TODO think about "save without exit"
+    edit_node(possible_timelines, root_nout)
 
 
-# Let's get to write-to-file; read from file as required on startup
+# Possibility & Actuality data structures
+
+POSSIBILITY = '\x00'
+ACTUALITY = '\x01'
+
+
+class Possibility(object):
+    def __init__(self, nout):
+        self.nout = nout
+
+    def as_bytes(self):
+        return POSSIBILITY + self.nout.as_bytes()
+
+    @staticmethod
+    def from_stream(byte_stream):
+        return Possibility(parse_nout(byte_stream))
+
+
+class Actuality(object):
+    def __init__(self, nout):
+        self.nout = nout
+
+    def as_bytes(self):
+        return ACTUALITY + self.nout.as_bytes()
+
+    @staticmethod
+    def from_stream(byte_stream):
+        return Actuality(parse_nout(byte_stream))
+
+
+# http://stackoverflow.com/a/21659588/339144
+def _find_getch():
+    try:
+        import termios
+    except ImportError:
+        # Non-POSIX. Return msvcrt's (Windows') getch.
+        import msvcrt
+        return msvcrt.getch
+
+    # POSIX system. Create and return a getch that manipulates the tty.
+    import sys
+    import tty
+
+    def _getch():
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            ch = sys.stdin.read(1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        return ch
+
+    return _getch
+
+getch = _find_getch()
