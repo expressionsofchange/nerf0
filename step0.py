@@ -10,12 +10,13 @@ TREE_TEXT = b'\x01'
 NOUT_BEGIN = b'\x00'
 NOUT_BLOCK = b'\x01'
 
-NOTE_INSERT = b'\x00'
-NOTE_DELETE = b'\x01'
-NOTE_REPLACE = b'\x02'
+NOTE_NODE_BECOME = b'\x04'
+NOTE_NODE_INSERT = b'\x00'
+NOTE_NODE_DELETE = b'\x01'
+NOTE_NODE_REPLACE = b'\x02'
 # NOTE_COMBINE = b'\x03'
 
-NOTE_TEXT_CREATE = b'\x03'
+NOTE_TEXT_BECOME = b'\x03'
 
 
 def rfs(byte_stream, n):
@@ -43,19 +44,25 @@ class Hash(object):
         return Hash(rfs(byte_stream, 32))
 
 
-def TreeNode(object):
+class TreeNode(object):
 
     def __init__(self, children):
         self.children = children
+
+    def __repr__(self):
+        return "(" + ", ".join(repr(c) for c in self.children) + ")"
 
     def as_bytes(self):
         return TREE_NODE + to_vlq(len(self.children)) + b''.join([c.to_bytes() for c in self.children])
 
 
-def TreeText(text):
+class TreeText(object):
 
     def __init__(self, unicode_):
         self.unicode_ = unicode_
+
+    def __repr__(self):
+        return self.unicode_.encode("utf-8")
 
     def as_bytes(self):
         utf8 = self.unicode_.encode('utf-8')
@@ -73,6 +80,9 @@ class NoutBegin(object):
     @staticmethod
     def from_stream(byte_stream):
         return NoutBegin()
+
+    def __eq__(self, other):
+        return isinstance(other, NoutBegin)
 
 
 class NoutBlock(object):
@@ -104,6 +114,21 @@ def parse_nout(byte_stream):
 # (As opposed to Text-related ones)
 
 
+class BecomeNode(object):
+    def __repr__(self):
+        return "(NODE)"
+
+    def as_bytes(self):
+        return NOTE_NODE_BECOME
+
+    def apply_(self, structure):
+        return TreeNode([])
+
+    @staticmethod
+    def from_stream(byte_stream):
+        return BecomeNode()
+
+
 class Insert(object):
     def __init__(self, index, nout_hash):
         # index :: index to be inserted at in the list of children
@@ -114,8 +139,13 @@ class Insert(object):
     def __repr__(self):
         return "(INSERT " + repr(self.index) + " " + repr(self.nout_hash) + ")"
 
+    def apply_(self, structure):
+        l = structure.children[:]
+        l.insert(self.index, play(possible_timelines.get(self.nout_hash)))
+        return TreeNode(l)
+
     def as_bytes(self):
-        return NOTE_INSERT + to_vlq(self.index) + self.nout_hash.as_bytes()
+        return NOTE_NODE_INSERT + to_vlq(self.index) + self.nout_hash.as_bytes()
 
     @staticmethod
     def from_stream(byte_stream):
@@ -131,8 +161,13 @@ class Delete(object):
     def __repr__(self):
         return "(DELETE " + repr(self.index) + ")"
 
+    def apply_(self, structure):
+        l = structure.children[:]
+        l.remove(self.index)
+        return TreeNode(l)
+
     def as_bytes(self):
-        return NOTE_DELETE + to_vlq(self.index)
+        return NOTE_NODE_DELETE + to_vlq(self.index)
 
     @staticmethod
     def from_stream(byte_stream):
@@ -149,8 +184,13 @@ class Replace(object):
     def __repr__(self):
         return "(REPLACE " + repr(self.index) + " " + repr(self.nout_hash) + ")"
 
+    def apply_(self, structure):
+        l = structure.children[:]
+        l[self.index] = play(possible_timelines.get(self.nout_hash))
+        return TreeNode(l)
+
     def as_bytes(self):
-        return NOTE_REPLACE + to_vlq(self.index) + self.nout_hash.as_bytes()
+        return NOTE_NODE_REPLACE + to_vlq(self.index) + self.nout_hash.as_bytes()
 
     @staticmethod
     def from_stream(byte_stream):
@@ -158,31 +198,35 @@ class Replace(object):
 
 
 # Text-related notes: I'm starting with just one
-class TextCreate(object):
+class TextBecome(object):
     def __init__(self, unicode_):
         self.unicode_ = unicode_
 
     def __repr__(self):
         return "(TEXT " + self.unicode_.encode('utf-8') + ")"
 
+    def apply_(self, structure):
+        return TreeText(self.unicode_)
+
     def as_bytes(self):
         utf8 = self.unicode_.encode('utf-8')
-        return NOTE_TEXT_CREATE + to_vlq(len(utf8)) + utf8
+        return NOTE_TEXT_BECOME + to_vlq(len(utf8)) + utf8
 
     @staticmethod
     def from_stream(byte_stream):
         length = from_vlq(byte_stream)
         utf8 = rfs(byte_stream, length)
-        return TextCreate(unicode(utf8, 'utf-8'))
+        return TextBecome(unicode(utf8, 'utf-8'))
 
 
 def parse_note(byte_stream):
     byte0 = byte_stream.next()
     return {
-        NOTE_INSERT: Insert,
-        NOTE_DELETE: Delete,
-        NOTE_REPLACE: Replace,
-        NOTE_TEXT_CREATE: TextCreate,
+        NOTE_NODE_BECOME: BecomeNode,
+        NOTE_NODE_INSERT: Insert,
+        NOTE_NODE_DELETE: Delete,
+        NOTE_NODE_REPLACE: Replace,
+        NOTE_TEXT_BECOME: TextBecome,
     }[byte0].from_stream(byte_stream)
 
 
@@ -213,7 +257,24 @@ class HashStore(object):
         raise KeyError()
 
 
-# Here is some example usage:
+def play(edge_nout):
+
+    if edge_nout == NoutBegin():
+        # Does it make sense to allow for the "playing" of "begin only"?
+        # Only if you think "nothing" is a thing; let's build a version which doesn't do that first.
+        raise Exception("In this version, I don't think playing empty history makes sense")
+
+    last_nout = possible_timelines.get(edge_nout.previous_hash)
+    if last_nout == NoutBegin():
+        tree_before_edge = None  # in theory: ignored, because the first note should always be a "Become" note
+    else:
+        tree_before_edge = play(last_nout)
+
+    note = edge_nout.note
+    result = note.apply_(tree_before_edge)
+    return result
+
+
 possible_timelines = HashStore(parse_nout)
 actual_timeline = []
 
@@ -221,18 +282,19 @@ actual_timeline = []
 def imagine(nout):
     return possible_timelines.add(nout.as_bytes())
 
-hash_0 = imagine(NoutBegin())
 
-hash_1 = imagine(NoutBlock(Insert(0, hash_0), hash_0))
-hash_2 = imagine(NoutBlock(Replace(0, hash_1), hash_1))
+# Here is some example usage:
+begin = imagine(NoutBegin())
+new_node = imagine(NoutBlock(BecomeNode(), begin))
 
-print possible_timelines
+aap = imagine(NoutBlock(TextBecome(u'aap'), begin))
+noot = imagine(NoutBlock(TextBecome(u'noot'), begin))
 
-def play(timeline):
-    What's the 'meaning of beginning?!
+aap_in_tree = imagine(NoutBlock(Insert(0, aap), new_node))
+shifted_down = imagine(NoutBlock(Replace(0, aap_in_tree), aap_in_tree))
 
-# Actually applying the changes on some structure :-D
-
+print play(possible_timelines.get(aap_in_tree))
+print play(possible_timelines.get(shifted_down))
 
 # that_happend v.s. _a particular history_
 # Stack-like behavior that exploits that difference
