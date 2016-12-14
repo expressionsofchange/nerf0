@@ -5,6 +5,8 @@ from os.path import isfile
 
 from vlq import to_vlq, from_vlq
 
+bytes_iterator = type(iter(bytes()))
+
 # Type constructor codes
 TREE_NODE = 0
 TREE_TEXT = 1
@@ -21,6 +23,11 @@ NOTE_NODE_REPLACE = 2
 NOTE_TEXT_BECOME = 3
 
 
+def pmts(v, type_):
+    """Poor man's type system"""
+    assert isinstance(v, type_), "Expected value of type '%s' but is type '%s'" % (type_.__name__, type(v).__name__)
+
+
 def rfs(byte_stream, n):
     # read n bytes from stream
     return bytes((next(byte_stream) for i in range(n)))
@@ -28,6 +35,11 @@ def rfs(byte_stream, n):
 
 class Hash(object):
     def __init__(self, hash_bytes):
+        pmts(hash_bytes, bytes)
+
+        # i.e. if you want to construct a hash _for_ a bunch of bytes, use 'for_bytes'
+        assert len(hash_bytes) == 32, "Direct construction of Hash objects takes a 32-byte hash"
+
         self.hash_bytes = hash_bytes
 
     def __repr__(self):
@@ -37,12 +49,15 @@ class Hash(object):
         return self.hash_bytes
 
     @staticmethod
-    def from_bytes(bytes_):
+    def for_bytes(bytes_):
+        pmts(bytes_, bytes)
         hash_ = sha256(bytes_).digest()
         return Hash(hash_)
 
     @staticmethod
     def from_stream(byte_stream):
+        """_reads_ (i.e. picks exactly 32 chars) from the stream"""
+        pmts(byte_stream, bytes_iterator)
         return Hash(rfs(byte_stream, 32))
 
 
@@ -103,6 +118,7 @@ class TreeNode(object):
 class TreeText(object):
 
     def __init__(self, unicode_):
+        pmts(unicode_, str)
         self.unicode_ = unicode_
 
     def __repr__(self):
@@ -161,8 +177,12 @@ pp_test = TreeNode([
 print(pp_test.__repr__())
 
 
+class Nout(object):
+    pass
+
+
 # ## Binary encoding of nouts
-class NoutBegin(object):
+class NoutBegin(Nout):
     def __repr__(self):
         return "(BEGIN)"
 
@@ -177,8 +197,11 @@ class NoutBegin(object):
         return isinstance(other, NoutBegin)
 
 
-class NoutBlock(object):
+class NoutBlock(Nout):
     def __init__(self, note, previous_hash):
+        pmts(note, Note)
+        pmts(previous_hash, Hash)
+
         self.note = note
         self.previous_hash = previous_hash
 
@@ -206,7 +229,11 @@ def parse_nout(byte_stream):
 # (As opposed to Text-related ones)
 
 
-class BecomeNode(object):
+class Note(object):
+    pass
+
+
+class BecomeNode(Note):
     def __repr__(self):
         return "(NODE)"
 
@@ -221,10 +248,15 @@ class BecomeNode(object):
         return BecomeNode()
 
 
-class Insert(object):
+class Insert(Note):
     def __init__(self, index, nout_hash):
-        # index :: index to be inserted at in the list of children
-        # nout_hash: NoutHash of the history to be inserted
+        """index : index to be inserted at in the list of children
+        nout_hash: Hash pointing to a Nout of the history to be inserted"""
+
+        pmts(index, int)
+        pmts(nout_hash, Hash)
+        # better yet would be: a pmts that actually makes sure whether the given hash actually points at a Nout...
+
         self.index = index
         self.nout_hash = nout_hash
 
@@ -249,9 +281,10 @@ class Insert(object):
         return Insert(from_vlq(byte_stream), Hash.from_stream(byte_stream))
 
 
-class Delete(object):
+class Delete(Note):
     def __init__(self, index):
-        # index :: VLQ (index to be deleted)
+        """index :: index to be deleted"""
+        pmts(index, int)
         self.index = index
 
     def __repr__(self):
@@ -273,10 +306,15 @@ class Delete(object):
         return Delete(from_vlq(byte_stream))
 
 
-class Replace(object):
+class Replace(Note):
     def __init__(self, index, nout_hash):
-        # index :: VLQ (index to be inserted at in the list of children;
-        # nout_hash: NoutHash of the history to be inserted
+        """index : index to be inserted at in the list of children
+        nout_hash: Hash pointing to a Nout of the history to be inserted"""
+
+        pmts(index, int)
+        pmts(nout_hash, Hash)
+        # better yet would be: a pmts that actually makes sure whether the given hash actually points at a Nout...
+
         self.index = index
         self.nout_hash = nout_hash
 
@@ -300,8 +338,9 @@ class Replace(object):
 
 
 # Text-related notes: I'm starting with just one
-class TextBecome(object):
+class TextBecome(Note):
     def __init__(self, unicode_):
+        pmts(unicode_, str)
         self.unicode_ = unicode_
 
     def __repr__(self):
@@ -345,7 +384,7 @@ class HashStore(object):
             )
 
     def add(self, bytes_):
-        hash_ = Hash.from_bytes(bytes_)
+        hash_ = Hash.for_bytes(bytes_)
         self.d[hash_.as_bytes()] = bytes_
         if self.write_to is not None:
             # Yuk:
@@ -541,6 +580,7 @@ ACTUALITY = 1
 
 class Possibility(object):
     def __init__(self, nout):
+        pmts(nout, Nout)
         self.nout = nout
 
     def as_bytes(self):
@@ -553,6 +593,8 @@ class Possibility(object):
 
 class Actuality(object):
     def __init__(self, nout_hash):
+        pmts(nout_hash, Hash)
+        # better yet would be: a pmts that actually makes sure whether the given hash actually points at a Nout...
         self.nout_hash = nout_hash
 
     def as_bytes(self):
