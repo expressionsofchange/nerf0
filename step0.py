@@ -412,15 +412,15 @@ def edit_node(possible_timelines, present_nout):
 
         # Note (TODO): edit & delete presume an existing node; insertion can happen at the end too.
         # i.e. check indexes
-        if choice in 'edi':
+        if choice in 'edi<':
             index = int(raw_input("Index>>> "))
 
-        # I am not sure yet on how to model the opposite
-        # WIP
-        if choice == '<':  # surround yourself with a new node
-            begin = imagine(NoutBegin())  # meh... this recurring imagining of begin is stupid; let's make it global
-            wrapping_nout = imagine(NoutBlock(BecomeNode(), begin))
-            present_nout = imagine(NoutBlock(Insert(0, present_nout), wrapping_nout))
+        if choice == '<':  # remove a node; make it's contents available as _your_ children
+            to_be_removed = present_tree.children[index]
+            for i, (child, child_history) in enumerate(zip(to_be_removed.children, to_be_removed.histories)):
+                present_nout = imagine(NoutBlock(Insert(index + i + 1, child_history), present_nout))
+
+            present_nout = imagine(NoutBlock(Delete(index), present_nout))
 
         if choice == 'e':
             # Where do we distinguish the type? perhaps actually here, based on what we see.
