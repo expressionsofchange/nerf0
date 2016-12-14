@@ -92,7 +92,9 @@ class TreeNode(object):
         next_indentation = indentation + 4
 
         return (my_arg_0 + ("\n\n" if len(self.children) > 1 else "") +
-                "\n\n".join((" " * next_indentation) + "[%s] " % (i + 1) + c.pp_todo(next_indentation) for (i, c) in enumerate(self.children[1:])))
+                "\n\n".join(
+                    (" " * next_indentation) + "[%s] " % (i + 1) + c.pp_todo(next_indentation)
+                    for (i, c) in enumerate(self.children[1:])))
 
     def as_bytes(self):
         return bytes([TREE_NODE]) + to_vlq(len(self.children)) + b''.join([c.as_bytes() for c in self.children])
@@ -432,13 +434,15 @@ def edit_node(possible_timelines, present_nout):
         if choice == 'a':  # append node
             begin = imagine(possible_timelines, NoutBegin())  # meh... this recurring imagining of begin is stupid;
             inserted_nout = imagine(possible_timelines, NoutBlock(BecomeNode(), begin))
-            present_nout = imagine(possible_timelines, NoutBlock(Insert(len(present_tree.children), inserted_nout), present_nout))
+            present_nout = imagine(
+                possible_timelines, NoutBlock(Insert(len(present_tree.children), inserted_nout), present_nout))
 
         if choice == 's':  # append text
             text = input(">>> ")
             begin = imagine(possible_timelines, NoutBegin())  # meh... this recurring imagining of begin is stupid;
             inserted_nout = imagine(possible_timelines, NoutBlock(TextBecome(text), begin))
-            present_nout = imagine(possible_timelines, NoutBlock(Insert(len(present_tree.children), inserted_nout), present_nout))
+            present_nout = imagine(
+                possible_timelines, NoutBlock(Insert(len(present_tree.children), inserted_nout), present_nout))
 
         if choice == '>':  # surround yourself with a new node
             begin = imagine(possible_timelines, NoutBegin())  # meh... this recurring imagining of begin is stupid;
@@ -453,7 +457,8 @@ def edit_node(possible_timelines, present_nout):
         if choice == '<':  # remove a node; make it's contents available as _your_ children
             to_be_removed = present_tree.children[index]
             for i, (child, child_history) in enumerate(zip(to_be_removed.children, to_be_removed.histories)):
-                present_nout = imagine(possible_timelines, NoutBlock(Insert(index + i + 1, child_history), present_nout))
+                present_nout = imagine(
+                    possible_timelines, NoutBlock(Insert(index + i + 1, child_history), present_nout))
 
             present_nout = imagine(possible_timelines, NoutBlock(Delete(index), present_nout))
 
@@ -469,7 +474,8 @@ def edit_node(possible_timelines, present_nout):
                     present_nout = imagine(possible_timelines, NoutBlock(Replace(index, new_nout), present_nout))
 
             else:
-                present_nout = imagine(possible_timelines, NoutBlock(Replace(index, edit_text(possible_timelines, subject)), present_nout))
+                present_nout = imagine(
+                    possible_timelines, NoutBlock(Replace(index, edit_text(possible_timelines, subject)), present_nout))
 
         if choice == 'i':
             type_choice = None
