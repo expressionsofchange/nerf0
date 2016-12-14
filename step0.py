@@ -1,6 +1,7 @@
 # coding=utf-8
 from hashlib import sha256
 from binascii import hexlify, unhexlify
+from os.path import isfile
 
 from vlq import to_vlq, from_vlq
 
@@ -70,7 +71,7 @@ class TreeNode(object):
                 u"\n".join((u" " * next_indentation) + c.pp_2(next_indentation) for c in self.children[2:]) + u")")
 
     def as_bytes(self):
-        return TREE_NODE + to_vlq(len(self.children)) + b''.join([c.to_bytes() for c in self.children])
+        return TREE_NODE + to_vlq(len(self.children)) + b''.join([c.as_bytes() for c in self.children])
 
 
 class TreeText(object):
@@ -180,7 +181,7 @@ class BecomeNode(object):
     def as_bytes(self):
         return NOTE_NODE_BECOME
 
-    def apply_(self, structure):
+    def apply_(self, possible_timelines, structure):
         return TreeNode([], [])
 
     @staticmethod
@@ -198,12 +199,12 @@ class Insert(object):
     def __repr__(self):
         return "(INSERT " + repr(self.index) + " " + repr(self.nout_hash) + ")"
 
-    def apply_(self, structure):
+    def apply_(self, possible_timelines, structure):
         h = structure.histories[:]
         h.insert(self.index, self.nout_hash)
 
         l = structure.children[:]
-        l.insert(self.index, play(possible_timelines.get(self.nout_hash)))
+        l.insert(self.index, play(possible_timelines, possible_timelines.get(self.nout_hash)))
 
         return TreeNode(l, h)
 
@@ -224,7 +225,7 @@ class Delete(object):
     def __repr__(self):
         return "(DELETE " + repr(self.index) + ")"
 
-    def apply_(self, structure):
+    def apply_(self, possible_timelines, structure):
         h = structure.histories[:]
         del h[self.index]
 
@@ -250,12 +251,12 @@ class Replace(object):
     def __repr__(self):
         return "(REPLACE " + repr(self.index) + " " + repr(self.nout_hash) + ")"
 
-    def apply_(self, structure):
+    def apply_(self, possible_timelines, structure):
         h = structure.histories[:]
         h[self.index] = self.nout_hash
 
         l = structure.children[:]
-        l[self.index] = play(possible_timelines.get(self.nout_hash))
+        l[self.index] = play(possible_timelines, possible_timelines.get(self.nout_hash))
         return TreeNode(l, h)
 
     def as_bytes(self):
@@ -274,7 +275,7 @@ class TextBecome(object):
     def __repr__(self):
         return "(TEXT " + self.unicode_.encode('utf-8') + ")"
 
-    def apply_(self, structure):
+    def apply_(self, possible_timelines, structure):
         return TreeText(self.unicode_)
 
     def as_bytes(self):
@@ -303,6 +304,7 @@ class HashStore(object):
     def __init__(self, parser):
         self.d = {}
         self.parser = parser
+        self.write_to = None
 
     def __repr__(self):
         return '\n'.join(
@@ -313,6 +315,12 @@ class HashStore(object):
     def add(self, bytes_):
         hash_ = Hash.from_bytes(bytes_)
         self.d[hash_.as_bytes()] = bytes_
+        if self.write_to is not None:
+            # Yuk:
+            # a] the conditional on write-to
+            # b] parsing here... suggests that .add's interface better be the whole object
+            self.write_to.write(Possibility(self.parser(iter((bytes_)))).as_bytes())
+
         return hash_
 
     def get(self, hash_):
@@ -328,7 +336,7 @@ class HashStore(object):
         raise KeyError()
 
 
-def play(edge_nout):
+def play(possible_timelines, edge_nout):
     if edge_nout == NoutBegin():
         # Does it make sense to allow for the "playing" of "begin only"?
         # Only if you think "nothing" is a thing; let's build a version which doesn't do that first.
@@ -338,17 +346,14 @@ def play(edge_nout):
     if last_nout == NoutBegin():
         tree_before_edge = None  # in theory: ignored, because the first note should always be a "Become" note
     else:
-        tree_before_edge = play(last_nout)
+        tree_before_edge = play(possible_timelines, last_nout)
 
     note = edge_nout.note
-    result = note.apply_(tree_before_edge)
+    result = note.apply_(possible_timelines, tree_before_edge)
     return result
 
 
-possible_timelines = HashStore(parse_nout)
-
-
-def edit_text(text_node):
+def edit_text(possible_timelines, text_node):
     print text_node.unicode_
     print '=' * 80
     text = unicode(raw_input(">>> "), 'utf-8')
@@ -358,15 +363,15 @@ def edit_text(text_node):
     # THE ABOVE IS A LIE
     # we could just as well choose to have history (just a history of full replaces) at the level of the text nodes
     # I have chosen against it for now, but we can always do it
-    begin = imagine(NoutBegin())
-    return imagine(NoutBlock(TextBecome(text), begin))
+    begin = imagine(possible_timelines, NoutBegin())
+    return imagine(possible_timelines, NoutBlock(TextBecome(text), begin))
 
 
 def edit_node(possible_timelines, present_nout):
     original_present_nout = present_nout
 
     while True:
-        present_tree = play(possible_timelines.get(present_nout))
+        present_tree = play(possible_timelines, possible_timelines.get(present_nout))
         print present_tree.pp_2(0)
         print '=' * 80
 
@@ -395,20 +400,20 @@ def edit_node(possible_timelines, present_nout):
             return present_nout
 
         if choice == 'a':  # append node
-            begin = imagine(NoutBegin())  # meh... this recurring imagining of begin is stupid; let's make it global
-            inserted_nout = imagine(NoutBlock(BecomeNode(), begin))
-            present_nout = imagine(NoutBlock(Insert(len(present_tree.children), inserted_nout), present_nout))
+            begin = imagine(possible_timelines, NoutBegin())  # meh... this recurring imagining of begin is stupid;
+            inserted_nout = imagine(possible_timelines, NoutBlock(BecomeNode(), begin))
+            present_nout = imagine(possible_timelines, NoutBlock(Insert(len(present_tree.children), inserted_nout), present_nout))
 
         if choice == 's':  # append text
             text = unicode(raw_input(">>> "), 'utf-8')
-            begin = imagine(NoutBegin())  # meh... this recurring imagining of begin is stupid; let's make it global
-            inserted_nout = imagine(NoutBlock(TextBecome(text), begin))
-            present_nout = imagine(NoutBlock(Insert(len(present_tree.children), inserted_nout), present_nout))
+            begin = imagine(possible_timelines, NoutBegin())  # meh... this recurring imagining of begin is stupid;
+            inserted_nout = imagine(possible_timelines, NoutBlock(TextBecome(text), begin))
+            present_nout = imagine(possible_timelines, NoutBlock(Insert(len(present_tree.children), inserted_nout), present_nout))
 
         if choice == '>':  # surround yourself with a new node
-            begin = imagine(NoutBegin())  # meh... this recurring imagining of begin is stupid; let's make it global
-            wrapping_nout = imagine(NoutBlock(BecomeNode(), begin))
-            present_nout = imagine(NoutBlock(Insert(0, present_nout), wrapping_nout))
+            begin = imagine(possible_timelines, NoutBegin())  # meh... this recurring imagining of begin is stupid;
+            wrapping_nout = imagine(possible_timelines, NoutBlock(BecomeNode(), begin))
+            present_nout = imagine(possible_timelines, NoutBlock(Insert(0, present_nout), wrapping_nout))
 
         # Note (TODO): edit & delete presume an existing node; insertion can happen at the end too.
         # i.e. check indexes
@@ -418,9 +423,9 @@ def edit_node(possible_timelines, present_nout):
         if choice == '<':  # remove a node; make it's contents available as _your_ children
             to_be_removed = present_tree.children[index]
             for i, (child, child_history) in enumerate(zip(to_be_removed.children, to_be_removed.histories)):
-                present_nout = imagine(NoutBlock(Insert(index + i + 1, child_history), present_nout))
+                present_nout = imagine(possible_timelines, NoutBlock(Insert(index + i + 1, child_history), present_nout))
 
-            present_nout = imagine(NoutBlock(Delete(index), present_nout))
+            present_nout = imagine(possible_timelines, NoutBlock(Delete(index), present_nout))
 
         if choice == 'e':
             # Where do we distinguish the type? perhaps actually here, based on what we see.
@@ -431,10 +436,10 @@ def edit_node(possible_timelines, present_nout):
                 new_nout = edit_node(possible_timelines, old_nout)
 
                 if new_nout != old_nout:
-                    present_nout = imagine(NoutBlock(Replace(index, new_nout), present_nout))
+                    present_nout = imagine(possible_timelines, NoutBlock(Replace(index, new_nout), present_nout))
 
             else:
-                present_nout = imagine(NoutBlock(Replace(index, edit_text(subject)), present_nout))
+                present_nout = imagine(possible_timelines, NoutBlock(Replace(index, edit_text(possible_timelines, subject)), present_nout))
 
         if choice == 'i':
             type_choice = None
@@ -444,31 +449,52 @@ def edit_node(possible_timelines, present_nout):
 
             if type_choice == 't':
                 text = unicode(raw_input(">>> "), 'utf-8')
-                begin = imagine(NoutBegin())  # meh... this recurring imagining of begin is stupid; let's make it global
-                inserted_nout = imagine(NoutBlock(TextBecome(text), begin))
+                begin = imagine(possible_timelines, NoutBegin())  # meh... this recurring imagining of begin is stupid;
+                inserted_nout = imagine(possible_timelines, NoutBlock(TextBecome(text), begin))
 
             else:  # type_choice == 'n'
-                begin = imagine(NoutBegin())  # meh... this recurring imagining of begin is stupid; let's make it global
-                inserted_nout = imagine(NoutBlock(BecomeNode(), begin))
+                begin = imagine(possible_timelines, NoutBegin())  # meh... this recurring imagining of begin is stupid;
+                inserted_nout = imagine(possible_timelines, NoutBlock(BecomeNode(), begin))
 
-            present_nout = imagine(NoutBlock(Insert(index, inserted_nout), present_nout))
+            present_nout = imagine(possible_timelines, NoutBlock(Insert(index, inserted_nout), present_nout))
 
         if choice == 'd':
-            present_nout = imagine(NoutBlock(Delete(index), present_nout))
+            present_nout = imagine(possible_timelines, NoutBlock(Delete(index), present_nout))
 
 
-def imagine(nout):
+def imagine(possible_timelines, nout):
     return possible_timelines.add(nout.as_bytes())
 
 
-def initialize():
-    # Here is some example usage:
-    begin = imagine(NoutBegin())
-    root_nout = imagine(NoutBlock(BecomeNode(), begin))
+def edit(filename):
+    possible_timelines = HashStore(parse_nout)
 
-    # TODO: 'save' at the highest level must be implemented here.
-    # TODO think about "save without exit"
-    edit_node(possible_timelines, root_nout)
+    def set_current(f, nout):
+        f.write(Actuality(nout).as_bytes())
+
+    if isfile(filename):
+        byte_stream = iter(open(filename, 'r').read())
+        for pos_act in parse_pos_acts(byte_stream):
+            if isinstance(pos_act, Possibility):
+                possible_timelines.add(pos_act.nout.as_bytes())
+            else:  # Actuality
+                # this can be depended on to happen at least once ... if the file is correct
+                present_nout = pos_act.nout_hash
+
+    else:
+        with open(filename, 'wb') as initialize_f:
+            possible_timelines.write_to = initialize_f
+
+            begin = imagine(possible_timelines, NoutBegin())
+            present_nout = imagine(possible_timelines, NoutBlock(BecomeNode(), begin))
+
+            set_current(initialize_f, present_nout)  # write the 'new file
+
+    with open(filename, 'ab') as f:
+        possible_timelines.write_to = f
+        new_nout = edit_node(possible_timelines, present_nout)
+        if new_nout != present_nout:
+            set_current(f, new_nout)
 
 
 # Possibility & Actuality data structures
@@ -490,17 +516,31 @@ class Possibility(object):
 
 
 class Actuality(object):
-    def __init__(self, nout):
-        self.nout = nout
+    def __init__(self, nout_hash):
+        self.nout_hash = nout_hash
 
     def as_bytes(self):
-        return ACTUALITY + self.nout.as_bytes()
+        return ACTUALITY + self.nout_hash.as_bytes()
 
     @staticmethod
     def from_stream(byte_stream):
-        return Actuality(parse_nout(byte_stream))
+        return Actuality(Hash.from_stream(byte_stream))
 
 
+def parse_pos_act(byte_stream):
+    byte0 = byte_stream.next()
+    return {
+        ACTUALITY: Actuality,
+        POSSIBILITY: Possibility,
+    }[byte0].from_stream(byte_stream)
+
+
+def parse_pos_acts(byte_stream):
+    while True:
+        yield parse_pos_act(byte_stream)  # Transparently yields the StopIteration at the lower level
+
+
+# The abilitiy to read a single character
 # http://stackoverflow.com/a/21659588/339144
 def _find_getch():
     try:
