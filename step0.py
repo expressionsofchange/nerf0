@@ -442,16 +442,14 @@ def edit_text(possible_timelines, text_node):
     return possible_timelines.add(NoutBlock(TextBecome(text), begin))
 
 
-def edit_node(possible_timelines, present_nout):
-    original_present_nout = present_nout
-
+def edit_node(possible_timelines, present_nout, autosave):
     while True:
         present_tree = play(possible_timelines, possible_timelines.get(present_nout))
         print(present_tree.pp_todo_numbered(0))
         print('=' * 80)
 
         choice = None
-        while choice not in ['x', 'w', 'e', 'd', 'i', 'a', 's', '>', '<']:
+        while choice not in ['x', 'w', 'W', 'e', 'E', 'd', 'i', 'a', 's', '>', '<']:
             # DONE:
             # print "[E]dit"
             # print "[D]elete"
@@ -469,21 +467,27 @@ def edit_node(possible_timelines, present_nout):
 
             choice = getch()
 
-        if choice in 'xw':
-            if choice == 'x':
-                return original_present_nout
-            return present_nout
+        if choice in 'xwW':
+            if choice == 'x':  # Exit w/out saving
+                raise StopIteration
+            if choice == 'w':  # write and continue
+                yield present_nout
+            if choice == 'W':
+                yield present_nout
+                raise StopIteration
 
         if choice == 'a':  # append node
             begin = possible_timelines.add(NoutBegin())
             inserted_nout = possible_timelines.add(NoutBlock(BecomeNode(), begin))
-            present_nout = possible_timelines.add(NoutBlock(Insert(len(present_tree.children), inserted_nout), present_nout))
+            present_nout = possible_timelines.add(
+                NoutBlock(Insert(len(present_tree.children), inserted_nout), present_nout))
 
         if choice == 's':  # append text
             text = input(">>> ")
             begin = possible_timelines.add(NoutBegin())
             inserted_nout = possible_timelines.add(NoutBlock(TextBecome(text), begin))
-            present_nout = possible_timelines.add(NoutBlock(Insert(len(present_tree.children), inserted_nout), present_nout))
+            present_nout = possible_timelines.add(
+                NoutBlock(Insert(len(present_tree.children), inserted_nout), present_nout))
 
         if choice == '>':  # surround yourself with a new node
             begin = possible_timelines.add(NoutBegin())
@@ -492,7 +496,7 @@ def edit_node(possible_timelines, present_nout):
 
         # Note (TODO): edit & delete presume an existing node; insertion can happen at the end too.
         # i.e. check indexes
-        if choice in 'edi<':
+        if choice in 'eEdi<':
             index = int(input("Index>>> "))
 
         if choice == '<':  # remove a node; make it's contents available as _your_ children
@@ -502,19 +506,26 @@ def edit_node(possible_timelines, present_nout):
 
             present_nout = possible_timelines.add(NoutBlock(Delete(index), present_nout))
 
-        if choice == 'e':
+        if choice in 'eE':
             # Where do we distinguish the type? perhaps actually here, based on what we see.
             subject = present_tree.children[index]
 
             if isinstance(subject, TreeNode):
                 old_nout = present_tree.histories[index]
-                new_nout = edit_node(possible_timelines, old_nout)
-
-                if new_nout != old_nout:
+                for new_nout in edit_node(possible_timelines, old_nout, autosave=choice == 'E'):
                     present_nout = possible_timelines.add(NoutBlock(Replace(index, new_nout), present_nout))
+                    # the question now becomes: should we yield or not?
+                    # ok... so?
+                    # there is no direct equivalent in this in the pre-historic world.
+                    # the simplest path forward is: make it a choice
+                    # it now is "autosave when the edited object gets presented with a save on a lower level"
+                    # whether that's actually what we want in practice: I don't know yet
+                    if autosave:
+                        yield present_nout
 
             else:
-                present_nout = possible_timelines.add(NoutBlock(Replace(index, edit_text(possible_timelines, subject)), present_nout))
+                present_nout = possible_timelines.add(
+                    NoutBlock(Replace(index, edit_text(possible_timelines, subject)), present_nout))
 
         if choice == 'i':
             type_choice = None
@@ -563,8 +574,7 @@ def edit(filename):
 
     with open(filename, 'ab') as f:
         possible_timelines.write_to = f
-        new_nout = edit_node(possible_timelines, present_nout)
-        if new_nout != present_nout:
+        for new_nout in edit_node(possible_timelines, present_nout, False):
             set_current(f, new_nout)
 
 
