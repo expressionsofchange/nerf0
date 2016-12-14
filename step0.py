@@ -6,24 +6,24 @@ from os.path import isfile
 from vlq import to_vlq, from_vlq
 
 # Type constructor codes
-TREE_NODE = b'\x00'
-TREE_TEXT = b'\x01'
+TREE_NODE = 0
+TREE_TEXT = 1
 
-NOUT_BEGIN = b'\x00'
-NOUT_BLOCK = b'\x01'
+NOUT_BEGIN = 0
+NOUT_BLOCK = 1
 
-NOTE_NODE_BECOME = b'\x04'
-NOTE_NODE_INSERT = b'\x00'
-NOTE_NODE_DELETE = b'\x01'
-NOTE_NODE_REPLACE = b'\x02'
-# NOTE_COMBINE = b'\x03'
+NOTE_NODE_BECOME = 4
+NOTE_NODE_INSERT = 0
+NOTE_NODE_DELETE = 1
+NOTE_NODE_REPLACE = 2
+# NOTE_COMBINE = 3
 
-NOTE_TEXT_BECOME = b'\x03'
+NOTE_TEXT_BECOME = 3
 
 
 def rfs(byte_stream, n):
     # read n bytes from stream
-    return "".join(byte_stream.next() for i in range(n))
+    return bytes((next(byte_stream) for i in range(n)))
 
 
 class Hash(object):
@@ -31,7 +31,7 @@ class Hash(object):
         self.hash_bytes = hash_bytes
 
     def __repr__(self):
-        return hexlify(self.hash_bytes)[:12]
+        return unicode(hexlify(self.hash_bytes)[:12], 'utf-8')
 
     def as_bytes(self):
         return self.hash_bytes
@@ -64,38 +64,38 @@ class TreeNode(object):
         # "Lisp Style indentation, i.e. xxx yyy
         #                                   zzz
         if len(self.children) <= 2:
-            return u"(" + u" ".join(c.pp_flat() for c in self.children) + u")"
+            return "(" + " ".join(c.pp_flat() for c in self.children) + ")"
 
-        my_arg_0 = u"(" + self.children[0].pp_flat()  # the first element is always shown flat;
-        next_indentation = indentation + len(my_arg_0) + len(u" ")
+        my_arg_0 = "(" + self.children[0].pp_flat()  # the first element is always shown flat;
+        next_indentation = indentation + len(my_arg_0) + len(" ")
 
-        return (my_arg_0 + u" " + self.children[1].pp_2(next_indentation) + u"\n" +
-                u"\n".join((u" " * next_indentation) + c.pp_2(next_indentation) for c in self.children[2:]) + u")")
+        return (my_arg_0 + " " + self.children[1].pp_2(next_indentation) + "\n" +
+                "\n".join((" " * next_indentation) + c.pp_2(next_indentation) for c in self.children[2:]) + ")")
 
     def pp_todo(self, indentation):
         if len(self.children) < 1:
-            return u"(...)"
+            return "(...)"
 
         # a somewhat unexpect scenario, because the first arg is supposed to be text in this setup
-        my_arg_0 = u"" + self.children[0].pp_flat()
+        my_arg_0 = "" + self.children[0].pp_flat()
         next_indentation = indentation + 4
 
-        return (my_arg_0 + (u"\n\n" if len(self.children) > 1 else "") +
-                u"\n\n".join((u" " * next_indentation) + c.pp_todo(next_indentation) for c in self.children[1:]))
+        return (my_arg_0 + ("\n\n" if len(self.children) > 1 else "") +
+                "\n\n".join((" " * next_indentation) + c.pp_todo(next_indentation) for c in self.children[1:]))
 
     def pp_todo_numbered(self, indentation):
         if len(self.children) < 1:
-            return u"(...)"
+            return "(...)"
 
         # a somewhat unexpect scenario, because the first arg is supposed to be text in this setup
-        my_arg_0 = u"[0] " + self.children[0].pp_flat()
+        my_arg_0 = "[0] " + self.children[0].pp_flat()
         next_indentation = indentation + 4
 
-        return (my_arg_0 + (u"\n\n" if len(self.children) > 1 else "") +
-                u"\n\n".join((u" " * next_indentation) + "[%s] " % (i + 1) + c.pp_todo(next_indentation) for (i, c) in enumerate(self.children[1:])))
+        return (my_arg_0 + ("\n\n" if len(self.children) > 1 else "") +
+                "\n\n".join((" " * next_indentation) + "[%s] " % (i + 1) + c.pp_todo(next_indentation) for (i, c) in enumerate(self.children[1:])))
 
     def as_bytes(self):
-        return TREE_NODE + to_vlq(len(self.children)) + b''.join([c.as_bytes() for c in self.children])
+        return bytes([TREE_NODE]) + to_vlq(len(self.children)) + b''.join([c.as_bytes() for c in self.children])
 
 
 class TreeText(object):
@@ -120,7 +120,7 @@ class TreeText(object):
 
     def as_bytes(self):
         utf8 = self.unicode_.encode('utf-8')
-        return TREE_TEXT + to_vlq(len(utf8)) + utf8
+        return bytes([TREE_TEXT]) + to_vlq(len(utf8)) + utf8
 
 
 pp_test = TreeNode([
@@ -139,7 +139,7 @@ pp_test = TreeNode([
         TreeText('1'),
         TreeNode([
             TreeText("+"),
-            TreeText(u'uro sign (€) is the cu'),
+            TreeText('uro sign (€) is the cu'),
             TreeText("14"),
         ]),
         TreeText("foo"),
@@ -156,7 +156,7 @@ pp_test = TreeNode([
     ]),
 ])
 
-print pp_test.__repr__()
+print(pp_test.__repr__())
 
 
 # ## Binary encoding of nouts
@@ -165,7 +165,7 @@ class NoutBegin(object):
         return "(BEGIN)"
 
     def as_bytes(self):
-        return NOUT_BEGIN
+        return bytes([NOUT_BEGIN])
 
     @staticmethod
     def from_stream(byte_stream):
@@ -184,7 +184,7 @@ class NoutBlock(object):
         return "(BLOCK " + repr(self.note) + " -> " + repr(self.previous_hash) + ")"
 
     def as_bytes(self):
-        return NOUT_BLOCK + self.note.as_bytes() + self.previous_hash.as_bytes()
+        return bytes([NOUT_BLOCK]) + self.note.as_bytes() + self.previous_hash.as_bytes()
 
     @staticmethod
     def from_stream(byte_stream):
@@ -192,7 +192,7 @@ class NoutBlock(object):
 
 
 def parse_nout(byte_stream):
-    byte0 = byte_stream.next()
+    byte0 = next(byte_stream)
     return {
         NOUT_BEGIN: NoutBegin,
         NOUT_BLOCK: NoutBlock,
@@ -209,7 +209,7 @@ class BecomeNode(object):
         return "(NODE)"
 
     def as_bytes(self):
-        return NOTE_NODE_BECOME
+        return bytes([NOTE_NODE_BECOME])
 
     def apply_(self, possible_timelines, structure):
         return TreeNode([], [])
@@ -239,7 +239,7 @@ class Insert(object):
         return TreeNode(l, h)
 
     def as_bytes(self):
-        return NOTE_NODE_INSERT + to_vlq(self.index) + self.nout_hash.as_bytes()
+        return bytes([NOTE_NODE_INSERT]) + to_vlq(self.index) + self.nout_hash.as_bytes()
 
     @staticmethod
     def from_stream(byte_stream):
@@ -264,7 +264,7 @@ class Delete(object):
         return TreeNode(l, h)
 
     def as_bytes(self):
-        return NOTE_NODE_DELETE + to_vlq(self.index)
+        return bytes([NOTE_NODE_DELETE]) + to_vlq(self.index)
 
     @staticmethod
     def from_stream(byte_stream):
@@ -290,7 +290,7 @@ class Replace(object):
         return TreeNode(l, h)
 
     def as_bytes(self):
-        return NOTE_NODE_REPLACE + to_vlq(self.index) + self.nout_hash.as_bytes()
+        return bytes([NOTE_NODE_REPLACE]) + to_vlq(self.index) + self.nout_hash.as_bytes()
 
     @staticmethod
     def from_stream(byte_stream):
@@ -310,17 +310,17 @@ class TextBecome(object):
 
     def as_bytes(self):
         utf8 = self.unicode_.encode('utf-8')
-        return NOTE_TEXT_BECOME + to_vlq(len(utf8)) + utf8
+        return bytes([NOTE_TEXT_BECOME]) + to_vlq(len(utf8)) + utf8
 
     @staticmethod
     def from_stream(byte_stream):
         length = from_vlq(byte_stream)
         utf8 = rfs(byte_stream, length)
-        return TextBecome(unicode(utf8, 'utf-8'))
+        return TextBecome(str(utf8, 'utf-8'))
 
 
 def parse_note(byte_stream):
-    byte0 = byte_stream.next()
+    byte0 = next(byte_stream)
     return {
         NOTE_NODE_BECOME: BecomeNode,
         NOTE_NODE_INSERT: Insert,
@@ -339,7 +339,7 @@ class HashStore(object):
     def __repr__(self):
         return '\n'.join(
             repr(Hash(hash_bytes)) + ": " + repr(self.parser(iter((bytes_))))
-            for hash_bytes, bytes_ in self.d.items()
+            for hash_bytes, bytes_ in list(self.d.items())
             )
 
     def add(self, bytes_):
@@ -360,7 +360,7 @@ class HashStore(object):
 
     def guess(self, human_readable_hash):
         prefix = unhexlify(human_readable_hash)
-        for k, v in self.d.items():
+        for k, v in list(self.d.items()):
             if k.startswith(prefix):
                 return self.get(Hash(k))
         raise KeyError()
@@ -384,9 +384,9 @@ def play(possible_timelines, edge_nout):
 
 
 def edit_text(possible_timelines, text_node):
-    print text_node.unicode_
-    print '=' * 80
-    text = unicode(raw_input(">>> "), 'utf-8')
+    print(text_node.unicode_)
+    print('=' * 80)
+    text = input(">>> ")
 
     # In the most basic version of the editor text has no history, which is why the editing of text spawns a new
     # (extremely brief) history
@@ -402,8 +402,8 @@ def edit_node(possible_timelines, present_nout):
 
     while True:
         present_tree = play(possible_timelines, possible_timelines.get(present_nout))
-        print present_tree.pp_todo_numbered(0)
-        print '=' * 80
+        print(present_tree.pp_todo_numbered(0))
+        print('=' * 80)
 
         choice = None
         while choice not in ['x', 'w', 'e', 'd', 'i', 'a', 's', '>', '<']:
@@ -435,7 +435,7 @@ def edit_node(possible_timelines, present_nout):
             present_nout = imagine(possible_timelines, NoutBlock(Insert(len(present_tree.children), inserted_nout), present_nout))
 
         if choice == 's':  # append text
-            text = unicode(raw_input(">>> "), 'utf-8')
+            text = input(">>> ")
             begin = imagine(possible_timelines, NoutBegin())  # meh... this recurring imagining of begin is stupid;
             inserted_nout = imagine(possible_timelines, NoutBlock(TextBecome(text), begin))
             present_nout = imagine(possible_timelines, NoutBlock(Insert(len(present_tree.children), inserted_nout), present_nout))
@@ -448,7 +448,7 @@ def edit_node(possible_timelines, present_nout):
         # Note (TODO): edit & delete presume an existing node; insertion can happen at the end too.
         # i.e. check indexes
         if choice in 'edi<':
-            index = int(raw_input("Index>>> "))
+            index = int(input("Index>>> "))
 
         if choice == '<':  # remove a node; make it's contents available as _your_ children
             to_be_removed = present_tree.children[index]
@@ -474,11 +474,11 @@ def edit_node(possible_timelines, present_nout):
         if choice == 'i':
             type_choice = None
             while type_choice not in ['n', 't']:
-                print "Choose type (n/t)"
+                print("Choose type (n/t)")
                 type_choice = getch()
 
             if type_choice == 't':
-                text = unicode(raw_input(">>> "), 'utf-8')
+                text = input(">>> ")
                 begin = imagine(possible_timelines, NoutBegin())  # meh... this recurring imagining of begin is stupid;
                 inserted_nout = imagine(possible_timelines, NoutBlock(TextBecome(text), begin))
 
@@ -503,7 +503,7 @@ def edit(filename):
         f.write(Actuality(nout).as_bytes())
 
     if isfile(filename):
-        byte_stream = iter(open(filename, 'r').read())
+        byte_stream = iter(open(filename, 'rb').read())
         for pos_act in parse_pos_acts(byte_stream):
             if isinstance(pos_act, Possibility):
                 possible_timelines.add(pos_act.nout.as_bytes())
@@ -529,8 +529,8 @@ def edit(filename):
 
 # Possibility & Actuality data structures
 
-POSSIBILITY = '\x00'
-ACTUALITY = '\x01'
+POSSIBILITY = 0
+ACTUALITY = 1
 
 
 class Possibility(object):
@@ -538,7 +538,7 @@ class Possibility(object):
         self.nout = nout
 
     def as_bytes(self):
-        return POSSIBILITY + self.nout.as_bytes()
+        return bytes([POSSIBILITY]) + self.nout.as_bytes()
 
     @staticmethod
     def from_stream(byte_stream):
@@ -550,7 +550,7 @@ class Actuality(object):
         self.nout_hash = nout_hash
 
     def as_bytes(self):
-        return ACTUALITY + self.nout_hash.as_bytes()
+        return bytes([ACTUALITY]) + self.nout_hash.as_bytes()
 
     @staticmethod
     def from_stream(byte_stream):
@@ -558,7 +558,7 @@ class Actuality(object):
 
 
 def parse_pos_act(byte_stream):
-    byte0 = byte_stream.next()
+    byte0 = next(byte_stream)
     return {
         ACTUALITY: Actuality,
         POSSIBILITY: Possibility,
