@@ -61,14 +61,38 @@ class TreeNode(object):
         return "(" + " ".join(c.pp_flat() for c in self.children) + ")"
 
     def pp_2(self, indentation):
+        # "Lisp Style indentation, i.e. xxx yyy
+        #                                   zzz
         if len(self.children) <= 2:
-            return u"(" + u" ".join(repr(c) for c in self.children) + u")"
+            return u"(" + u" ".join(c.pp_flat() for c in self.children) + u")"
 
-        my_arg_0 = u"(" + self.children[0].pp_flat()  # ...
+        my_arg_0 = u"(" + self.children[0].pp_flat()  # the first element is always shown flat;
         next_indentation = indentation + len(my_arg_0) + len(u" ")
 
         return (my_arg_0 + u" " + self.children[1].pp_2(next_indentation) + u"\n" +
                 u"\n".join((u" " * next_indentation) + c.pp_2(next_indentation) for c in self.children[2:]) + u")")
+
+    def pp_todo(self, indentation):
+        if len(self.children) < 1:
+            return u"(...)"
+
+        # a somewhat unexpect scenario, because the first arg is supposed to be text in this setup
+        my_arg_0 = u"" + self.children[0].pp_flat()
+        next_indentation = indentation + 4
+
+        return (my_arg_0 + (u"\n\n" if len(self.children) > 1 else "") +
+                u"\n\n".join((u" " * next_indentation) + c.pp_todo(next_indentation) for c in self.children[1:]))
+
+    def pp_todo_numbered(self, indentation):
+        if len(self.children) < 1:
+            return u"(...)"
+
+        # a somewhat unexpect scenario, because the first arg is supposed to be text in this setup
+        my_arg_0 = u"[0] " + self.children[0].pp_flat()
+        next_indentation = indentation + 4
+
+        return (my_arg_0 + (u"\n\n" if len(self.children) > 1 else "") +
+                u"\n\n".join((u" " * next_indentation) + "[%s] " % (i + 1) + c.pp_todo(next_indentation) for (i, c) in enumerate(self.children[1:])))
 
     def as_bytes(self):
         return TREE_NODE + to_vlq(len(self.children)) + b''.join([c.as_bytes() for c in self.children])
@@ -86,6 +110,12 @@ class TreeText(object):
         return self.unicode_
 
     def pp_2(self, indentation):
+        return self.unicode_
+
+    def pp_todo(self, indentation):
+        return self.unicode_
+
+    def pp_todo_numbered(self, indentation):
         return self.unicode_
 
     def as_bytes(self):
@@ -372,7 +402,7 @@ def edit_node(possible_timelines, present_nout):
 
     while True:
         present_tree = play(possible_timelines, possible_timelines.get(present_nout))
-        print present_tree.pp_2(0)
+        print present_tree.pp_todo_numbered(0)
         print '=' * 80
 
         choice = None
