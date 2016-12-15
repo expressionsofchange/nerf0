@@ -43,7 +43,7 @@ class Hash(object):
         self.hash_bytes = hash_bytes
 
     def __repr__(self):
-        return unicode(hexlify(self.hash_bytes)[:12], 'utf-8')
+        return str(hexlify(self.hash_bytes)[:12], 'utf-8')
 
     def as_bytes(self):
         return self.hash_bytes
@@ -344,7 +344,7 @@ class TextBecome(Note):
         self.unicode_ = unicode_
 
     def __repr__(self):
-        return "(TEXT " + self.unicode_.encode('utf-8') + ")"
+        return "(TEXT " + self.unicode_ + ")"
 
     def apply_(self, possible_timelines, structure):
         return TreeText(self.unicode_)
@@ -442,10 +442,51 @@ def edit_text(possible_timelines, text_node):
     return possible_timelines.add(NoutBlock(TextBecome(text), begin))
 
 
+def print_nouts(possible_timelines, present_nout_hash):
+    # Shows how the Nouts ref, but does not go inside notes
+    present_nout = possible_timelines.get(present_nout_hash)
+    prev_nout = possible_timelines.get(present_nout.previous_hash)
+
+    if prev_nout == NoutBegin():
+        result = ""
+    else:
+        result = print_nouts(possible_timelines, present_nout.previous_hash) + "\n"
+
+    return result + repr(present_nout_hash) + ': ' + repr(present_nout)
+
+
+def print_nouts_2(possible_timelines, present_nout_hash, indentation, seen):
+    # Shows how the Nouts ref recursively
+    if present_nout_hash.as_bytes() in seen:
+        return (indentation * " ") + repr(present_nout_hash) + ":..."
+
+    seen.add(present_nout_hash.as_bytes())
+    present_nout = possible_timelines.get(present_nout_hash)
+
+    if present_nout == NoutBegin():
+        result = ""
+    else:
+        result = print_nouts_2(possible_timelines, present_nout.previous_hash, indentation, seen) + "\n\n"
+
+    if hasattr(present_nout, 'note') and hasattr(present_nout.note, 'nout_hash'):
+        horizontal_recursion = "\n" + print_nouts_2(possible_timelines, present_nout.note.nout_hash, indentation + 4,
+                                                    seen)
+    else:
+        horizontal_recursion = ""
+
+    return result + (indentation * " ") + repr(present_nout_hash) + ': ' + repr(present_nout) + horizontal_recursion
+
+
 def edit_node(possible_timelines, present_nout, autosave):
     while True:
         present_tree = play(possible_timelines, possible_timelines.get(present_nout))
         print("AUTOSAVE", autosave)
+        print('=' * 80)
+
+        print("HISTORY")
+        print(print_nouts_2(possible_timelines, present_nout, 0, set()))
+        print('=' * 80)
+
         print(present_tree.pp_todo_numbered(0))
         print('=' * 80)
 
