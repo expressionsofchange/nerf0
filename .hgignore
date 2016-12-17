@@ -2,3 +2,4 @@ syntax: glob
 lib
 src
 bin
+share
