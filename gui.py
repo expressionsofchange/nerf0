@@ -1,15 +1,20 @@
+from collections import namedtuple
+
 from kivy.app import App
 from kivy.core.text import Label
 from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle
 from kivy.core.text.markup import LabelBase
 from kivy.metrics import pt
+from kivy.uix.scrollview import ScrollView
 
 from step0 import TreeText, pp_test, HashStore, play, parse_nout, parse_pos_acts, Possibility
 
 MARGIN = 5
 PADDING = 3
 
+X = 0
+Y = 1
 
 LabelBase.register(name="FreeSerif",
                    fn_regular="/usr/share/fonts/truetype/freefont/FreeSerif.ttf",
@@ -32,10 +37,14 @@ LabelBase.register(name="DejaVu",
                    fn_bolditalic="/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf",)
 
 
+BoxStructure = namedtuple('BoxStructure', ('node', 'top_left', 'bottom_right', 'children'))
+
+
 class MyFirstWidget(Widget):
 
     def __init__(self, **kwargs):
         super(MyFirstWidget, self).__init__(**kwargs)
+
         self.refresh()
 
         self.bind(pos=self.refresh)
@@ -48,7 +57,20 @@ class MyFirstWidget(Widget):
             Color(1, 1, 1, 1)
             Rectangle(pos=self.pos, size=self.size,)
 
-        self._render_node_as_todo_list(self._hack(), (0, self.size[1]))
+        self.box_structure = self._render_node_as_todo_list(self._hack(), (0, self.size[1]))
+
+    def on_touch_down(self, touch):
+        result = self._from_xy(self.box_structure, touch.x, touch.y)
+        for r in result:
+            print(r)
+
+    def on_touch_move(self, touch):
+        pass
+        # print("M", touch.x, touch.y, touch.profile)
+
+    def on_touch_up(self, touch):
+        pass
+        # print("U", touch.x, touch.y, touch.profile)
 
     def _hack(self):
         filename = 'test1'
@@ -88,7 +110,7 @@ class MyFirstWidget(Widget):
                 texture=text_texture,
                 )
 
-        return bottom_right
+        return BoxStructure(text, top_left, bottom_right, ())
 
     def _render_node_as_todo_list(self, node, pos):
         if isinstance(node, TreeText):
@@ -100,7 +122,10 @@ class MyFirstWidget(Widget):
         # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that we
         # are robust for (we render it as flat text); but it's not the expected use-case.
         my_arg_0 = "" + node.children[0].pp_flat()
-        rendered_bottom_right = self._render_text(my_arg_0, pos)
+        rendered_arg_0 = self._render_text(my_arg_0, pos)
+        children = [rendered_arg_0]
+        rendered_bottom_right = rendered_arg_0.bottom_right
+        max_x = rendered_bottom_right[X]
 
         my_indentation = pos[0]
         next_indentation = my_indentation + 50  # Magic number for indentation
@@ -108,10 +133,13 @@ class MyFirstWidget(Widget):
         next_pos = (next_indentation, rendered_bottom_right[1])
 
         for child in node.children[1:]:
-            rendered_bottom_right = self._render_node_as_todo_list(child, next_pos)
+            rendered_arg_0 = self._render_node_as_todo_list(child, next_pos)
+            rendered_bottom_right = rendered_arg_0.bottom_right
+            max_x = max(max_x, rendered_bottom_right[X])
+            children.append(rendered_arg_0)
             next_pos = (next_indentation, rendered_bottom_right[1])
 
-        return rendered_bottom_right
+        return BoxStructure(node, pos, (max_x, rendered_bottom_right[Y]), tuple(children))
 
     def _render_label(self, text):
         kw = {
@@ -162,10 +190,23 @@ class MyFirstWidget(Widget):
         return label.texture
         """
 
+    def _from_xy(self, bs, x, y):
+        for child in bs.children:
+            if (x >= child.top_left[X] and x <= child.bottom_right[X] and
+                    y <= child.top_left[Y] and y >= child.bottom_right[Y]):
+                return self._from_xy(child, x, y) + [bs.node]
+        return [bs.node]
+
 
 class TestApp(App):
     def build(self):
-        root = MyFirstWidget()
-        return root
+        widget = MyFirstWidget()
+        widget.size_hint = (None, None)
+        widget.height = 5000
+        widget.width = 1000
+
+        scrollview = ScrollView()
+        scrollview.add_widget(widget)
+        return scrollview
 
 TestApp().run()
