@@ -60,10 +60,22 @@ class MyFirstWidget(Widget):
         self.box_structure = self._render_node_as_todo_list(self._hack(), (0, self.size[1]))
 
     def on_touch_down(self, touch):
-        result = self._from_xy(self.box_structure, touch.x, touch.y)
-        for r in result:
-            print(r)
+        # see https://kivy.org/docs/guide/inputs.html#touch-event-basics
+        # Basically:
+        # 1. Kivy (intentionally) does not limit its passing of touch events to widgets that it applies to, you
+        #   need to do this youself
+        # 2. You need to call super and return its value
+        ret = super(MyFirstWidget, self).on_touch_down(touch)
 
+        if not self.collide_point(*touch.pos):
+            return ret
+
+        clicked_item = self._from_xy(self.box_structure, touch.x, touch.y)
+        print(clicked_item)
+
+        return ret
+
+    """
     def on_touch_move(self, touch):
         pass
         # print("M", touch.x, touch.y, touch.profile)
@@ -71,6 +83,7 @@ class MyFirstWidget(Widget):
     def on_touch_up(self, touch):
         pass
         # print("U", touch.x, touch.y, touch.profile)
+    """
 
     def _hack(self):
         filename = 'test1'
