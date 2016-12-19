@@ -73,6 +73,9 @@ class MyFirstWidget(Widget):
         clicked_item = self._from_xy(self.box_structure, touch.x, touch.y)
         print(clicked_item)
 
+        # TODO (potentially): grabbing, as documented here (including the caveats of that approach)
+        # https://kivy.org/docs/guide/inputs.html#grabbing-touch-events
+
         return ret
 
     """
