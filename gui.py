@@ -1,4 +1,6 @@
 from collections import namedtuple
+from contextlib import contextmanager
+
 
 from kivy.app import App
 from kivy.core.text import Label
@@ -6,10 +8,9 @@ from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle
 from kivy.core.text.markup import LabelBase
 from kivy.metrics import pt
-from kivy.uix.scrollview import ScrollView
 from kivy.graphics.context_instructions import PushMatrix, PopMatrix, Translate
 
-from step0 import TreeText, pp_test, HashStore, play, parse_nout, parse_pos_acts, Possibility
+from step0 import TreeText, HashStore, play, parse_nout, parse_pos_acts, Possibility
 
 MARGIN = 5
 PADDING = 3
@@ -38,23 +39,38 @@ LabelBase.register(name="DejaVu",
                    fn_bolditalic="/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf",)
 
 
-OffsetBS = namedtuple('OffsetBS', ('offset', 'item'))
+OffsetBox = namedtuple('OffsetBox', ('offset', 'item'))
 
 
-def o(item):
-    return OffsetBS((0, 0), item)
+@contextmanager
+def apply_offset(canvas, offset):
+    canvas.add(PushMatrix())
+    canvas.add(Translate(*offset))
+    yield
+    canvas.add(PopMatrix())
 
-BSTerminal = namedtuple('BSTerminal', ('instructions', 'outer_dimensions', ))
+
+def no_offset(item):
+    return OffsetBox((0, 0), item)
+
+BoxTerminal = namedtuple('BoxTerminal', ('instructions', 'outer_dimensions', ))
 
 
-class BSNonTerminal(object):
+class BoxNonTerminal(object):
     def __init__(self, semantics, offset_nonterminals, offset_terminals):
-        """The `offset_nonterminals` are ... the children
+        """The idea here is: draw tree-like structures using 'boxes', rectangular shapes that may contain other such
+        shapes. Some details:
 
-        I.e. the distinction is "is the node of semantics directly responsible for this, or only by virtue of its
-        children?"
+        * The direction of drawing is from top left to bottom right. Children may have (X, Y) offsets of respectively
+            postive (including 0), and negative (including 0) values.
 
-        (besides that distinction, one could argue for more folding of the concepts of terminals and non-terminals)
+        * We tie some "semantics" to a node in the "box tree", by this we simply mean the underlying thing that's beign
+            drawn. Any actual drawing related to the present semantics is represented in the terminals.
+
+        * The current box may have some child-boxes, which have underlying semantics.
+
+        * There outer_dimensions of represent the smallest box that can be drawn around this entire node. This is useful
+            to quickly decide whether the current box needs to be considered at all in e.g. collision checks.
         """
 
         self.semantics = semantics
@@ -63,27 +79,50 @@ class BSNonTerminal(object):
 
         self.outer_dimensions = self.calc_outer_dimensions()
 
-    def get_all_terminals(self):
-        result = self.offset_terminals
-        for ((offset_x, offset_y), nt) in self.offset_nonterminals:
-            for ((recursive_offset_x, recursive_offset_y), t) in nt.get_all_terminals:
-                result.append(OffsetBS((offset_x + recursive_offset_x, offset_y + recursive_offset_y), t))
-        return result
-
     def calc_outer_dimensions(self):
         max_x = max((obs.offset[X] + obs.item.outer_dimensions[X])
                     for obs in self.offset_terminals + self.offset_nonterminals)
 
+        # min_y, because we're moving _down_ which is negative in Kivy's coordinate system
         min_y = min((obs.offset[Y] + obs.item.outer_dimensions[Y])
                     for obs in self.offset_terminals + self.offset_nonterminals)
 
         return (max_x, min_y)
 
+    def from_point(self, point):
+        """X & Y in the reference frame of `self`"""
 
-class MyFirstWidget(Widget):
+        # If any of our terminals matches, we match
+        for o, t in self.offset_terminals:
+            if (point[X] >= o[X] and point[X] <= o[X] + t.outer_dimensions[X] and
+                    point[Y] <= o[Y] and point[Y] >= o[Y] + t.outer_dimensions[Y]):
+
+                return self
+
+        # Otherwise, recursively check our children
+        for o, nt in self.offset_nonterminals:
+            if (point[X] >= o[X] and point[X] <= o[X] + nt.outer_dimensions[X] and
+                    point[Y] <= o[Y] and point[Y] >= o[Y] + nt.outer_dimensions[Y]):
+
+                # it's within the outer bounds, and _might_ be a hit. recurse to check:
+                result = nt.from_point(bring_into_offset(o, point))
+                if result is not None:
+                    return result
+
+        return None
+
+
+def bring_into_offset(offset, point):
+    """The _inverse_ of applying to offset on the point"""
+    return point[X] - offset[X], point[Y] - offset[Y]
+
+
+class TreeWidget(Widget):
 
     def __init__(self, **kwargs):
-        super(MyFirstWidget, self).__init__(**kwargs)
+        super(TreeWidget, self).__init__(**kwargs)
+
+        self.offset = (0, self.size[Y])  # default offset: start on top_left
 
         self.refresh()
 
@@ -97,13 +136,9 @@ class MyFirstWidget(Widget):
             Color(1, 1, 1, 1)
             Rectangle(pos=self.pos, size=self.size,)
 
-        self.canvas.add(PushMatrix())
-        self.canvas.add(Translate(0, self.size[Y]))
-
-        self.box_structure = self._nt_for_node_as_todo_list(self._hack())
-        self._render_bs(self.box_structure)
-
-        self.canvas.add(PopMatrix())
+        with apply_offset(self.canvas, self.offset):
+            self.box_structure = self._nt_for_node_as_todo_list(self._hack())
+            self._render_box(self.box_structure)
 
     def on_touch_down(self, touch):
         # see https://kivy.org/docs/guide/inputs.html#touch-event-basics
@@ -111,28 +146,20 @@ class MyFirstWidget(Widget):
         # 1. Kivy (intentionally) does not limit its passing of touch events to widgets that it applies to, you
         #   need to do this youself
         # 2. You need to call super and return its value
-        ret = super(MyFirstWidget, self).on_touch_down(touch)
+        ret = super(TreeWidget, self).on_touch_down(touch)
 
         if not self.collide_point(*touch.pos):
             return ret
 
-        clicked_item = self._from_xy(self.box_structure, touch.x, touch.y - self.height)
-        print(repr(clicked_item))
+        clicked_item = self.box_structure.from_point(
+            bring_into_offset(self.offset, (touch.x, touch.y)))
+
+        print(repr(clicked_item.semantics) if clicked_item else None)
 
         # TODO (potentially): grabbing, as documented here (including the caveats of that approach)
         # https://kivy.org/docs/guide/inputs.html#grabbing-touch-events
 
         return ret
-
-    """
-    def on_touch_move(self, touch):
-        pass
-        # print("M", touch.x, touch.y, touch.profile)
-
-    def on_touch_up(self, touch):
-        pass
-        # print("U", touch.x, touch.y, touch.profile)
-    """
 
     def _hack(self):
         filename = 'test1'
@@ -170,52 +197,44 @@ class MyFirstWidget(Widget):
                 ),
         ]
 
-        return BSTerminal(instructions, bottom_right)
+        return BoxTerminal(instructions, bottom_right)
 
     def _nt_for_node_as_todo_list(self, node):
         if isinstance(node, TreeText):
-            return BSNonTerminal(node, [], [o(self._t_for_text(node.unicode_))])
+            return BoxNonTerminal(node, [], [no_offset(self._t_for_text(node.unicode_))])
 
         if len(node.children) == 0:
-            return BSNonTerminal(node, [], [o(self._t_for_text("(...)"))])
+            return BoxNonTerminal(node, [], [no_offset(self._t_for_text("(...)"))])
 
         # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that we
         # are robust for (we render it as flat text); but it's not the expected use-case.
         flat_first_child = "" + node.children[0].pp_flat()
         t = self._t_for_text(flat_first_child)
         offset_nonterminals = [
-            o(BSNonTerminal(node.children[0], [], [o(t)]))
+            no_offset(BoxNonTerminal(node.children[0], [], [no_offset(t)]))
         ]
         offset_down = t.outer_dimensions[Y]
         offset_right = 50  # Magic number for indentation
 
         for child in node.children[1:]:
             nt = self._nt_for_node_as_todo_list(child)
-            offset_nonterminals.append(OffsetBS((offset_right, offset_down), nt))
+            offset_nonterminals.append(OffsetBox((offset_right, offset_down), nt))
             offset_down += nt.outer_dimensions[Y]
 
-        return BSNonTerminal(
+        return BoxNonTerminal(
             node,
             offset_nonterminals,
             [])
 
-    def _render_bs(self, bs):
-        for o, t in bs.offset_terminals:
-            self.canvas.add(PushMatrix())
-            self.canvas.add(Translate(*o))
+    def _render_box(self, box):
+        for o, t in box.offset_terminals:
+            with apply_offset(self.canvas, o):
+                for instruction in t.instructions:
+                    self.canvas.add(instruction)
 
-            for instruction in t.instructions:
-                self.canvas.add(instruction)
-
-            self.canvas.add(PopMatrix())
-
-        for o, nt in bs.offset_nonterminals:
-            self.canvas.add(PushMatrix())
-            self.canvas.add(Translate(*o))
-
-            self._render_bs(nt)
-
-            self.canvas.add(PopMatrix())
+        for o, nt in box.offset_nonterminals:
+            with apply_offset(self.canvas, o):
+                self._render_box(nt)
 
     def _texture_for_text(self, text):
         kw = {
@@ -226,73 +245,16 @@ class MyFirstWidget(Widget):
             'anchor_y': 'top',
             'padding_x': 0,
             'padding_y': 0,
-            'padding': (0, 0)}  # Hee... hier kan het ook direct.
+            'padding': (0, 0)}
 
         label = Label(text=text, **kw)
         label.refresh()
         return label.texture
 
-        """
-        # below is ill-understood copy/pasta; the explanation is inlcuded:
-        # FIXME right now, we can't render very long line...
-        # if we move on "VBO" version as fallback, we won't need to
-        # do this. try to found the maximum text we can handle
-
-        label = None
-        label_len = len(text)
-        ld = None
-
-        while True:
-            try:
-                label = Label(text=text[:label_len], **kw)
-                label.refresh()
-                if ld is not None and ld > 2:
-                    ld = int(ld / 2)
-                    label_len += ld
-                else:
-                    break
-            except Exception as e:
-                # exception happen when we tried to render the text
-                # reduce it...
-                if ld is None:
-                    ld = len(text)
-                ld = int(ld / 2)
-                if ld < 2 and label_len:
-                    label_len -= 1
-                label_len -= ld
-                continue
-
-        # ok, we found it.
-        return label.texture
-        """
-
-    def _from_xy(self, bs, x, y):
-        for o, t in bs.offset_terminals:
-            if (x >= o[X] and x <= o[X] + t.outer_dimensions[X] and
-                    y <= o[Y] and y >= o[Y] + t.outer_dimensions[Y]):
-                return bs.semantics
-
-        for o, nt in bs.offset_nonterminals:
-            if (x >= o[X] and x <= o[X] + nt.outer_dimensions[X] and
-                    y <= o[Y] and y >= o[Y] + nt.outer_dimensions[Y]):
-
-                # it's within the outer bounds, and _may_ be a hit. recurse
-                result = self._from_xy(nt, x - o[X], y - o[Y])
-                if result is not None:
-                    return result
-
-        return None
-
 
 class TestApp(App):
     def build(self):
-        widget = MyFirstWidget()
-        widget.size_hint = (None, None)
-        widget.height = 500
-        widget.width = 1000
-
-        scrollview = ScrollView()
-        scrollview.add_widget(widget)
-        return scrollview
+        widget = TreeWidget()
+        return widget
 
 TestApp().run()
