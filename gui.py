@@ -7,6 +7,7 @@ from kivy.graphics import Color, Rectangle
 from kivy.core.text.markup import LabelBase
 from kivy.metrics import pt
 from kivy.uix.scrollview import ScrollView
+from kivy.graphics.context_instructions import PushMatrix, PopMatrix, Translate
 
 from step0 import TreeText, pp_test, HashStore, play, parse_nout, parse_pos_acts, Possibility
 
@@ -37,7 +38,46 @@ LabelBase.register(name="DejaVu",
                    fn_bolditalic="/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf",)
 
 
-BoxStructure = namedtuple('BoxStructure', ('node', 'top_left', 'bottom_right', 'children'))
+OffsetBS = namedtuple('OffsetBS', ('offset', 'item'))
+
+
+def o(item):
+    return OffsetBS((0, 0), item)
+
+BSTerminal = namedtuple('BSTerminal', ('instructions', 'outer_dimensions', ))
+
+
+class BSNonTerminal(object):
+    def __init__(self, semantics, offset_nonterminals, offset_terminals):
+        """The `offset_nonterminals` are ... the children
+
+        I.e. the distinction is "is the node of semantics directly responsible for this, or only by virtue of its
+        children?"
+
+        (besides that distinction, one could argue for more folding of the concepts of terminals and non-terminals)
+        """
+
+        self.semantics = semantics
+        self.offset_nonterminals = offset_nonterminals
+        self.offset_terminals = offset_terminals
+
+        self.outer_dimensions = self.calc_outer_dimensions()
+
+    def get_all_terminals(self):
+        result = self.offset_terminals
+        for ((offset_x, offset_y), nt) in self.offset_nonterminals:
+            for ((recursive_offset_x, recursive_offset_y), t) in nt.get_all_terminals:
+                result.append(OffsetBS((offset_x + recursive_offset_x, offset_y + recursive_offset_y), t))
+        return result
+
+    def calc_outer_dimensions(self):
+        max_x = max((obs.offset[X] + obs.item.outer_dimensions[X])
+                    for obs in self.offset_terminals + self.offset_nonterminals)
+
+        min_y = min((obs.offset[Y] + obs.item.outer_dimensions[Y])
+                    for obs in self.offset_terminals + self.offset_nonterminals)
+
+        return (max_x, min_y)
 
 
 class MyFirstWidget(Widget):
@@ -57,7 +97,13 @@ class MyFirstWidget(Widget):
             Color(1, 1, 1, 1)
             Rectangle(pos=self.pos, size=self.size,)
 
-        self.box_structure = self._render_node_as_todo_list(self._hack(), (0, self.size[1]))
+        self.canvas.add(PushMatrix())
+        self.canvas.add(Translate(0, self.size[Y]))
+
+        self.box_structure = self._nt_for_node_as_todo_list(self._hack())
+        self._render_bs(self.box_structure)
+
+        self.canvas.add(PopMatrix())
 
     def on_touch_down(self, touch):
         # see https://kivy.org/docs/guide/inputs.html#touch-event-basics
@@ -70,8 +116,8 @@ class MyFirstWidget(Widget):
         if not self.collide_point(*touch.pos):
             return ret
 
-        clicked_item = self._from_xy(self.box_structure, touch.x, touch.y)
-        print(clicked_item)
+        clicked_item = self._from_xy(self.box_structure, touch.x, touch.y - self.height)
+        print(repr(clicked_item))
 
         # TODO (potentially): grabbing, as documented here (including the caveats of that approach)
         # https://kivy.org/docs/guide/inputs.html#grabbing-touch-events
@@ -101,63 +147,77 @@ class MyFirstWidget(Widget):
         present_tree = play(possible_timelines, possible_timelines.get(present_nout))
         return present_tree
 
-    def _render_text(self, text, pos):
-        relative_x, relative_y = pos
+    def _t_for_text(self, text):
+        text_texture = self._texture_for_text(text)
+        content_height = text_texture.height
+        content_width = text_texture.width
 
-        with self.canvas:
-            text_texture = self._render_label(text)
-            content_height = text_texture.height
-            content_width = text_texture.width
+        top_left = 0, 0
+        bottom_left = (top_left[X], top_left[Y] - PADDING - MARGIN - content_height - MARGIN - PADDING)
+        bottom_right = (bottom_left[X] + PADDING + MARGIN + content_width + MARGIN + PADDING, bottom_left[Y])
 
-            top_left = pos
-            bottom_left = (top_left[0], top_left[1] - PADDING - MARGIN - content_height - MARGIN - PADDING)
-            bottom_right = (bottom_left[0] + PADDING + MARGIN + content_width + MARGIN + PADDING, bottom_left[1])
-
-            Color(0.95, 0.95, 0.95, 1)  # Ad Hoc Grey
+        instructions = [
+            Color(0.95, 0.95, 0.95, 1),  # Ad Hoc Grey
             Rectangle(
                 pos=(bottom_left[0] + PADDING, bottom_left[1] + PADDING),
                 size=(content_width + 2 * MARGIN, content_height + 2 * MARGIN),
-                )
-
-            Color(0, 115/255, 230/255, 1)  # Blue
+                ),
+            Color(0, 115/255, 230/255, 1),  # Blue
             Rectangle(
                 pos=(bottom_left[0] + PADDING + MARGIN, bottom_left[1] + PADDING + MARGIN),
                 size=text_texture.size,
                 texture=text_texture,
-                )
+                ),
+        ]
 
-        return BoxStructure(text, top_left, bottom_right, ())
+        return BSTerminal(instructions, bottom_right)
 
-    def _render_node_as_todo_list(self, node, pos):
+    def _nt_for_node_as_todo_list(self, node):
         if isinstance(node, TreeText):
-            return self._render_text(node.unicode_, pos)
+            return BSNonTerminal(node, [], [o(self._t_for_text(node.unicode_))])
 
-        if len(node.children) < 1:
-            return self._render_text("(...)", pos)
+        if len(node.children) == 0:
+            return BSNonTerminal(node, [], [o(self._t_for_text("(...)"))])
 
         # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that we
         # are robust for (we render it as flat text); but it's not the expected use-case.
-        my_arg_0 = "" + node.children[0].pp_flat()
-        rendered_arg_0 = self._render_text(my_arg_0, pos)
-        children = [rendered_arg_0]
-        rendered_bottom_right = rendered_arg_0.bottom_right
-        max_x = rendered_bottom_right[X]
-
-        my_indentation = pos[0]
-        next_indentation = my_indentation + 50  # Magic number for indentation
-
-        next_pos = (next_indentation, rendered_bottom_right[1])
+        flat_first_child = "" + node.children[0].pp_flat()
+        t = self._t_for_text(flat_first_child)
+        offset_nonterminals = [
+            o(BSNonTerminal(node.children[0], [], [o(t)]))
+        ]
+        offset_down = t.outer_dimensions[Y]
+        offset_right = 50  # Magic number for indentation
 
         for child in node.children[1:]:
-            rendered_arg_0 = self._render_node_as_todo_list(child, next_pos)
-            rendered_bottom_right = rendered_arg_0.bottom_right
-            max_x = max(max_x, rendered_bottom_right[X])
-            children.append(rendered_arg_0)
-            next_pos = (next_indentation, rendered_bottom_right[1])
+            nt = self._nt_for_node_as_todo_list(child)
+            offset_nonterminals.append(OffsetBS((offset_right, offset_down), nt))
+            offset_down += nt.outer_dimensions[Y]
 
-        return BoxStructure(node, pos, (max_x, rendered_bottom_right[Y]), tuple(children))
+        return BSNonTerminal(
+            node,
+            offset_nonterminals,
+            [])
 
-    def _render_label(self, text):
+    def _render_bs(self, bs):
+        for o, t in bs.offset_terminals:
+            self.canvas.add(PushMatrix())
+            self.canvas.add(Translate(*o))
+
+            for instruction in t.instructions:
+                self.canvas.add(instruction)
+
+            self.canvas.add(PopMatrix())
+
+        for o, nt in bs.offset_nonterminals:
+            self.canvas.add(PushMatrix())
+            self.canvas.add(Translate(*o))
+
+            self._render_bs(nt)
+
+            self.canvas.add(PopMatrix())
+
+    def _texture_for_text(self, text):
         kw = {
             'font_size': pt(13),
             'font_name': 'DejaVuSans',
@@ -207,18 +267,28 @@ class MyFirstWidget(Widget):
         """
 
     def _from_xy(self, bs, x, y):
-        for child in bs.children:
-            if (x >= child.top_left[X] and x <= child.bottom_right[X] and
-                    y <= child.top_left[Y] and y >= child.bottom_right[Y]):
-                return self._from_xy(child, x, y) + [bs.node]
-        return [bs.node]
+        for o, t in bs.offset_terminals:
+            if (x >= o[X] and x <= o[X] + t.outer_dimensions[X] and
+                    y <= o[Y] and y >= o[Y] + t.outer_dimensions[Y]):
+                return bs.semantics
+
+        for o, nt in bs.offset_nonterminals:
+            if (x >= o[X] and x <= o[X] + nt.outer_dimensions[X] and
+                    y <= o[Y] and y >= o[Y] + nt.outer_dimensions[Y]):
+
+                # it's within the outer bounds, and _may_ be a hit. recurse
+                result = self._from_xy(nt, x - o[X], y - o[Y])
+                if result is not None:
+                    return result
+
+        return None
 
 
 class TestApp(App):
     def build(self):
         widget = MyFirstWidget()
         widget.size_hint = (None, None)
-        widget.height = 5000
+        widget.height = 500
         widget.width = 1000
 
         scrollview = ScrollView()

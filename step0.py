@@ -122,7 +122,7 @@ class TreeText(object):
         self.unicode_ = unicode_
 
     def __repr__(self):
-        return self.unicode_.encode("utf-8")
+        return self.unicode_
 
     def pp_flat(self):
         return self.unicode_
