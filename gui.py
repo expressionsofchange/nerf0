@@ -96,7 +96,6 @@ class BoxNonTerminal(object):
         for o, t in self.offset_terminals:
             if (point[X] >= o[X] and point[X] <= o[X] + t.outer_dimensions[X] and
                     point[Y] <= o[Y] and point[Y] >= o[Y] + t.outer_dimensions[Y]):
-
                 return self
 
         # Otherwise, recursively check our children
@@ -111,6 +110,20 @@ class BoxNonTerminal(object):
 
         return None
 
+    def get_all_terminals(self):
+        def k(ob):
+            return ob.offset[Y] * -1, ob.offset[X]
+
+        result = self.offset_terminals[:]
+        for ((offset_x, offset_y), nt) in self.offset_nonterminals:
+            for ((recursive_offset_x, recursive_offset_y), t) in nt.get_all_terminals():
+                result.append(OffsetBox((offset_x + recursive_offset_x, offset_y + recursive_offset_y), t))
+
+        # sorting here is a bit of a hack. We need it to be able to access the "last added item" while throwing
+        # terminals and non-terminals on a single big pile during construction time. Better solution: simply remember in
+        # which order items were constructed in the first place.
+        return sorted(result, key=k)
+
 
 def bring_into_offset(offset, point):
     """The _inverse_ of applying to offset on the point"""
@@ -122,8 +135,6 @@ class TreeWidget(Widget):
     def __init__(self, **kwargs):
         super(TreeWidget, self).__init__(**kwargs)
 
-        self.offset = (0, self.size[Y])  # default offset: start on top_left
-
         self.refresh()
 
         self.bind(pos=self.refresh)
@@ -132,12 +143,14 @@ class TreeWidget(Widget):
     def refresh(self, *args):
         self.canvas.clear()
 
+        self.offset = (0, self.size[Y])  # default offset: start on top_left
+
         with self.canvas:
             Color(1, 1, 1, 1)
             Rectangle(pos=self.pos, size=self.size,)
 
         with apply_offset(self.canvas, self.offset):
-            self.box_structure = self._nt_for_node_as_todo_list(self._hack())
+            self.box_structure = self._nt_for_node_as_lispy_layout(self._hack())
             self._render_box(self.box_structure)
 
     def on_touch_down(self, touch):
@@ -208,8 +221,8 @@ class TreeWidget(Widget):
 
         # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that we
         # are robust for (we render it as flat text); but it's not the expected use-case.
-        flat_first_child = "" + node.children[0].pp_flat()
-        t = self._t_for_text(flat_first_child)
+        flat_child_0 = "" + node.children[0].pp_flat()
+        t = self._t_for_text(flat_child_0)
         offset_nonterminals = [
             no_offset(BoxNonTerminal(node.children[0], [], [no_offset(t)]))
         ]
@@ -225,6 +238,57 @@ class TreeWidget(Widget):
             node,
             offset_nonterminals,
             [])
+
+    def _nt_for_node_as_lispy_layout(self, node):
+        # "Lisp Style indentation, i.e. xxx yyy
+        #                                   zzz
+
+        if isinstance(node, TreeText):
+            return BoxNonTerminal(node, [], [no_offset(self._t_for_text(node.unicode_))])
+
+        t = self._t_for_text("(")
+        offset_right = t.outer_dimensions[X]
+        offset_down = 0
+
+        offset_terminals = [
+            no_offset(t),
+        ]
+        offset_nonterminals = []
+
+        if len(node.children) > 0:
+            # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that
+            # we are robust for (we render it as flat text); but it's not the expected use-case.
+            flat_child_0 = "" + node.children[0].pp_flat()
+            t = self._t_for_text(flat_child_0)
+
+            offset_nonterminals.append(
+                OffsetBox((offset_right, offset_down), BoxNonTerminal(node.children[0], [], [no_offset(t)]))
+            )
+            offset_right += t.outer_dimensions[X]
+
+            if len(node.children) > 1:
+                for i, child_x in enumerate(node.children[1:]):
+                    nt = self._nt_for_node_as_lispy_layout(child_x)
+                    offset_nonterminals.append(OffsetBox((offset_right, offset_down), nt))
+                    offset_down += nt.outer_dimensions[Y]
+
+                # get the final drawn item to figure out where to put the closing ")"
+                last_drawn = nt.get_all_terminals()[-1]
+                offset_right += last_drawn.item.outer_dimensions[X] + last_drawn.offset[X]
+
+                # go "one line" back up
+                offset_down -= last_drawn.item.outer_dimensions[Y]
+
+        else:
+            offset_right = t.outer_dimensions[X]
+
+        t = self._t_for_text(")")
+        offset_terminals.append(OffsetBox((offset_right, offset_down), t))
+
+        return BoxNonTerminal(
+            node,
+            offset_nonterminals,
+            offset_terminals)
 
     def _render_box(self, box):
         for o, t in box.offset_terminals:
