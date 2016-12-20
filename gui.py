@@ -1,7 +1,7 @@
 from collections import namedtuple
 from contextlib import contextmanager
 
-
+from kivy.core.window import Window
 from kivy.app import App
 from kivy.core.text import Label
 from kivy.uix.widget import Widget
@@ -135,10 +135,29 @@ class TreeWidget(Widget):
     def __init__(self, **kwargs):
         super(TreeWidget, self).__init__(**kwargs)
 
-        self.refresh()
-
         self.bind(pos=self.refresh)
         self.bind(size=self.refresh)
+
+        self._keyboard = Window.request_keyboard(self._keyboard_closed, self, 'text')
+        self._keyboard.bind(on_key_down=self._on_keyboard_down)
+
+        self.tree = self._hack()
+        self.s_cursor = []
+        self._unpoke_all_cursors(self.tree)
+        self._poke_s_cursor(self.tree, self.s_cursor)
+
+        self.refresh()
+
+    def _keyboard_closed(self):
+        # LATER: think about further handling of this scenario. (probably: only once I get into Mobile territory)
+        self._keyboard.unbind(on_key_down=self._on_keyboard_down)
+        self._keyboard = None
+
+    def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
+        # ......
+
+        # Return True to accept the key. Otherwise, it will be used by the system.
+        return True
 
     def refresh(self, *args):
         self.canvas.clear()
@@ -150,7 +169,7 @@ class TreeWidget(Widget):
             Rectangle(pos=self.pos, size=self.size,)
 
         with apply_offset(self.canvas, self.offset):
-            self.box_structure = self._nt_for_node_as_lispy_layout(self._hack())
+            self.box_structure = self._nt_for_node_as_lispy_layout(self.tree)
             self._render_box(self.box_structure)
 
     def on_touch_down(self, touch):
@@ -187,7 +206,25 @@ class TreeWidget(Widget):
         present_tree = play(possible_timelines, possible_timelines.get(present_nout))
         return present_tree
 
-    def _t_for_text(self, text):
+    def _unpoke_all_cursors(self, node):
+        node.is_cursor = False
+        if hasattr(node, 'children'):
+            for child in node.children:
+                self._unpoke_all_cursors(child)
+
+    def _poke_s_cursor(self, node, s_cursor):
+        # poking... yuck; soonish a better solution will present itself
+        if s_cursor == []:
+            node.is_cursor = True
+            return
+
+        if hasattr(node, 'children'):
+            for i, child in enumerate(node.children):
+                if i == s_cursor[0]:
+                    self._poke_s_cursor(child, s_cursor[1:])
+                    return
+
+    def _t_for_text(self, text, is_cursor):
         text_texture = self._texture_for_text(text)
         content_height = text_texture.height
         content_width = text_texture.width
@@ -196,8 +233,13 @@ class TreeWidget(Widget):
         bottom_left = (top_left[X], top_left[Y] - PADDING - MARGIN - content_height - MARGIN - PADDING)
         bottom_right = (bottom_left[X] + PADDING + MARGIN + content_width + MARGIN + PADDING, bottom_left[Y])
 
+        if is_cursor:
+            box_color = Color(0.95, 0.95, 0.95, 1)  # Ad Hoc Grey
+        else:
+            box_color = Color(1, 1, 0.97, 1)  # Ad Hoc Light Yellow
+
         instructions = [
-            Color(0.95, 0.95, 0.95, 1),  # Ad Hoc Grey
+            box_color,
             Rectangle(
                 pos=(bottom_left[0] + PADDING, bottom_left[1] + PADDING),
                 size=(content_width + 2 * MARGIN, content_height + 2 * MARGIN),
@@ -214,15 +256,15 @@ class TreeWidget(Widget):
 
     def _nt_for_node_as_todo_list(self, node):
         if isinstance(node, TreeText):
-            return BoxNonTerminal(node, [], [no_offset(self._t_for_text(node.unicode_))])
+            return BoxNonTerminal(node, [], [no_offset(self._t_for_text(node.unicode_, node.is_cursor))])
 
         if len(node.children) == 0:
-            return BoxNonTerminal(node, [], [no_offset(self._t_for_text("(...)"))])
+            return BoxNonTerminal(node, [], [no_offset(self._t_for_text("(...)", node.is_cursor))])
 
         # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that we
         # are robust for (we render it as flat text); but it's not the expected use-case.
         flat_child_0 = "" + node.children[0].pp_flat()
-        t = self._t_for_text(flat_child_0)
+        t = self._t_for_text(flat_child_0, node.children[0].is_cursor)
         offset_nonterminals = [
             no_offset(BoxNonTerminal(node.children[0], [], [no_offset(t)]))
         ]
@@ -244,9 +286,9 @@ class TreeWidget(Widget):
         #                                   zzz
 
         if isinstance(node, TreeText):
-            return BoxNonTerminal(node, [], [no_offset(self._t_for_text(node.unicode_))])
+            return BoxNonTerminal(node, [], [no_offset(self._t_for_text(node.unicode_, node.is_cursor))])
 
-        t = self._t_for_text("(")
+        t = self._t_for_text("(", node.is_cursor)
         offset_right = t.outer_dimensions[X]
         offset_down = 0
 
@@ -259,7 +301,7 @@ class TreeWidget(Widget):
             # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that
             # we are robust for (we render it as flat text); but it's not the expected use-case.
             flat_child_0 = "" + node.children[0].pp_flat()
-            t = self._t_for_text(flat_child_0)
+            t = self._t_for_text(flat_child_0, node.children[0].is_cursor)
 
             offset_nonterminals.append(
                 OffsetBox((offset_right, offset_down), BoxNonTerminal(node.children[0], [], [no_offset(t)]))
@@ -282,7 +324,7 @@ class TreeWidget(Widget):
         else:
             offset_right = t.outer_dimensions[X]
 
-        t = self._t_for_text(")")
+        t = self._t_for_text(")", node.is_cursor)
         offset_terminals.append(OffsetBox((offset_right, offset_down), t))
 
         return BoxNonTerminal(
