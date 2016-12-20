@@ -10,7 +10,7 @@ from kivy.core.text.markup import LabelBase
 from kivy.metrics import pt
 from kivy.graphics.context_instructions import PushMatrix, PopMatrix, Translate
 
-from step0 import TreeText, HashStore, play, parse_nout, parse_pos_acts, Possibility
+from step0 import TreeText, HashStore, play, parse_nout, parse_pos_acts, Possibility, pp_test
 
 MARGIN = 5
 PADDING = 3
@@ -141,10 +141,10 @@ class TreeWidget(Widget):
         self._keyboard = Window.request_keyboard(self._keyboard_closed, self, 'text')
         self._keyboard.bind(on_key_down=self._on_keyboard_down)
 
-        self.tree = self._hack()
+        self.tree = pp_test
         self.s_cursor = []
         self._unpoke_all_cursors(self.tree)
-        self._poke_s_cursor(self.tree, self.s_cursor)
+        self._node_for_s_cursor(self.tree, self.s_cursor).is_cursor = True
 
         self.refresh()
 
@@ -154,7 +154,21 @@ class TreeWidget(Widget):
         self._keyboard = None
 
     def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
-        # ......
+        code, textual_code = keycode
+
+        if textual_code in ['left', 'h']:
+            self.s_cursor = self._parent_sc(self.s_cursor)
+        elif textual_code in ['right', 'l']:
+            self.s_cursor = self._child_sc(self.s_cursor)
+        elif textual_code in ['up', 'k']:
+            self.s_cursor = self._dfs_sibbling_sc(self.s_cursor, -1)
+        elif textual_code in ['down', 'j']:
+            self.s_cursor = self._dfs_sibbling_sc(self.s_cursor, 1)
+
+        # Redraw, the lazy way:
+        self._unpoke_all_cursors(self.tree)
+        self._node_for_s_cursor(self.tree, self.s_cursor).is_cursor = True
+        self.refresh()
 
         # Return True to accept the key. Otherwise, it will be used by the system.
         return True
@@ -183,10 +197,15 @@ class TreeWidget(Widget):
         if not self.collide_point(*touch.pos):
             return ret
 
-        clicked_item = self.box_structure.from_point(
-            bring_into_offset(self.offset, (touch.x, touch.y)))
+        clicked_item = self.box_structure.from_point(bring_into_offset(self.offset, (touch.x, touch.y)))
 
-        print(repr(clicked_item.semantics) if clicked_item else None)
+        if clicked_item is not None:
+            self.s_cursor = self._s_cursor_for_node(self.tree, clicked_item.semantics)
+
+            # Redraw, the lazy way: (COPY PASTA)
+            self._unpoke_all_cursors(self.tree)
+            self._node_for_s_cursor(self.tree, self.s_cursor).is_cursor = True
+            self.refresh()
 
         # TODO (potentially): grabbing, as documented here (including the caveats of that approach)
         # https://kivy.org/docs/guide/inputs.html#grabbing-touch-events
@@ -206,23 +225,68 @@ class TreeWidget(Widget):
         present_tree = play(possible_timelines, possible_timelines.get(present_nout))
         return present_tree
 
+    # ## Some s_cursor methods:
+    def _dfs(self, node):
+        result = [node]
+        if hasattr(node, 'children'):
+            for c in node.children:
+                result.extend(self._dfs(c))
+
+        return result
+
     def _unpoke_all_cursors(self, node):
         node.is_cursor = False
         if hasattr(node, 'children'):
             for child in node.children:
                 self._unpoke_all_cursors(child)
 
-    def _poke_s_cursor(self, node, s_cursor):
-        # poking... yuck; soonish a better solution will present itself
+    def _node_for_s_cursor(self, node, s_cursor):
         if s_cursor == []:
-            node.is_cursor = True
-            return
+            return node
 
         if hasattr(node, 'children'):
-            for i, child in enumerate(node.children):
-                if i == s_cursor[0]:
-                    self._poke_s_cursor(child, s_cursor[1:])
-                    return
+            # no bounds checking (yet?)
+            return self._node_for_s_cursor(node.children[s_cursor[0]], s_cursor[1:])
+
+    def _s_cursor_for_node(self, in_node, sought_node):
+        if in_node == sought_node:
+            return []
+
+        if not hasattr(in_node, 'children'):
+            return None
+
+        for i, child in enumerate(in_node.children):
+            child_result = self._s_cursor_for_node(child, sought_node)
+            if child_result is not None:
+                return [i] + child_result
+
+        return None
+
+    def _parent_sc(self, s_cursor):
+        return s_cursor[:-1]
+
+    def _child_sc(self, s_cursor):
+        node = self._node_for_s_cursor(self.tree, s_cursor)
+        if not hasattr(node, 'children') or len(node.children) == 0:
+            return s_cursor  # the no-op
+        return s_cursor + [0]
+
+    def _sibbling_sc(self, s_cursor, direction):
+        if s_cursor == []:
+            return s_cursor  # root has no sibblings
+
+        parent = self._node_for_s_cursor(self.tree, self._parent_sc(s_cursor))
+        index = s_cursor[-1] + direction
+        bounded_index = max(0, min(len(parent.children) - 1, index))
+        return s_cursor[:-1] + [bounded_index]
+
+    def _dfs_sibbling_sc(self, s_cursor, direction):
+        current = self._node_for_s_cursor(self.tree, s_cursor)
+        dfs = self._dfs(self.tree)
+        dfs_index = dfs.index(current) + direction
+        bounded_index = max(0, min(len(dfs) - 1, dfs_index))
+        new_node = dfs[bounded_index]
+        return self._s_cursor_for_node(self.tree, new_node)
 
     def _t_for_text(self, text, is_cursor):
         text_texture = self._texture_for_text(text)
