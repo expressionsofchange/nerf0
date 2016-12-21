@@ -318,6 +318,32 @@ class TreeWidget(Widget):
 
         return BoxTerminal(instructions, bottom_right)
 
+    def _nt_for_node_single_line(self, node):
+        if isinstance(node, TreeText):
+            return BoxNonTerminal(node, [], [no_offset(self._t_for_text(node.unicode_, node.is_cursor))])
+
+        t = self._t_for_text("(", node.is_cursor)
+        offset_terminals = [
+            no_offset(t),
+        ]
+        offset_nonterminals = []
+
+        offset_right = t.outer_dimensions[X]
+        offset_down = 0
+
+        for child in node.children:
+            nt = self._nt_for_node_single_line(child)
+            offset_nonterminals.append(OffsetBox((offset_right, offset_down), nt))
+            offset_right += nt.outer_dimensions[X]
+
+        t = self._t_for_text(")", node.is_cursor)
+        offset_terminals.append(OffsetBox((offset_right, offset_down), t))
+
+        return BoxNonTerminal(
+            node,
+            offset_nonterminals,
+            offset_terminals)
+
     def _nt_for_node_as_todo_list(self, node):
         if isinstance(node, TreeText):
             return BoxNonTerminal(node, [], [no_offset(self._t_for_text(node.unicode_, node.is_cursor))])
@@ -327,12 +353,11 @@ class TreeWidget(Widget):
 
         # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that we
         # are robust for (we render it as flat text); but it's not the expected use-case.
-        flat_child_0 = "" + node.children[0].pp_flat()
-        t = self._t_for_text(flat_child_0, node.children[0].is_cursor)
+        nt = self._nt_for_node_single_line(node.children[0])
         offset_nonterminals = [
-            no_offset(BoxNonTerminal(node.children[0], [], [no_offset(t)]))
+            no_offset(nt)
         ]
-        offset_down = t.outer_dimensions[Y]
+        offset_down = nt.outer_dimensions[Y]
         offset_right = 50  # Magic number for indentation
 
         for child in node.children[1:]:
@@ -364,16 +389,14 @@ class TreeWidget(Widget):
         if len(node.children) > 0:
             # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that
             # we are robust for (we render it as flat text); but it's not the expected use-case.
-            flat_child_0 = "" + node.children[0].pp_flat()
-            t = self._t_for_text(flat_child_0, node.children[0].is_cursor)
-
+            nt = self._nt_for_node_single_line(node.children[0])
             offset_nonterminals.append(
-                OffsetBox((offset_right, offset_down), BoxNonTerminal(node.children[0], [], [no_offset(t)]))
+                OffsetBox((offset_right, offset_down), nt)
             )
-            offset_right += t.outer_dimensions[X]
+            offset_right += nt.outer_dimensions[X]
 
             if len(node.children) > 1:
-                for i, child_x in enumerate(node.children[1:]):
+                for child_x in node.children[1:]:
                     nt = self._nt_for_node_as_lispy_layout(child_x)
                     offset_nonterminals.append(OffsetBox((offset_right, offset_down), nt))
                     offset_down += nt.outer_dimensions[Y]
