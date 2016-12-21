@@ -10,7 +10,11 @@ from kivy.core.text.markup import LabelBase
 from kivy.metrics import pt
 from kivy.graphics.context_instructions import PushMatrix, PopMatrix, Translate
 
-from step0 import TreeText, HashStore, play, parse_nout, parse_pos_acts, Possibility, pp_test
+from datastructure import TreeText, play, parse_nout
+
+from hashstore import HashStore
+from posacts import Possibility, parse_pos_acts
+from example_data import pp_test
 
 MARGIN = 5
 PADDING = 3
