@@ -1,8 +1,6 @@
 from binascii import unhexlify
 
-from datastructure import Hash, Nout
-from posacts import Possibility
-from utils import pmts
+from datastructure import Hash
 
 
 class HashStore(object):
@@ -10,7 +8,6 @@ class HashStore(object):
     def __init__(self, parser):
         self.d = {}
         self.parser = parser
-        self.write_to = None
 
     def __repr__(self):
         return '\n'.join(
@@ -19,17 +16,9 @@ class HashStore(object):
             )
 
     def add(self, serializable):
-        # Even though HashStore has, in theory, no hard relationship with "Nouts", in practice we yiled "Possibilities"
-        # here, which require Nout objects; that may point to "pull Possibility out" refactoring
-        pmts(serializable, Nout)
-
         bytes_ = serializable.as_bytes()
         hash_ = Hash.for_bytes(bytes_)
         self.d[hash_.as_bytes()] = bytes_
-        if self.write_to is not None:
-            # Yuk: # the conditional on write-to
-            self.write_to.write(Possibility(serializable).as_bytes())
-
         return hash_
 
     def get(self, hash_):

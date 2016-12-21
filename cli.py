@@ -1,13 +1,13 @@
 # coding=utf-8
 from os.path import isfile
 
+from channel import Channel
 from datastructure import (
     BecomeNode,
     Delete,
     Insert,
     NoutBegin,
     NoutBlock,
-    parse_nout,
     play,
     Replace,
     TextBecome,
@@ -17,25 +17,17 @@ from datastructure import (
 from posacts import (
     Actuality,
     Possibility,
-    parse_pos_acts,
 )
 from hashstore import (
-    HashStore,
+    Hash,
 )
 
-
-def edit_text(possible_timelines, text_node):
-    print(text_node.unicode_)
-    print('=' * 80)
-    text = input(">>> ")
-
-    # In the most basic version of the editor text has no history, which is why the editing of text spawns a new
-    # (extremely brief) history
-    # THE ABOVE IS A LIE
-    # we could just as well choose to have history (just a history of full replaces) at the level of the text nodes
-    # I have chosen against it for now, but we can always do it
-    begin = possible_timelines.add(NoutBegin())
-    return possible_timelines.add(NoutBlock(TextBecome(text), begin))
+from filehandler import (
+    FileWriter,
+    RealmOfThePossible,
+    initialize_history,
+    read_from_file
+)
 
 
 def print_nouts(possible_timelines, present_nout_hash):
@@ -73,76 +65,100 @@ def print_nouts_2(possible_timelines, present_nout_hash, indentation, seen):
     return result + (indentation * " ") + repr(present_nout_hash) + ': ' + repr(present_nout) + horizontal_recursion
 
 
-def edit_node(possible_timelines, present_nout, autosave):
-    while True:
-        present_tree = play(possible_timelines, possible_timelines.get(present_nout))
-        print("AUTOSAVE", autosave)
-        print('=' * 80)
+class CLI(object):
+    def __init__(self, parent_channel, possible_timelines, autosave):
+        self._send_to_parent = parent_channel.connect(self.receive_from_parent)
+        self.autosave = autosave
+        self.present_nout_hash = None  # expected to be received from parent
 
-        print("HISTORY")
-        print(print_nouts_2(possible_timelines, present_nout, 0, set()))
-        print('=' * 80)
+        # possible_timelines is modelled as a global variable;
+        # * reads can be done straight from the variable
+        # * writes are expected to channeled, by passing Possibility up the parent-chain
+        self.possible_timelines = possible_timelines
 
-        print(present_tree.pp_todo_numbered(0))
-        print('=' * 80)
+    def receive_from_parent(self, data):
+        # there is no else branch: Possibility only travels up
+        if isinstance(data, Actuality):
+            self.present_nout_hash = data.nout_hash
+            self._present_nout_updated()
 
-        choice = None
-        while choice not in ['x', 'w', 'W', 'e', 'd', 'i', 'a', 's', '>', '<', '+', '-']:
-            # DONE:
-            # print "[E]dit"
-            # print "[D]elete"
-            # print "[I]nsert"
-            # print "e[X]it without saving"
-            # print "Exit and save (W)"
+    def receive_from_child(self, data):
+        if isinstance(data, Possibility):
+            self._send_to_parent(data)
+        else:  # Actuality
+            # Not sure: too much Possibility objects being sent up (I think so...) (TODO): check in practice
+            self.set_present_nout(NoutBlock(Replace(self.child_s_address, data.nout_hash), self.present_nout_hash))
 
-            # UNDO?
-            # Save w/o exit?
-            # Reload? (i.e. full undo?)
-
-            # Simply "Add"
-            # Create wrapping node
-            # Collapse to index
+    def main_keyboard_loop(self):
+        keep_going = True
+        while keep_going:
+            self.print_stuff_on_screen()
 
             choice = getch()
+            keep_going = self.on_keyboard_choice(choice)
+
+    def send_possibility_up(self, nout):
+        # Note: the're some duplication here of logic that's also elsewhere, e.g. the calculation of the hash was
+        # copy/pasted from the HashStore implementation; but we need it here again.
+
+        bytes_ = nout.as_bytes()
+        hash_ = Hash.for_bytes(bytes_)
+        self._send_to_parent(Possibility(nout))
+        return hash_
+
+    def send_actuality_up(self, nout_hash):
+        self._send_to_parent(Actuality(nout_hash))
+
+    def set_present_nout(self, nout):
+        """Call only_from inside_ ! don't call this in response to parent updates, because this moves data in the
+        direction of the parent!"""
+        present_nout_hash = self.send_possibility_up(nout)
+        self.present_nout_hash = present_nout_hash
+        if self.autosave:
+            self.send_actuality_up(present_nout_hash)
+        self._present_nout_updated()
+
+    def _present_nout_updated(self):
+        """invalidation of any local caches that may depend on present_nout; must be called in response to _any_
+        update"""
+        self.present_tree = play(self.possible_timelines, self.possible_timelines.get(self.present_nout_hash))
+
+    def on_keyboard_choice(self, choice):
+        if choice not in ['x', 'w', 'W', 'e', 'd', 'i', 'a', 's', '>', '<', '+', '-']:
+            return True
 
         if choice == '+':
-            autosave = True
+            self.autosave = True
 
         if choice == '-':
-            autosave = False
+            self.autosave = False
 
         if choice in 'xwW':
             if choice == 'x':  # Exit w/out saving
-                raise StopIteration
+                return False
             if choice == 'w':  # write and continue
-                yield present_nout
-            if choice == 'W':
-                yield present_nout
-                raise StopIteration
+                self.send_actuality_up(self.present_nout_hash)
+            if choice == 'W':  # Save & exit
+                self.send_actuality_up(self.present_nout_hash)
+                return False
 
         if choice == 'a':  # append node
-            begin = possible_timelines.add(NoutBegin())
-            inserted_nout = possible_timelines.add(NoutBlock(BecomeNode(), begin))
-            present_nout = possible_timelines.add(
-                NoutBlock(Insert(len(present_tree.children), inserted_nout), present_nout))
-            if autosave:
-                yield present_nout
+            begin = self.send_possibility_up(NoutBegin())
+            inserted_nout = self.send_possibility_up(NoutBlock(BecomeNode(), begin))
+            self.set_present_nout(
+                NoutBlock(Insert(len(self.present_tree.children), inserted_nout), self.present_nout_hash))
 
         if choice == 's':  # append text
             text = input(">>> ")
-            begin = possible_timelines.add(NoutBegin())
-            inserted_nout = possible_timelines.add(NoutBlock(TextBecome(text), begin))
-            present_nout = possible_timelines.add(
-                NoutBlock(Insert(len(present_tree.children), inserted_nout), present_nout))
-            if autosave:
-                yield present_nout
+            begin = self.send_possibility_up(NoutBegin())
+            inserted_nout = self.send_possibility_up(NoutBlock(TextBecome(text), begin))
+            self.set_present_nout(
+                NoutBlock(Insert(len(self.present_tree.children), inserted_nout), self.present_nout_hash))
 
         if choice == '>':  # surround yourself with a new node
-            begin = possible_timelines.add(NoutBegin())
-            wrapping_nout = possible_timelines.add(NoutBlock(BecomeNode(), begin))
-            present_nout = possible_timelines.add(NoutBlock(Insert(0, present_nout), wrapping_nout))
-            if autosave:
-                yield present_nout
+            begin = self.send_possibility_up(NoutBegin())
+            wrapping_nout = self.send_possibility_up(NoutBlock(BecomeNode(), begin))
+            self.self.present_nout(NoutBlock(Insert(0, self.present_nout_hash), wrapping_nout))
 
         # Note (TODO): edit & delete presume an existing node; insertion can happen at the end too.
         # i.e. check indexes
@@ -150,30 +166,38 @@ def edit_node(possible_timelines, present_nout, autosave):
             index = int(input("Index>>> "))
 
         if choice == '<':  # remove a node; make it's contents available as _your_ children
-            to_be_removed = present_tree.children[index]
+            to_be_removed = self.present_tree.children[index]
             for i, (child, child_history) in enumerate(zip(to_be_removed.children, to_be_removed.histories)):
-                present_nout = possible_timelines.add(NoutBlock(Insert(index + i + 1, child_history), present_nout))
+                self.set_present_nout(NoutBlock(Insert(index + i + 1, child_history), self.present_nout_hash))
 
-            present_nout = possible_timelines.add(NoutBlock(Delete(index), present_nout))
-            if autosave:
-                yield present_nout
+            self.set_present_nout(NoutBlock(Delete(index), self.present_nout_hash))
 
         if choice in 'e':
             # Where do we distinguish the type? perhaps actually here, based on what we see.
-            subject = present_tree.children[index]
+            subject = self.present_tree.children[index]
 
             if isinstance(subject, TreeNode):
-                old_nout = present_tree.histories[index]
-                for new_nout in edit_node(possible_timelines, old_nout, autosave=autosave):
-                    present_nout = possible_timelines.add(NoutBlock(Replace(index, new_nout), present_nout))
-                    if autosave:
-                        yield present_nout
+                self.child_s_address = index
+                current_child_nout = self.present_tree.histories[index]
+
+                self.child_comms = Channel()
+                send_to_child = self.child_comms.connect(self.receive_from_child)
+                self.child = CLI(self.child_comms, self.possible_timelines, self.autosave)
+                send_to_child(Actuality(current_child_nout))
+                self.child.main_keyboard_loop()
 
             else:
-                present_nout = possible_timelines.add(
-                    NoutBlock(Replace(index, edit_text(possible_timelines, subject)), present_nout))
-                if autosave:
-                    yield present_nout
+                print(subject.unicode_)
+                print('=' * 80)
+                text = input(">>> ")
+
+                # In the most basic version of the editor, we have not thought extensively about the Clef for Text
+                # nodes, having only TextBecome; even in that scenario we can choose between "every text edit spawns a
+                # history from the beginning of time" and "every text edit is adds a piece of history". We chose the
+                # first, but the second is probably better.
+                begin = self.send_possibility_up(NoutBegin())
+                text_nout = self.send_possibility_up(NoutBlock(TextBecome(text), begin))
+                self.set_present_nout(NoutBlock(Replace(index, text_nout), self.present_nout_hash))
 
         if choice == 'i':
             type_choice = None
@@ -183,51 +207,47 @@ def edit_node(possible_timelines, present_nout, autosave):
 
             if type_choice == 't':
                 text = input(">>> ")
-                begin = possible_timelines.add(NoutBegin())
-                inserted_nout = possible_timelines.add(NoutBlock(TextBecome(text), begin))
+                begin = self.send_possibility_up(NoutBegin())
+                inserted_nout = self.send_possibility_up(NoutBlock(TextBecome(text), begin))
 
             else:  # type_choice == 'n'
-                begin = possible_timelines.add(NoutBegin())
-                inserted_nout = possible_timelines.add(NoutBlock(BecomeNode(), begin))
+                begin = self.send_possibility_up(NoutBegin())
+                inserted_nout = self.send_possibility_up(NoutBlock(BecomeNode(), begin))
 
-            present_nout = possible_timelines.add(NoutBlock(Insert(index, inserted_nout), present_nout))
-            if autosave:
-                yield present_nout
+            self.set_present_nout(NoutBlock(Insert(index, inserted_nout), self.present_nout_hash))
 
         if choice == 'd':
-            present_nout = possible_timelines.add(NoutBlock(Delete(index), present_nout))
-            if autosave:
-                yield present_nout
+            self.set_present_nout(NoutBlock(Delete(index), self.present_nout_hash))
+
+        return True
+
+    def print_stuff_on_screen(self):
+        # print("AUTOSAVE", self.autosave)
+        # print('=' * 80)
+
+        # print("HISTORY")
+        # print(print_nouts_2(possible_timelines, self.present_nout_hash, 0, set()))
+        # print('=' * 80)
+
+        print(self.present_tree.pp_todo_numbered(0))
+        print('=' * 80)
 
 
 def edit(filename):
-    possible_timelines = HashStore(parse_nout)
+    channel = Channel()
 
-    def set_current(f, nout):
-        f.write(Actuality(nout).as_bytes())
+    possible_timelines = RealmOfThePossible(channel).possible_timelines
+    cli = CLI(channel, possible_timelines, False)
 
     if isfile(filename):
-        byte_stream = iter(open(filename, 'rb').read())
-        for pos_act in parse_pos_acts(byte_stream):
-            if isinstance(pos_act, Possibility):
-                possible_timelines.add(pos_act.nout)
-            else:  # Actuality
-                # this can be depended on to happen at least once ... if the file is correct
-                present_nout = pos_act.nout_hash
-
+        read_from_file(filename, channel)
+        FileWriter(channel, filename)
     else:
-        with open(filename, 'wb') as initialize_f:
-            possible_timelines.write_to = initialize_f
+        # FileWriter first to ensure that the initialization becomes part of the file.
+        FileWriter(channel, filename)
+        initialize_history(channel)
 
-            begin = possible_timelines.add(NoutBegin())
-            present_nout = possible_timelines.add(NoutBlock(BecomeNode(), begin))
-
-            set_current(initialize_f, present_nout)  # write the 'new file
-
-    with open(filename, 'ab') as f:
-        possible_timelines.write_to = f
-        for new_nout in edit_node(possible_timelines, present_nout, False):
-            set_current(f, new_nout)
+    cli.main_keyboard_loop()
 
 
 # The abilitiy to read a single character
