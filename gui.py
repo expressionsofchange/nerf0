@@ -1,5 +1,6 @@
 from collections import namedtuple
 from contextlib import contextmanager
+from os.path import isfile
 
 from kivy.core.window import Window
 from kivy.app import App
@@ -10,17 +11,40 @@ from kivy.core.text.markup import LabelBase
 from kivy.metrics import pt
 from kivy.graphics.context_instructions import PushMatrix, PopMatrix, Translate
 
-from datastructure import TreeText, play, parse_nout
+from datastructure import (
+    BecomeNode,
+    # Delete,
+    Insert,
+    NoutBegin,
+    NoutBlock,
+    construct_x,
+    Replace,
+    TextBecome,
+    TreeNode,
+    TreeText,
+)
 
-from hashstore import HashStore
-from posacts import Possibility, parse_pos_acts
-from example_data import pp_test
+from hashstore import Hash
+from posacts import Possibility, Actuality
+from channel import Channel
+
+from filehandler import (
+    FileWriter,
+    RealmOfThePossible,
+    initialize_history,
+    read_from_file
+)
 
 MARGIN = 5
 PADDING = 3
 
 X = 0
 Y = 1
+
+# These are standard Python (and common sense); still... one might occasionally be tempted to think that 'before' is
+# moddeled as -1 rather than 0, which is why I made the correct indexes constants
+INSERT_BEFORE = 0
+INSERT_AFTER = 1
 
 LabelBase.register(name="FreeSerif",
                    fn_regular="/usr/share/fonts/truetype/freefont/FreeSerif.ttf",
@@ -138,6 +162,27 @@ class TreeWidget(Widget):
 
     def __init__(self, **kwargs):
         super(TreeWidget, self).__init__(**kwargs)
+        self.autosave = True
+
+        self.s_cursor = []
+
+        # In this version the file-handling and history-channel are maintained by the GUI widget itself. I can imagine
+        # they'll be moved out once we get multiple windows.
+
+        filename = 'test2'
+        history_channel = Channel()  # Pun not intended
+
+        self.possible_timelines = RealmOfThePossible(history_channel).possible_timelines
+        self.send_to_channel = history_channel.connect(self.receive_from_channel)
+
+        if isfile(filename):
+            # ReadFromFile before connecting to the Writer to ensure that reading from the file does not write to it
+            read_from_file(filename, history_channel)
+            FileWriter(history_channel, filename)
+        else:
+            # FileWriter first to ensure that the initialization becomes part of the file.
+            FileWriter(history_channel, filename)
+            initialize_history(history_channel)
 
         self.bind(pos=self.refresh)
         self.bind(size=self.refresh)
@@ -145,13 +190,46 @@ class TreeWidget(Widget):
         self._keyboard = Window.request_keyboard(self._keyboard_closed, self, 'text')
         self._keyboard.bind(on_key_down=self._on_keyboard_down)
 
-        self.tree = pp_test
-        self.s_cursor = []
-        self._unpoke_all_cursors(self.tree)
-        self._node_for_s_cursor(self.tree, self.s_cursor).is_cursor = True
+    # ## Section for channel-communication
+    def receive_from_channel(self, data):
+        # data :: Possibility | Actuality
+        # there is no else branch: Possibility only travels _to_ the channel;
+        if isinstance(data, Actuality):
+            self.present_nout_hash = data.nout_hash
+            self._present_nout_updated()
+
+    def send_possibility_up(self, nout):
+        # Note: the're some duplication here of logic that's also elsewhere, e.g. the calculation of the hash was
+        # copy/pasted from the HashStore implementation; but we need it here again.
+
+        bytes_ = nout.as_bytes()
+        hash_ = Hash.for_bytes(bytes_)
+        self.send_to_channel(Possibility(nout))
+        return hash_
+
+    def send_actuality_up(self, nout_hash):
+        self.send_to_channel(Actuality(nout_hash))
+
+    def set_present_nout(self, nout):
+        """Call only_from inside_ ! don't call this in response to parent updates, because this moves data in the
+        direction of the parent!"""
+        present_nout_hash = self.send_possibility_up(nout)
+        self.present_nout_hash = present_nout_hash
+        if self.autosave:
+            self.send_actuality_up(present_nout_hash)
+        self._present_nout_updated()
+
+    def _present_nout_updated(self):
+        """invalidation of any local caches that may depend on present_nout; must be called in response to _any_
+        update"""
+
+        # LATER: The below is stupid (but it's the easiest impl.): we don't need to replay all of history all the time,
+        # we only need to replay the last bit.
+        self.present_tree = construct_x(self.possible_timelines, self.possible_timelines.get(self.present_nout_hash))
 
         self.refresh()
 
+    # ## Section for Keyboard / Mouse handling
     def _keyboard_closed(self):
         # LATER: think about further handling of this scenario. (probably: only once I get into Mobile territory)
         self._keyboard.unbind(on_key_down=self._on_keyboard_down)
@@ -162,22 +240,38 @@ class TreeWidget(Widget):
 
         if textual_code in ['left', 'h']:
             self.s_cursor = self._parent_sc(self.s_cursor)
+            self.refresh()
         elif textual_code in ['right', 'l']:
             self.s_cursor = self._child_sc(self.s_cursor)
+            self.refresh()
         elif textual_code in ['up', 'k']:
             self.s_cursor = self._dfs_sibbling_sc(self.s_cursor, -1)
+            self.refresh()
         elif textual_code in ['down', 'j']:
             self.s_cursor = self._dfs_sibbling_sc(self.s_cursor, 1)
+            self.refresh()
 
-        # Redraw, the lazy way:
-        self._unpoke_all_cursors(self.tree)
-        self._node_for_s_cursor(self.tree, self.s_cursor).is_cursor = True
-        self.refresh()
+        elif textual_code in ['q']:
+            self._add_sibbling_text(INSERT_BEFORE)
+        elif textual_code in ['w']:
+            self._add_child_text()
+        elif textual_code in ['e']:
+            self._add_sibbling_text(INSERT_AFTER)
+        elif textual_code in ['a']:
+            self._add_sibbling_node(INSERT_BEFORE)
+        elif textual_code in ['s']:
+            self._add_child_node()
+        elif textual_code in ['d']:
+            self._add_sibbling_node(INSERT_AFTER)
 
         # Return True to accept the key. Otherwise, it will be used by the system.
         return True
 
     def refresh(self, *args):
+        """refresh means: redraw (I suppose we could rename, but I believe it's "canonical Kivy" to use 'refresh'"""
+        self._unpoke_all_cursors(self.present_tree)
+        self._node_for_s_cursor(self.present_tree, self.s_cursor).is_cursor = True
+
         self.canvas.clear()
 
         self.offset = (0, self.size[Y])  # default offset: start on top_left
@@ -187,7 +281,7 @@ class TreeWidget(Widget):
             Rectangle(pos=self.pos, size=self.size,)
 
         with apply_offset(self.canvas, self.offset):
-            self.box_structure = self._nt_for_node_as_lispy_layout(self.tree)
+            self.box_structure = self._nt_for_node_as_lispy_layout(self.present_tree)
             self._render_box(self.box_structure)
 
     def on_touch_down(self, touch):
@@ -204,11 +298,11 @@ class TreeWidget(Widget):
         clicked_item = self.box_structure.from_point(bring_into_offset(self.offset, (touch.x, touch.y)))
 
         if clicked_item is not None:
-            self.s_cursor = self._s_cursor_for_node(self.tree, clicked_item.semantics)
+            self.s_cursor = self._s_cursor_for_node(self.present_tree, clicked_item.semantics)
 
             # Redraw, the lazy way: (COPY PASTA)
-            self._unpoke_all_cursors(self.tree)
-            self._node_for_s_cursor(self.tree, self.s_cursor).is_cursor = True
+            self._unpoke_all_cursors(self.present_tree)
+            self._node_for_s_cursor(self.present_tree, self.s_cursor).is_cursor = True
             self.refresh()
 
         # TODO (potentially): grabbing, as documented here (including the caveats of that approach)
@@ -216,20 +310,7 @@ class TreeWidget(Widget):
 
         return ret
 
-    def _hack(self):
-        filename = 'test1'
-        possible_timelines = HashStore(parse_nout)
-        byte_stream = iter(open(filename, 'rb').read())
-        for pos_act in parse_pos_acts(byte_stream):
-            if isinstance(pos_act, Possibility):
-                possible_timelines.add(pos_act.nout)
-            else:  # Actuality
-                # this can be depended on to happen at least once ... if the file is correct
-                present_nout = pos_act.nout_hash
-        present_tree = play(possible_timelines, possible_timelines.get(present_nout))
-        return present_tree
-
-    # ## Some s_cursor methods:
+    # ## Section for s_cursor navigation
     def _dfs(self, node):
         result = [node]
         if hasattr(node, 'children'):
@@ -252,6 +333,14 @@ class TreeWidget(Widget):
             # no bounds checking (yet?)
             return self._node_for_s_cursor(node.children[s_cursor[0]], s_cursor[1:])
 
+    def _node_path_for_s_cursor(self, node, s_cursor):
+        if s_cursor == []:
+            return [node]
+
+        if hasattr(node, 'children'):
+            # no bounds checking (yet?)
+            return [node] + self._node_path_for_s_cursor(node.children[s_cursor[0]], s_cursor[1:])
+
     def _s_cursor_for_node(self, in_node, sought_node):
         if in_node == sought_node:
             return []
@@ -270,7 +359,7 @@ class TreeWidget(Widget):
         return s_cursor[:-1]
 
     def _child_sc(self, s_cursor):
-        node = self._node_for_s_cursor(self.tree, s_cursor)
+        node = self._node_for_s_cursor(self.present_tree, s_cursor)
         if not hasattr(node, 'children') or len(node.children) == 0:
             return s_cursor  # the no-op
         return s_cursor + [0]
@@ -279,19 +368,105 @@ class TreeWidget(Widget):
         if s_cursor == []:
             return s_cursor  # root has no sibblings
 
-        parent = self._node_for_s_cursor(self.tree, self._parent_sc(s_cursor))
+        parent = self._node_for_s_cursor(self.present_tree, self._parent_sc(s_cursor))
         index = s_cursor[-1] + direction
         bounded_index = max(0, min(len(parent.children) - 1, index))
         return s_cursor[:-1] + [bounded_index]
 
     def _dfs_sibbling_sc(self, s_cursor, direction):
-        current = self._node_for_s_cursor(self.tree, s_cursor)
-        dfs = self._dfs(self.tree)
+        current = self._node_for_s_cursor(self.present_tree, s_cursor)
+        dfs = self._dfs(self.present_tree)
         dfs_index = dfs.index(current) + direction
         bounded_index = max(0, min(len(dfs) - 1, dfs_index))
         new_node = dfs[bounded_index]
-        return self._s_cursor_for_node(self.tree, new_node)
+        return self._s_cursor_for_node(self.present_tree, new_node)
 
+    # ## Section for editing
+    def _add_child_node(self):
+        cursor_node = self._node_for_s_cursor(self.present_tree, self.s_cursor)
+        if not isinstance(cursor_node, TreeNode):
+            return  # for now... we just silently ignore the user's request when they ask to add a child to a non-node
+
+        return self._add_x_node(self.s_cursor, len(cursor_node.children))
+
+    def _add_sibbling_node(self, direction):
+        if self.s_cursor == []:
+            return  # adding sibblings to the root is not possible (it would lead to a forrest)
+
+        # because direction is in [0, 1]... no need to minimize/maximize (PROVE!)
+        index = self.s_cursor[-1] + direction
+        return self._add_x_node(self.s_cursor[:-1], index)
+
+    def _add_x_node(self, s_cursor, index):
+        cursor_node = self._node_for_s_cursor(self.present_tree, s_cursor)
+
+        begin = self.send_possibility_up(NoutBegin())
+        to_be_inserted = self.send_possibility_up(NoutBlock(BecomeNode(), begin))
+
+        new_history_at_lower_level = self.send_possibility_up(
+            NoutBlock(Insert(index, to_be_inserted), cursor_node.metadata.nout_hash))
+
+        for i in reversed(range(len(s_cursor))):
+            # We iterate over all indices in the cursor in reverse order to "bubble up" the Replacements
+            # N.B.: slice to index removes from that index upwards. That means that replace_in is the node _in which_ a
+            # replacement will occur (it's the parent of the replacement); s_cursor[i] denotes the index at which this
+            # replacement should occur.
+            replace_in_path = s_cursor[:i]
+            replace_in = self._node_for_s_cursor(self.present_tree, replace_in_path)
+
+            new_history_at_lower_level = self.send_possibility_up(
+                NoutBlock(Replace(s_cursor[i], new_history_at_lower_level), replace_in.metadata.nout_hash))
+
+        # I was temporarily puzzled by: how to express Replacement of the root node?!
+        # feels like a lack of symmetry here.
+        # The answer is (for now): at top level we simply yield an actuality
+        self.present_nout_hash = new_history_at_lower_level
+        self.send_actuality_up(new_history_at_lower_level)
+        self._present_nout_updated()
+
+    def _add_child_text(self):
+        cursor_node = self._node_for_s_cursor(self.present_tree, self.s_cursor)
+        if not isinstance(cursor_node, TreeNode):
+            return  # for now... we just silently ignore the user's request when they ask to add a child to a non-node
+
+        return self._add_x_text(self.s_cursor, len(cursor_node.children))
+
+    def _add_sibbling_text(self, direction):
+        if self.s_cursor == []:
+            return  # adding sibblings to the root is not possible (it would lead to a forrest)
+
+        # because direction is in [0, 1]... no need to minimize/maximize (PROVE!)
+        index = self.s_cursor[-1] + direction
+        return self._add_x_text(self.s_cursor[:-1], index)
+
+    def _add_x_text(self, s_cursor, index):
+        cursor_node = self._node_for_s_cursor(self.present_tree, s_cursor)
+
+        begin = self.send_possibility_up(NoutBegin())
+        to_be_inserted = self.send_possibility_up(NoutBlock(TextBecome("Een text"), begin))
+
+        new_history_at_lower_level = self.send_possibility_up(
+            NoutBlock(Insert(index, to_be_inserted), cursor_node.metadata.nout_hash))
+
+        for i in reversed(range(len(s_cursor))):
+            # We iterate over all indices in the cursor in reverse order to "bubble up" the Replacements
+            # N.B.: slice to index removes from that index upwards. That means that replace_in is the node _in which_ a
+            # replacement will occur (it's the parent of the replacement); s_cursor[i] denotes the index at which this
+            # replacement should occur.
+            replace_in_path = s_cursor[:i]
+            replace_in = self._node_for_s_cursor(self.present_tree, replace_in_path)
+
+            new_history_at_lower_level = self.send_possibility_up(
+                NoutBlock(Replace(s_cursor[i], new_history_at_lower_level), replace_in.metadata.nout_hash))
+
+        # I was temporarily puzzled by: how to express Replacement of the root node?!
+        # feels like a lack of symmetry here.
+        # The answer is (for now): at top level we simply yield an actuality
+        self.present_nout_hash = new_history_at_lower_level
+        self.send_actuality_up(new_history_at_lower_level)
+        self._present_nout_updated()
+
+    # ## Section for drawing boxes
     def _t_for_text(self, text, is_cursor):
         text_texture = self._texture_for_text(text)
         content_height = text_texture.height

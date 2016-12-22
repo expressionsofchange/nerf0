@@ -1,6 +1,6 @@
 from datastructure import NoutBegin, NoutBlock, BecomeNode, parse_nout
 from posacts import parse_pos_acts, Possibility, Actuality
-from hashstore import HashStore
+from hashstore import HashStore, Hash
 
 
 class FileWriter(object):
@@ -23,14 +23,18 @@ def read_from_file(filename, channel):
 
 
 def initialize_history(channel):
+    def hash_for(nout):
+        # copy/pasta... e.g. from cli.py (at the time of copy/pasting)
+        bytes_ = nout.as_bytes()
+        return Hash.for_bytes(bytes_)
+
     def as_iter():
         begin = NoutBegin()
         yield Possibility(begin)
-        yield Actuality(begin)
 
-        root_node_nout = NoutBlock(BecomeNode(), begin)
+        root_node_nout = NoutBlock(BecomeNode(), hash_for(begin))
         yield Possibility(root_node_nout)
-        yield Actuality(root_node_nout)
+        yield Actuality(hash_for(root_node_nout))
 
     for item in as_iter():
         channel.broadcast(item)
