@@ -8,7 +8,7 @@ from datastructure import (
     Insert,
     NoutBegin,
     NoutBlock,
-    play,
+    construct_x,
     Replace,
     TextBecome,
     TreeNode,
@@ -79,6 +79,8 @@ class CLI(object):
     def receive_from_parent(self, data):
         # there is no else branch: Possibility only travels up
         if isinstance(data, Actuality):
+            # LATER: now that TreeNode has nouth_hash in its metadata, we can get rid of self.present_nout_hash in favor
+            # of simply self.present_nout_hash.metadata.nout_hash
             self.present_nout_hash = data.nout_hash
             self._present_nout_updated()
 
@@ -121,7 +123,7 @@ class CLI(object):
     def _present_nout_updated(self):
         """invalidation of any local caches that may depend on present_nout; must be called in response to _any_
         update"""
-        self.present_tree = play(self.possible_timelines, self.possible_timelines.get(self.present_nout_hash))
+        self.present_tree = construct_x(self.possible_timelines, self.possible_timelines.get(self.present_nout_hash))
 
     def on_keyboard_choice(self, choice):
         if choice not in ['x', 'w', 'W', 'e', 'd', 'i', 'a', 's', '>', '<', '+', '-']:
@@ -144,16 +146,16 @@ class CLI(object):
 
         if choice == 'a':  # append node
             begin = self.send_possibility_up(NoutBegin())
-            inserted_nout = self.send_possibility_up(NoutBlock(BecomeNode(), begin))
+            to_be_inserted = self.send_possibility_up(NoutBlock(BecomeNode(), begin))
             self.set_present_nout(
-                NoutBlock(Insert(len(self.present_tree.children), inserted_nout), self.present_nout_hash))
+                NoutBlock(Insert(len(self.present_tree.children), to_be_inserted), self.present_nout_hash))
 
         if choice == 's':  # append text
             text = input(">>> ")
             begin = self.send_possibility_up(NoutBegin())
-            inserted_nout = self.send_possibility_up(NoutBlock(TextBecome(text), begin))
+            to_be_inserted = self.send_possibility_up(NoutBlock(TextBecome(text), begin))
             self.set_present_nout(
-                NoutBlock(Insert(len(self.present_tree.children), inserted_nout), self.present_nout_hash))
+                NoutBlock(Insert(len(self.present_tree.children), to_be_inserted), self.present_nout_hash))
 
         if choice == '>':  # surround yourself with a new node
             begin = self.send_possibility_up(NoutBegin())
@@ -167,8 +169,9 @@ class CLI(object):
 
         if choice == '<':  # remove a node; make it's contents available as _your_ children
             to_be_removed = self.present_tree.children[index]
-            for i, (child, child_history) in enumerate(zip(to_be_removed.children, to_be_removed.histories)):
-                self.set_present_nout(NoutBlock(Insert(index + i + 1, child_history), self.present_nout_hash))
+            for i, child in enumerate(to_be_removed.children):
+                self.set_present_nout(
+                    NoutBlock(Insert(index + i + 1, child.metadata.nout_hash), self.present_nout_hash))
 
             self.set_present_nout(NoutBlock(Delete(index), self.present_nout_hash))
 
@@ -178,12 +181,12 @@ class CLI(object):
 
             if isinstance(subject, TreeNode):
                 self.child_s_address = index
-                current_child_nout = self.present_tree.histories[index]
+                current_child_nout_hash = self.present_tree.children[index].metadata.nout_hash
 
                 self.child_comms = Channel()
                 send_to_child = self.child_comms.connect(self.receive_from_child)
                 self.child = CLI(self.child_comms, self.possible_timelines, self.autosave)
-                send_to_child(Actuality(current_child_nout))
+                send_to_child(Actuality(current_child_nout_hash))
                 self.child.main_keyboard_loop()
 
             else:
@@ -208,13 +211,13 @@ class CLI(object):
             if type_choice == 't':
                 text = input(">>> ")
                 begin = self.send_possibility_up(NoutBegin())
-                inserted_nout = self.send_possibility_up(NoutBlock(TextBecome(text), begin))
+                to_be_inserted = self.send_possibility_up(NoutBlock(TextBecome(text), begin))
 
             else:  # type_choice == 'n'
                 begin = self.send_possibility_up(NoutBegin())
-                inserted_nout = self.send_possibility_up(NoutBlock(BecomeNode(), begin))
+                to_be_inserted = self.send_possibility_up(NoutBlock(BecomeNode(), begin))
 
-            self.set_present_nout(NoutBlock(Insert(index, inserted_nout), self.present_nout_hash))
+            self.set_present_nout(NoutBlock(Insert(index, to_be_inserted), self.present_nout_hash))
 
         if choice == 'd':
             self.set_present_nout(NoutBlock(Delete(index), self.present_nout_hash))

@@ -51,13 +51,16 @@ class Hash(object):
         return Hash(rfs(byte_stream, 32))
 
 
+class YourOwnHash(object):
+    def __init__(self, nout_hash):
+        self.nout_hash = nout_hash
+
+
 class TreeNode(object):
 
-    def __init__(self, children, histories=None):
-        if histories is None:
-            histories = []  # hack to keep the pp-code around for a bit
-        self.histories = histories
+    def __init__(self, children, metadata=None):
         self.children = children
+        self.metadata = metadata
 
     def __repr__(self):
         return self.pp_flat()
@@ -107,9 +110,10 @@ class TreeNode(object):
 
 class TreeText(object):
 
-    def __init__(self, unicode_):
+    def __init__(self, unicode_, metadata):
         pmts(unicode_, str)
         self.unicode_ = unicode_
+        self.metadata = metadata
 
     def __repr__(self):
         return self.unicode_
@@ -194,8 +198,8 @@ class BecomeNode(Note):
     def as_bytes(self):
         return bytes([NOTE_NODE_BECOME])
 
-    def apply_(self, possible_timelines, structure):
-        return TreeNode([], [])
+    def play(self, structure, recurse, metadata):
+        return TreeNode([], metadata)
 
     @staticmethod
     def from_stream(byte_stream):
@@ -217,14 +221,11 @@ class Insert(Note):
     def __repr__(self):
         return "(INSERT " + repr(self.index) + " " + repr(self.nout_hash) + ")"
 
-    def apply_(self, possible_timelines, structure):
-        h = structure.histories[:]
-        h.insert(self.index, self.nout_hash)
-
+    def play(self, structure, recurse, metadata):
         l = structure.children[:]
-        l.insert(self.index, play(possible_timelines, possible_timelines.get(self.nout_hash)))
+        l.insert(self.index, recurse(self.nout_hash))
 
-        return TreeNode(l, h)
+        return TreeNode(l, metadata)
 
     def as_bytes(self):
         return bytes([NOTE_NODE_INSERT]) + to_vlq(self.index) + self.nout_hash.as_bytes()
@@ -244,13 +245,10 @@ class Delete(Note):
     def __repr__(self):
         return "(DELETE " + repr(self.index) + ")"
 
-    def apply_(self, possible_timelines, structure):
-        h = structure.histories[:]
-        del h[self.index]
-
+    def play(self, structure, recurse, metadata):
         l = structure.children[:]
         del l[self.index]
-        return TreeNode(l, h)
+        return TreeNode(l, metadata)
 
     def as_bytes(self):
         return bytes([NOTE_NODE_DELETE]) + to_vlq(self.index)
@@ -275,13 +273,10 @@ class Replace(Note):
     def __repr__(self):
         return "(REPLACE " + repr(self.index) + " " + repr(self.nout_hash) + ")"
 
-    def apply_(self, possible_timelines, structure):
-        h = structure.histories[:]
-        h[self.index] = self.nout_hash
-
+    def play(self, structure, recurse, metadata):
         l = structure.children[:]
-        l[self.index] = play(possible_timelines, possible_timelines.get(self.nout_hash))
-        return TreeNode(l, h)
+        l[self.index] = recurse(self.nout_hash)
+        return TreeNode(l, metadata)
 
     def as_bytes(self):
         return bytes([NOTE_NODE_REPLACE]) + to_vlq(self.index) + self.nout_hash.as_bytes()
@@ -300,8 +295,8 @@ class TextBecome(Note):
     def __repr__(self):
         return "(TEXT " + self.unicode_ + ")"
 
-    def apply_(self, possible_timelines, structure):
-        return TreeText(self.unicode_)
+    def play(self, structure, recurse, metadata):
+        return TreeText(self.unicode_, metadata)
 
     def as_bytes(self):
         utf8 = self.unicode_.encode('utf-8')
@@ -325,7 +320,39 @@ def parse_note(byte_stream):
     }[byte0].from_stream(byte_stream)
 
 
-def play(possible_timelines, edge_nout):
+def construct_x(possible_timelines, edge_nout):
+    """Constructs a TreeNode with the appropriate metadata. The fact that I'm not really sure what's appropriate yet (I
+    just refactored it) is reflected in the `_x` part of this procedure's name.
+
+    What do I mean by 'metadata'?
+    By that I mean that for any single defined structure (until now there's only one) multiple choices may be made about
+    whch attributes need to be available for the rest of the program.
+
+    The prime example of this is the fact that I just added the node's own Nout Hash as an attribute on any node. This
+    is useful if you want to see a tree as "a tree of histories" and in fact expresses such trees more elegantly than
+    the previous solution (which has a special-case attribute `histories` to deal with that scenario)
+
+    The alternative case is where you're _not_ interested in the history of the node (e.g. when you want to display the
+    node you may want to ignore the history). And in general I'm not so charmed by a TreeNode having to know what it's
+    point in NoutHistory is (also because many different points in NoutHistory may map to a single treenode)
+
+    As an alternative solution I considered to pass the n (in this case 2: for TreeNode and TreeText) mechanisms of
+    construction to `play`, rather than just some metadata.
+
+    One more reason I came up with the idea of 'metadata' is: the name 'nout_hash' is bound to become quite overloaded;
+    better to reflect which nout_hash we're talking about.
+
+    (I may be overthinking this, I'm too sleepy today, but I want it documented at least somewhere)
+
+    The points where this is reflected are:
+    * metadata as an attribute on TreeNode and TreeText
+    * YourOwnHash as a class
+    * the `_x` in the present method's name
+    """
+
+    def recurse(nout_hash):
+        return construct_x(possible_timelines, possible_timelines.get(nout_hash))
+
     if edge_nout == NoutBegin():
         # Does it make sense to allow for the "playing" of "begin only"?
         # Only if you think "nothing" is a thing; let's build a version which doesn't do that first.
@@ -335,8 +362,13 @@ def play(possible_timelines, edge_nout):
     if last_nout == NoutBegin():
         tree_before_edge = None  # in theory: ignored, because the first note should always be a "Become" note
     else:
-        tree_before_edge = play(possible_timelines, last_nout)
+        tree_before_edge = construct_x(possible_timelines, last_nout)
 
     note = edge_nout.note
-    result = note.apply_(possible_timelines, tree_before_edge)
-    return result
+
+    def hash_for(nout):
+        # copy/pasta... e.g. from cli.py (at the time of copy/pasting)
+        bytes_ = nout.as_bytes()
+        return Hash.for_bytes(bytes_)
+
+    return note.play(tree_before_edge, recurse, YourOwnHash(hash_for(edge_nout)))
