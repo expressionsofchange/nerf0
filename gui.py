@@ -92,7 +92,7 @@ class BoxNonTerminal(object):
         * The direction of drawing is from top left to bottom right. Children may have (X, Y) offsets of respectively
             postive (including 0), and negative (including 0) values.
 
-        * We tie some "semantics" to a node in the "box tree", by this we simply mean the underlying thing that's beign
+        * We tie some "semantics" to a node in the "box tree", by this we simply mean the underlying thing that's being
             drawn. Any actual drawing related to the present semantics is represented in the terminals.
 
         * The current box may have some child-boxes, which have underlying semantics.
@@ -271,9 +271,6 @@ class TreeWidget(Widget):
 
     def refresh(self, *args):
         """refresh means: redraw (I suppose we could rename, but I believe it's "canonical Kivy" to use 'refresh'"""
-        self._unpoke_all_cursors(self.present_tree)
-        self._node_for_s_cursor(self.present_tree, self.s_cursor).is_cursor = True
-
         self.canvas.clear()
 
         self.offset = (0, self.size[Y])  # default offset: start on top_left
@@ -283,7 +280,7 @@ class TreeWidget(Widget):
             Rectangle(pos=self.pos, size=self.size,)
 
         with apply_offset(self.canvas, self.offset):
-            self.box_structure = self._nt_for_node_as_lispy_layout(self.present_tree)
+            self.box_structure = self._nt_for_node_as_lispy_layout(self.present_tree, [])
             self._render_box(self.box_structure)
 
     def on_touch_down(self, touch):
@@ -300,8 +297,7 @@ class TreeWidget(Widget):
         clicked_item = self.box_structure.from_point(bring_into_offset(self.offset, (touch.x, touch.y)))
 
         if clicked_item is not None:
-            self.s_cursor = self._s_cursor_for_node(self.present_tree, clicked_item.semantics)
-
+            self.s_cursor = clicked_item.semantics
             self.refresh()
 
         # TODO (potentially): grabbing, as documented here (including the caveats of that approach)
@@ -310,19 +306,14 @@ class TreeWidget(Widget):
         return ret
 
     # ## Section for s_cursor navigation
-    def _dfs(self, node):
-        result = [node]
+    def _dfs(self, node, s_address):
+        # returns the depth first search of all s_addresses
+        result = [s_address]
         if hasattr(node, 'children'):
-            for c in node.children:
-                result.extend(self._dfs(c))
+            for i, child in enumerate(node.children):
+                result.extend(self._dfs(child, s_address + [i]))
 
         return result
-
-    def _unpoke_all_cursors(self, node):
-        node.is_cursor = False
-        if hasattr(node, 'children'):
-            for child in node.children:
-                self._unpoke_all_cursors(child)
 
     def _node_for_s_cursor(self, node, s_cursor):
         if s_cursor == []:
@@ -339,20 +330,6 @@ class TreeWidget(Widget):
         if hasattr(node, 'children'):
             # no bounds checking (yet?)
             return [node] + self._node_path_for_s_cursor(node.children[s_cursor[0]], s_cursor[1:])
-
-    def _s_cursor_for_node(self, in_node, sought_node):
-        if in_node == sought_node:
-            return []
-
-        if not hasattr(in_node, 'children'):
-            return None
-
-        for i, child in enumerate(in_node.children):
-            child_result = self._s_cursor_for_node(child, sought_node)
-            if child_result is not None:
-                return [i] + child_result
-
-        return None
 
     def _parent_sc(self, s_cursor):
         return s_cursor[:-1]
@@ -373,12 +350,10 @@ class TreeWidget(Widget):
         return s_cursor[:-1] + [bounded_index]
 
     def _dfs_sibbling_sc(self, s_cursor, direction):
-        current = self._node_for_s_cursor(self.present_tree, s_cursor)
-        dfs = self._dfs(self.present_tree)
-        dfs_index = dfs.index(current) + direction
+        dfs = self._dfs(self.present_tree, [])
+        dfs_index = dfs.index(s_cursor) + direction
         bounded_index = max(0, min(len(dfs) - 1, dfs_index))
-        new_node = dfs[bounded_index]
-        return self._s_cursor_for_node(self.present_tree, new_node)
+        return dfs[bounded_index]
 
     # ## Section for editing
     def _add_child_node(self):
@@ -496,11 +471,12 @@ class TreeWidget(Widget):
 
         return BoxTerminal(instructions, bottom_right)
 
-    def _nt_for_node_single_line(self, node):
+    def _nt_for_node_single_line(self, node, s_address):
+        is_cursor = s_address == self.s_cursor
         if isinstance(node, TreeText):
-            return BoxNonTerminal(node, [], [no_offset(self._t_for_text(node.unicode_, node.is_cursor))])
+            return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text(node.unicode_, is_cursor))])
 
-        t = self._t_for_text("(", node.is_cursor)
+        t = self._t_for_text("(", is_cursor)
         offset_terminals = [
             no_offset(t),
         ]
@@ -509,53 +485,56 @@ class TreeWidget(Widget):
         offset_right = t.outer_dimensions[X]
         offset_down = 0
 
-        for child in node.children:
-            nt = self._nt_for_node_single_line(child)
+        for i, child in enumerate(node.children):
+            nt = self._nt_for_node_single_line(child, s_address + [i])
             offset_nonterminals.append(OffsetBox((offset_right, offset_down), nt))
             offset_right += nt.outer_dimensions[X]
 
-        t = self._t_for_text(")", node.is_cursor)
+        t = self._t_for_text(")", is_cursor)
         offset_terminals.append(OffsetBox((offset_right, offset_down), t))
 
         return BoxNonTerminal(
-            node,
+            s_address,
             offset_nonterminals,
             offset_terminals)
 
-    def _nt_for_node_as_todo_list(self, node):
+    def _nt_for_node_as_todo_list(self, node, s_address):
+        is_cursor = s_address == self.s_cursor
+
         if isinstance(node, TreeText):
-            return BoxNonTerminal(node, [], [no_offset(self._t_for_text(node.unicode_, node.is_cursor))])
+            return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text(node.unicode_, is_cursor))])
 
         if len(node.children) == 0:
-            return BoxNonTerminal(node, [], [no_offset(self._t_for_text("(...)", node.is_cursor))])
+            return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text("(...)", is_cursor))])
 
         # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that we
         # are robust for (we render it as flat text); but it's not the expected use-case.
-        nt = self._nt_for_node_single_line(node.children[0])
+        nt = self._nt_for_node_single_line(node.children[0], s_address + [0])
         offset_nonterminals = [
             no_offset(nt)
         ]
         offset_down = nt.outer_dimensions[Y]
         offset_right = 50  # Magic number for indentation
 
-        for child in node.children[1:]:
-            nt = self._nt_for_node_as_todo_list(child)
+        for i, child in enumerate(node.children[1:]):
+            nt = self._nt_for_node_as_todo_list(child, s_address + [i + 1])
             offset_nonterminals.append(OffsetBox((offset_right, offset_down), nt))
             offset_down += nt.outer_dimensions[Y]
 
         return BoxNonTerminal(
-            node,
+            s_address,
             offset_nonterminals,
             [])
 
-    def _nt_for_node_as_lispy_layout(self, node):
+    def _nt_for_node_as_lispy_layout(self, node, s_address):
         # "Lisp Style indentation, i.e. xxx yyy
         #                                   zzz
+        is_cursor = s_address == self.s_cursor
 
         if isinstance(node, TreeText):
-            return BoxNonTerminal(node, [], [no_offset(self._t_for_text(node.unicode_, node.is_cursor))])
+            return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text(node.unicode_, is_cursor))])
 
-        t = self._t_for_text("(", node.is_cursor)
+        t = self._t_for_text("(", is_cursor)
         offset_right = t.outer_dimensions[X]
         offset_down = 0
 
@@ -567,15 +546,15 @@ class TreeWidget(Widget):
         if len(node.children) > 0:
             # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that
             # we are robust for (we render it as flat text); but it's not the expected use-case.
-            nt = self._nt_for_node_single_line(node.children[0])
+            nt = self._nt_for_node_single_line(node.children[0], s_address + [0])
             offset_nonterminals.append(
                 OffsetBox((offset_right, offset_down), nt)
             )
             offset_right += nt.outer_dimensions[X]
 
             if len(node.children) > 1:
-                for child_x in node.children[1:]:
-                    nt = self._nt_for_node_as_lispy_layout(child_x)
+                for i, child_x in enumerate(node.children[1:]):
+                    nt = self._nt_for_node_as_lispy_layout(child_x, s_address + [i + 1])
                     offset_nonterminals.append(OffsetBox((offset_right, offset_down), nt))
                     offset_down += nt.outer_dimensions[Y]
 
@@ -589,11 +568,11 @@ class TreeWidget(Widget):
         else:
             offset_right = t.outer_dimensions[X]
 
-        t = self._t_for_text(")", node.is_cursor)
+        t = self._t_for_text(")", is_cursor)
         offset_terminals.append(OffsetBox((offset_right, offset_down), t))
 
         return BoxNonTerminal(
-            node,
+            s_address,
             offset_nonterminals,
             offset_terminals)
 
