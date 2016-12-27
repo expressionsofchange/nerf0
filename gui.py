@@ -13,7 +13,7 @@ from kivy.graphics.context_instructions import PushMatrix, PopMatrix, Translate
 
 from datastructure import (
     BecomeNode,
-    # Delete,
+    Delete,
     Insert,
     NoutBegin,
     NoutBlock,
@@ -263,6 +263,9 @@ class TreeWidget(Widget):
         elif textual_code in ['d']:
             self._add_sibbling_node(INSERT_AFTER)
 
+        elif textual_code in ['x', 'del']:
+            self._delete_current_node()
+
         # Return True to accept the key. Otherwise, it will be used by the system.
         return True
 
@@ -359,6 +362,17 @@ class TreeWidget(Widget):
             return  # for now... we just silently ignore the user's request when they ask to add a child to a non-node
 
         return self._add_x_node(self.s_cursor, len(cursor_node.children))
+
+    def _delete_current_node(self):
+        if self.s_cursor == []:
+            # silently ignored ('delete root' is not defined, because the root is assumed to exist. ('delete "from
+            # where?")
+            return
+
+        delete_from = self.s_cursor[:-1]
+        delete_at = self.s_cursor[-1]
+        h = self.send_possibility_up(NoutBlock(Delete(delete_at), self._node_for_s_cursor(self.present_tree, delete_from).metadata.nout_hash))
+        self._bubble_history_up(h, delete_from)
 
     def _add_sibbling_node(self, direction):
         if self.s_cursor == []:
