@@ -361,18 +361,10 @@ class TreeWidget(Widget):
         if not isinstance(cursor_node, TreeNode):
             return  # for now... we just silently ignore the user's request when they ask to add a child to a non-node
 
-        return self._add_x_node(self.s_cursor, len(cursor_node.children))
-
-    def _delete_current_node(self):
-        if self.s_cursor == []:
-            # silently ignored ('delete root' is not defined, because the root is assumed to exist. ('delete "from
-            # where?")
-            return
-
-        delete_from = self.s_cursor[:-1]
-        delete_at = self.s_cursor[-1]
-        h = self.send_possibility_up(NoutBlock(Delete(delete_at), self._node_for_s_cursor(self.present_tree, delete_from).metadata.nout_hash))
-        self._bubble_history_up(h, delete_from)
+        index = len(cursor_node.children)
+        self._add_x_node(self.s_cursor, index)
+        self.s_cursor = self.s_cursor + [index]
+        self._present_nout_updated()
 
     def _add_sibbling_node(self, direction):
         if self.s_cursor == []:
@@ -380,7 +372,9 @@ class TreeWidget(Widget):
 
         # because direction is in [0, 1]... no need to minimize/maximize (PROVE!)
         index = self.s_cursor[-1] + direction
-        return self._add_x_node(self.s_cursor[:-1], index)
+        self._add_x_node(self.s_cursor[:-1], index)
+        self.s_cursor = self.s_cursor[:-1] + [index]
+        self._present_nout_updated()
 
     def _add_x_node(self, s_cursor, index):
         cursor_node = self._node_for_s_cursor(self.present_tree, s_cursor)
@@ -413,14 +407,16 @@ class TreeWidget(Widget):
         # The root node (s_address=[]) itself cannot be replaced, its replacement is represented as "Actuality updated"
         self.present_nout_hash = hash_to_bubble
         self.send_actuality_up(hash_to_bubble)
-        self._present_nout_updated()
 
     def _add_child_text(self):
         cursor_node = self._node_for_s_cursor(self.present_tree, self.s_cursor)
         if not isinstance(cursor_node, TreeNode):
             return  # for now... we just silently ignore the user's request when they ask to add a child to a non-node
 
-        return self._add_x_text(self.s_cursor, len(cursor_node.children))
+        index = len(cursor_node.children)
+        self._add_x_text(self.s_cursor, index)
+        self.s_cursor = self.s_cursor + [index]
+        self._present_nout_updated()
 
     def _add_sibbling_text(self, direction):
         if self.s_cursor == []:
@@ -428,7 +424,9 @@ class TreeWidget(Widget):
 
         # because direction is in [0, 1]... no need to minimize/maximize (PROVE!)
         index = self.s_cursor[-1] + direction
-        return self._add_x_text(self.s_cursor[:-1], index)
+        self._add_x_text(self.s_cursor[:-1], index)
+        self.s_cursor = self.s_cursor[:-1] + [index]
+        self._present_nout_updated()
 
     def _add_x_text(self, s_cursor, index):
         cursor_node = self._node_for_s_cursor(self.present_tree, s_cursor)
@@ -438,6 +436,20 @@ class TreeWidget(Widget):
 
         self._bubble_history_up(self.send_possibility_up(
             NoutBlock(Insert(index, to_be_inserted), cursor_node.metadata.nout_hash)), s_cursor)
+
+    def _delete_current_node(self):
+        if self.s_cursor == []:
+            # silently ignored ('delete root' is not defined, because the root is assumed to exist.)
+            return
+
+        delete_from = self.s_cursor[:-1]
+        delete_at = self.s_cursor[-1]
+
+        h = self.send_possibility_up(
+            NoutBlock(Delete(delete_at), self._node_for_s_cursor(self.present_tree, delete_from).metadata.nout_hash))
+
+        self._bubble_history_up(h, delete_from)
+        self._present_nout_updated()
 
     # ## Section for drawing boxes
     def _t_for_text(self, text, is_cursor):
