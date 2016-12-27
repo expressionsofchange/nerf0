@@ -374,25 +374,31 @@ class TreeWidget(Widget):
         begin = self.send_possibility_up(NoutBegin())
         to_be_inserted = self.send_possibility_up(NoutBlock(BecomeNode(), begin))
 
-        new_history_at_lower_level = self.send_possibility_up(
-            NoutBlock(Insert(index, to_be_inserted), cursor_node.metadata.nout_hash))
+        self._bubble_history_up(self.send_possibility_up(
+            NoutBlock(Insert(index, to_be_inserted), cursor_node.metadata.nout_hash)), s_cursor)
 
-        for i in reversed(range(len(s_cursor))):
-            # We iterate over all indices in the cursor in reverse order to "bubble up" the Replacements
-            # N.B.: slice to index removes from that index upwards. That means that replace_in is the node _in which_ a
-            # replacement will occur (it's the parent of the replacement); s_cursor[i] denotes the index at which this
-            # replacement should occur.
-            replace_in_path = s_cursor[:i]
-            replace_in = self._node_for_s_cursor(self.present_tree, replace_in_path)
+    def _bubble_history_up(self, hash_to_bubble, s_address):
+        """Recursively replace history to reflect a change (hash_to_bubble) at a lower level (s_address)"""
 
-            new_history_at_lower_level = self.send_possibility_up(
-                NoutBlock(Replace(s_cursor[i], new_history_at_lower_level), replace_in.metadata.nout_hash))
+        for i in reversed(range(len(s_address))):
+            # We slide a window of size 2 over the s_address from right to left, like so:
+            # [..., ..., ..., ..., ..., ..., ...]  <- s_address
+            #                              ^  ^
+            #                           [:i]  i
+            # For each such i, the sliced array s_address[:i] gives you the s_address of a node in which a replacement
+            # takes place, and s_address[i] gives you the index to replace at.
+            #
+            # Regarding the range (0, len(s_address)) the following:
+            # * len(s_address) means the s_address itself is the first thing to be replaced.
+            # * 0 means: the last replacement is _inside_ the root node (s_address=[]), at index s_address[0]
+            replace_in = self._node_for_s_cursor(self.present_tree, s_address[:i])
 
-        # I was temporarily puzzled by: how to express Replacement of the root node?!
-        # feels like a lack of symmetry here.
-        # The answer is (for now): at top level we simply yield an actuality
-        self.present_nout_hash = new_history_at_lower_level
-        self.send_actuality_up(new_history_at_lower_level)
+            hash_to_bubble = self.send_possibility_up(
+                NoutBlock(Replace(s_address[i], hash_to_bubble), replace_in.metadata.nout_hash))
+
+        # The root node (s_address=[]) itself cannot be replaced, its replacement is represented as "Actuality updated"
+        self.present_nout_hash = hash_to_bubble
+        self.send_actuality_up(hash_to_bubble)
         self._present_nout_updated()
 
     def _add_child_text(self):
@@ -416,26 +422,8 @@ class TreeWidget(Widget):
         begin = self.send_possibility_up(NoutBegin())
         to_be_inserted = self.send_possibility_up(NoutBlock(TextBecome("Een text"), begin))
 
-        new_history_at_lower_level = self.send_possibility_up(
-            NoutBlock(Insert(index, to_be_inserted), cursor_node.metadata.nout_hash))
-
-        for i in reversed(range(len(s_cursor))):
-            # We iterate over all indices in the cursor in reverse order to "bubble up" the Replacements
-            # N.B.: slice to index removes from that index upwards. That means that replace_in is the node _in which_ a
-            # replacement will occur (it's the parent of the replacement); s_cursor[i] denotes the index at which this
-            # replacement should occur.
-            replace_in_path = s_cursor[:i]
-            replace_in = self._node_for_s_cursor(self.present_tree, replace_in_path)
-
-            new_history_at_lower_level = self.send_possibility_up(
-                NoutBlock(Replace(s_cursor[i], new_history_at_lower_level), replace_in.metadata.nout_hash))
-
-        # I was temporarily puzzled by: how to express Replacement of the root node?!
-        # feels like a lack of symmetry here.
-        # The answer is (for now): at top level we simply yield an actuality
-        self.present_nout_hash = new_history_at_lower_level
-        self.send_actuality_up(new_history_at_lower_level)
-        self._present_nout_updated()
+        self._bubble_history_up(self.send_possibility_up(
+            NoutBlock(Insert(index, to_be_inserted), cursor_node.metadata.nout_hash)), s_cursor)
 
     # ## Section for drawing boxes
     def _t_for_text(self, text, is_cursor):
