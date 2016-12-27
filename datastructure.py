@@ -320,7 +320,7 @@ def parse_note(byte_stream):
     }[byte0].from_stream(byte_stream)
 
 
-def construct_x(possible_timelines, edge_nout):
+def construct_x(results_lookup, possible_timelines, edge_nout_hash):
     """Constructs a TreeNode with the appropriate metadata. The fact that I'm not really sure what's appropriate yet (I
     just refactored it) is reflected in the `_x` part of this procedure's name.
 
@@ -349,20 +349,25 @@ def construct_x(possible_timelines, edge_nout):
     * YourOwnHash as a class
     * the `_x` in the present method's name
     """
-
     def recurse(nout_hash):
-        return construct_x(possible_timelines, possible_timelines.get(nout_hash))
+        return construct_x(results_lookup, possible_timelines, nout_hash)
+
+    if edge_nout_hash.as_bytes() in results_lookup:
+        return results_lookup[edge_nout_hash.as_bytes()]
+
+    edge_nout = possible_timelines.get(edge_nout_hash)
 
     if edge_nout == NoutBegin():
         # Does it make sense to allow for the "playing" of "begin only"?
         # Only if you think "nothing" is a thing; let's build a version which doesn't do that first.
         raise Exception("In this version, I don't think playing empty history makes sense")
 
-    last_nout = possible_timelines.get(edge_nout.previous_hash)
+    last_nout_hash = edge_nout.previous_hash
+    last_nout = possible_timelines.get(last_nout_hash)
     if last_nout == NoutBegin():
         tree_before_edge = None  # in theory: ignored, because the first note should always be a "Become" note
     else:
-        tree_before_edge = construct_x(possible_timelines, last_nout)
+        tree_before_edge = construct_x(results_lookup, possible_timelines, last_nout_hash)
 
     note = edge_nout.note
 
@@ -371,4 +376,6 @@ def construct_x(possible_timelines, edge_nout):
         bytes_ = nout.as_bytes()
         return Hash.for_bytes(bytes_)
 
-    return note.play(tree_before_edge, recurse, YourOwnHash(hash_for(edge_nout)))
+    result = note.play(tree_before_edge, recurse, YourOwnHash(hash_for(edge_nout)))
+    results_lookup[edge_nout_hash.as_bytes()] = result
+    return result

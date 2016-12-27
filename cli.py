@@ -123,7 +123,8 @@ class CLI(object):
     def _present_nout_updated(self):
         """invalidation of any local caches that may depend on present_nout; must be called in response to _any_
         update"""
-        self.present_tree = construct_x(self.possible_timelines, self.possible_timelines.get(self.present_nout_hash))
+        self.present_tree = construct_x(
+            {}, self.possible_timelines, self.present_nout_hash)
 
     def on_keyboard_choice(self, choice):
         if choice not in ['x', 'w', 'W', 'e', 'd', 'i', 'a', 's', '>', '<', '+', '-']:

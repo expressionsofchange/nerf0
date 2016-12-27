@@ -164,6 +164,7 @@ class TreeWidget(Widget):
         super(TreeWidget, self).__init__(**kwargs)
         self.autosave = True
 
+        self.all_trees = {}
         self.s_cursor = []
 
         # In this version the file-handling and history-channel are maintained by the GUI widget itself. I can imagine
@@ -225,7 +226,8 @@ class TreeWidget(Widget):
 
         # LATER: The below is stupid (but it's the easiest impl.): we don't need to replay all of history all the time,
         # we only need to replay the last bit.
-        self.present_tree = construct_x(self.possible_timelines, self.possible_timelines.get(self.present_nout_hash))
+        self.present_tree = construct_x(
+            self.all_trees, self.possible_timelines, self.present_nout_hash)
 
         self.refresh()
 
@@ -300,9 +302,6 @@ class TreeWidget(Widget):
         if clicked_item is not None:
             self.s_cursor = self._s_cursor_for_node(self.present_tree, clicked_item.semantics)
 
-            # Redraw, the lazy way: (COPY PASTA)
-            self._unpoke_all_cursors(self.present_tree)
-            self._node_for_s_cursor(self.present_tree, self.s_cursor).is_cursor = True
             self.refresh()
 
         # TODO (potentially): grabbing, as documented here (including the caveats of that approach)
