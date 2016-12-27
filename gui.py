@@ -10,6 +10,10 @@ from kivy.graphics import Color, Rectangle
 from kivy.core.text.markup import LabelBase
 from kivy.metrics import pt
 from kivy.graphics.context_instructions import PushMatrix, PopMatrix, Translate
+from kivy.uix.popup import Popup
+from kivy.uix.textinput import TextInput
+from kivy.uix.button import Button
+from kivy.uix.boxlayout import BoxLayout
 
 from datastructure import (
     BecomeNode,
@@ -188,8 +192,14 @@ class TreeWidget(Widget):
         self.bind(pos=self.refresh)
         self.bind(size=self.refresh)
 
-        self._keyboard = Window.request_keyboard(self._keyboard_closed, self, 'text')
-        self._keyboard.bind(on_key_down=self._on_keyboard_down)
+        self._keyboard = None
+        self.initialize_keyboard()
+
+    def initialize_keyboard(self):
+        # not well-understood yet...
+        if self._keyboard is None:
+            self._keyboard = Window.request_keyboard(self._keyboard_closed, self, 'text')
+            self._keyboard.bind(on_key_down=self._on_keyboard_down)
 
     # ## Section for channel-communication
     def receive_from_channel(self, data):
@@ -411,12 +421,13 @@ class TreeWidget(Widget):
     def _add_child_text(self):
         cursor_node = self._node_for_s_cursor(self.present_tree, self.s_cursor)
         if not isinstance(cursor_node, TreeNode):
-            return  # for now... we just silently ignore the user's request when they ask to add a child to a non-node
+            # Add child-text to text node is interpreted as "edit that text node"
+            self._edit_x_text(cursor_node.unicode_, self.s_cursor[:-1], self.s_cursor[-1], self.s_cursor)
+            return
 
         index = len(cursor_node.children)
-        self._add_x_text(self.s_cursor, index)
-        self.s_cursor = self.s_cursor + [index]
-        self._present_nout_updated()
+        new_s_cursor = self.s_cursor + [index]
+        self._add_x_text(self.s_cursor, index, new_s_cursor)
 
     def _add_sibbling_text(self, direction):
         if self.s_cursor == []:
@@ -424,18 +435,72 @@ class TreeWidget(Widget):
 
         # because direction is in [0, 1]... no need to minimize/maximize (PROVE!)
         index = self.s_cursor[-1] + direction
-        self._add_x_text(self.s_cursor[:-1], index)
-        self.s_cursor = self.s_cursor[:-1] + [index]
-        self._present_nout_updated()
+        new_s_cursor = self.s_cursor = self.s_cursor[:-1] + [index]
+        self._add_x_text(self.s_cursor[:-1], index, new_s_cursor)
 
-    def _add_x_text(self, s_cursor, index):
-        cursor_node = self._node_for_s_cursor(self.present_tree, s_cursor)
+    def _add_x_text(self, s_cursor, index, new_s_cursor):
+        layout = BoxLayout(spacing=10, orientation='vertical')
+        ti = TextInput(text="", size_hint=(1, .9))
+        btn = Button(text='Close and save', size_hint=(1, .1,))
+        layout.add_widget(ti)
+        layout.add_widget(btn)
 
-        begin = self.send_possibility_up(NoutBegin())
-        to_be_inserted = self.send_possibility_up(NoutBlock(TextBecome("Een text"), begin))
+        popup = Popup(
+            title='Edit text', content=layout
+            )
 
-        self._bubble_history_up(self.send_possibility_up(
-            NoutBlock(Insert(index, to_be_inserted), cursor_node.metadata.nout_hash)), s_cursor)
+        def popup_dismiss(*args):
+            # Because of the Modal nature of the popup, we can take the naive approach here and simply insert the
+            # results of the popup, trigger the recalc etc. etc. as if this were sequential code.
+            cursor_node = self._node_for_s_cursor(self.present_tree, s_cursor)
+
+            begin = self.send_possibility_up(NoutBegin())
+            to_be_inserted = self.send_possibility_up(NoutBlock(TextBecome(ti.text), begin))
+
+            self._bubble_history_up(self.send_possibility_up(
+                NoutBlock(Insert(index, to_be_inserted), cursor_node.metadata.nout_hash)), s_cursor)
+
+            self.s_cursor = new_s_cursor
+            self._present_nout_updated()
+            self.initialize_keyboard()
+
+        btn.bind(on_press=popup.dismiss)
+        popup.bind(on_dismiss=popup_dismiss)
+
+        popup.open()
+        ti.focus = True
+
+    def _edit_x_text(self, current_text, s_cursor, index, new_s_cursor):
+        layout = BoxLayout(spacing=10, orientation='vertical')
+        ti = TextInput(text=current_text, size_hint=(1, .9))
+        btn = Button(text='Close and save', size_hint=(1, .1,))
+        layout.add_widget(ti)
+        layout.add_widget(btn)
+
+        popup = Popup(
+            title='Edit text', content=layout
+            )
+
+        def popup_dismiss(*args):
+            # Because of the Modal nature of the popup, we can take the naive approach here and simply insert the
+            # results of the popup, trigger the recalc etc. etc. as if this were sequential code.
+            cursor_node = self._node_for_s_cursor(self.present_tree, s_cursor)
+
+            begin = self.send_possibility_up(NoutBegin())
+            to_be_inserted = self.send_possibility_up(NoutBlock(TextBecome(ti.text), begin))
+
+            self._bubble_history_up(self.send_possibility_up(
+                NoutBlock(Replace(index, to_be_inserted), cursor_node.metadata.nout_hash)), s_cursor)
+
+            self.s_cursor = new_s_cursor
+            self._present_nout_updated()
+            self.initialize_keyboard()
+
+        btn.bind(on_press=popup.dismiss)
+        popup.bind(on_dismiss=popup_dismiss)
+
+        popup.open()
+        ti.focus = True
 
     def _delete_current_node(self):
         if self.s_cursor == []:
