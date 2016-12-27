@@ -223,9 +223,6 @@ class TreeWidget(Widget):
     def _present_nout_updated(self):
         """invalidation of any local caches that may depend on present_nout; must be called in response to _any_
         update"""
-
-        # LATER: The below is stupid (but it's the easiest impl.): we don't need to replay all of history all the time,
-        # we only need to replay the last bit.
         self.present_tree = construct_x(
             self.all_trees, self.possible_timelines, self.present_nout_hash)
 
