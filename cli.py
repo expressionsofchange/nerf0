@@ -44,9 +44,14 @@ def print_nouts(possible_timelines, present_nout_hash):
 
 
 def print_nouts_2(possible_timelines, present_nout_hash, indentation, seen):
+    def short_repr_nout(nout):
+        if hasattr(nout, 'note'):
+            return repr(nout.note)
+        return "BEGIN"
+
     # Shows how the Nouts ref recursively
     if present_nout_hash.as_bytes() in seen:
-        return (indentation * " ") + repr(present_nout_hash) + ":..."
+        return (indentation * " ") + ":..."
 
     seen.add(present_nout_hash.as_bytes())
     present_nout = possible_timelines.get(present_nout_hash)
@@ -62,7 +67,7 @@ def print_nouts_2(possible_timelines, present_nout_hash, indentation, seen):
     else:
         horizontal_recursion = ""
 
-    return result + (indentation * " ") + repr(present_nout_hash) + ': ' + repr(present_nout) + horizontal_recursion
+    return result + (indentation * " ") + short_repr_nout(present_nout) + horizontal_recursion
 
 
 class CLI(object):

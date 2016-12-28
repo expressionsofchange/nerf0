@@ -177,6 +177,8 @@ class TreeWidget(Widget):
         filename = 'test2'
         history_channel = Channel()  # Pun not intended
 
+        self.cursor_channel = Channel()
+
         self.possible_timelines = RealmOfThePossible(history_channel).possible_timelines
         self.send_to_channel = history_channel.connect(self.receive_from_channel)
 
@@ -248,16 +250,16 @@ class TreeWidget(Widget):
         code, textual_code = keycode
 
         if textual_code in ['left', 'h']:
-            self.s_cursor = self._parent_sc(self.s_cursor)
+            self._set_s_cursor(self._parent_sc(self.s_cursor))
             self.refresh()
         elif textual_code in ['right', 'l']:
-            self.s_cursor = self._child_sc(self.s_cursor)
+            self._set_s_cursor(self._child_sc(self.s_cursor))
             self.refresh()
         elif textual_code in ['up', 'k']:
-            self.s_cursor = self._dfs_sibbling_sc(self.s_cursor, -1)
+            self._set_s_cursor(self._dfs_sibbling_sc(self.s_cursor, -1))
             self.refresh()
         elif textual_code in ['down', 'j']:
-            self.s_cursor = self._dfs_sibbling_sc(self.s_cursor, 1)
+            self._set_s_cursor(self._dfs_sibbling_sc(self.s_cursor, 1))
             self.refresh()
 
         elif textual_code in ['q']:
@@ -293,6 +295,11 @@ class TreeWidget(Widget):
             self.box_structure = self._nt_for_node_as_lispy_layout(self.present_tree, [])
             self._render_box(self.box_structure)
 
+    def _set_s_cursor(self, s_cursor):
+        self.s_cursor = s_cursor
+        cursor_node = self._node_for_s_cursor(self.present_tree, self.s_cursor)
+        self.cursor_channel.broadcast(cursor_node.metadata.nout_hash)
+
     def on_touch_down(self, touch):
         # see https://kivy.org/docs/guide/inputs.html#touch-event-basics
         # Basically:
@@ -307,7 +314,7 @@ class TreeWidget(Widget):
         clicked_item = self.box_structure.from_point(bring_into_offset(self.offset, (touch.x, touch.y)))
 
         if clicked_item is not None:
-            self.s_cursor = clicked_item.semantics
+            self._set_s_cursor(clicked_item.semantics)
             self.refresh()
 
         # TODO (potentially): grabbing, as documented here (including the caveats of that approach)
@@ -373,7 +380,7 @@ class TreeWidget(Widget):
 
         index = len(cursor_node.children)
         self._add_x_node(self.s_cursor, index)
-        self.s_cursor = self.s_cursor + [index]
+        self._set_s_cursor(self.s_cursor + [index])
         self._present_nout_updated()
 
     def _add_sibbling_node(self, direction):
@@ -383,7 +390,7 @@ class TreeWidget(Widget):
         # because direction is in [0, 1]... no need to minimize/maximize (PROVE!)
         index = self.s_cursor[-1] + direction
         self._add_x_node(self.s_cursor[:-1], index)
-        self.s_cursor = self.s_cursor[:-1] + [index]
+        self._set_s_cursor(self.s_cursor[:-1] + [index])
         self._present_nout_updated()
 
     def _add_x_node(self, s_cursor, index):
@@ -435,7 +442,7 @@ class TreeWidget(Widget):
 
         # because direction is in [0, 1]... no need to minimize/maximize (PROVE!)
         index = self.s_cursor[-1] + direction
-        new_s_cursor = self.s_cursor = self.s_cursor[:-1] + [index]
+        new_s_cursor = self._set_s_cursor(self.s_cursor[:-1] + [index])
         self._add_x_text(self.s_cursor[:-1], index, new_s_cursor)
 
     def _add_x_text(self, s_cursor, index, new_s_cursor):
@@ -460,7 +467,7 @@ class TreeWidget(Widget):
             self._bubble_history_up(self.send_possibility_up(
                 NoutBlock(Insert(index, to_be_inserted), cursor_node.metadata.nout_hash)), s_cursor)
 
-            self.s_cursor = new_s_cursor
+            self._set_s_cursor(new_s_cursor)
             self._present_nout_updated()
             self.initialize_keyboard()
 
@@ -492,7 +499,7 @@ class TreeWidget(Widget):
             self._bubble_history_up(self.send_possibility_up(
                 NoutBlock(Replace(index, to_be_inserted), cursor_node.metadata.nout_hash)), s_cursor)
 
-            self.s_cursor = new_s_cursor
+            self._set_s_cursor(new_s_cursor)
             self._present_nout_updated()
             self.initialize_keyboard()
 
@@ -679,8 +686,24 @@ class TreeWidget(Widget):
 
 
 class TestApp(App):
+
     def build(self):
-        widget = TreeWidget()
-        return widget
+        layout = BoxLayout(spacing=10, orientation='horizontal')
+        tree = TreeWidget(size_hint=(.7, 1))
+
+        textinput = TextInput(text='placeholder', size_hint=(.3, 1))
+        layout.add_widget(tree)
+        layout.add_widget(textinput)
+
+        from cli import print_nouts_2
+
+        def update_ti_text(nout_hash):
+            textinput.text = print_nouts_2(tree.possible_timelines, nout_hash, 0, set())
+
+        tree.cursor_channel.connect(update_ti_text)
+
+        tree.focus = True
+
+        return layout
 
 TestApp().run()
