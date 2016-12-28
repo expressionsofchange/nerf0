@@ -112,12 +112,12 @@ class BoxNonTerminal(object):
         self.outer_dimensions = self.calc_outer_dimensions()
 
     def calc_outer_dimensions(self):
-        max_x = max((obs.offset[X] + obs.item.outer_dimensions[X])
-                    for obs in self.offset_terminals + self.offset_nonterminals)
+        max_x = max([0] + [(obs.offset[X] + obs.item.outer_dimensions[X])
+                    for obs in self.offset_terminals + self.offset_nonterminals])
 
         # min_y, because we're moving _down_ which is negative in Kivy's coordinate system
-        min_y = min((obs.offset[Y] + obs.item.outer_dimensions[Y])
-                    for obs in self.offset_terminals + self.offset_nonterminals)
+        min_y = min([0] + [(obs.offset[Y] + obs.item.outer_dimensions[Y])
+                    for obs in self.offset_terminals + self.offset_nonterminals])
 
         return (max_x, min_y)
 
@@ -285,7 +285,7 @@ class TreeWidget(Widget):
         """refresh means: redraw (I suppose we could rename, but I believe it's "canonical Kivy" to use 'refresh'"""
         self.canvas.clear()
 
-        self.offset = (0, self.size[Y])  # default offset: start on top_left
+        self.offset = (self.pos[X], self.pos[Y] + self.size[Y])  # default offset: start on top_left
 
         with self.canvas:
             Color(1, 1, 1, 1)
@@ -685,22 +685,156 @@ class TreeWidget(Widget):
         return label.texture
 
 
+ColWidths = namedtuple('ColWidths', ('my_hash', 'prev_hash', 'note', 'payload'))
+
+
+class HistoryWidget(Widget):
+
+    def __init__(self, **kwargs):
+        self.possible_timelines = kwargs.pop('possible_timelines')
+
+        super(HistoryWidget, self).__init__(**kwargs)
+
+        self.bind(pos=self.refresh)
+        self.bind(size=self.refresh)
+
+    def update_nout_hash(self, nout_hash):
+        self.nout_hash = nout_hash
+        self.refresh()
+
+    def refresh(self, *args):
+        # As it stands: _PURE_ copy-pasta from TreeWidget;
+        """refresh means: redraw (I suppose we could rename, but I believe it's "canonical Kivy" to use 'refresh'"""
+        self.canvas.clear()
+
+        self.offset = (self.pos[X], self.pos[Y] + self.size[Y])  # default offset: start on top_left
+
+        with self.canvas:
+            Color(1, 1, 1, 1)
+            Rectangle(pos=self.pos, size=self.size,)
+
+        if not hasattr(self, 'nout_hash'):
+            # This can happen if we call refresh() before being properly initialized... making sure that cannot happen
+            # is something for a later date.
+            return
+
+        with apply_offset(self.canvas, self.offset):
+            self.box_structure = self.some_recursive_thing(self.nout_hash, ColWidths(70, 70, 15, 100))
+            self._render_box(self.box_structure)
+
+    def some_recursive_thing(self, nout_hash, col_widths):
+        nout = self.possible_timelines.get(nout_hash)
+        if nout == NoutBegin():
+            # in a later version, we could display BEGIN if that ever proves useful
+            return BoxNonTerminal(nout, [], [])
+
+        else:
+            recursive_result = self.some_recursive_thing(nout.previous_hash, col_widths)
+            recursive_offset_y = recursive_result.outer_dimensions[Y]
+            horizontal_recursive_offset_x = recursive_result.outer_dimensions[X]
+
+            terminals = [OffsetBox((0, recursive_offset_y), self._t_for_text(repr(nout), False))]
+            non_terminals = [no_offset(recursive_result)]
+
+        if hasattr(nout, 'note') and hasattr(nout.note, 'nout_hash'):
+            horizontal_recursion = self.some_recursive_thing(nout.note.nout_hash, col_widths)
+            non_terminals.append(OffsetBox((horizontal_recursive_offset_x, recursive_offset_y), horizontal_recursion))
+
+        # TODO: continuation of history.
+        # how to do it? not sure, we'll see in a sec
+
+        return BoxNonTerminal(nout, non_terminals, terminals)
+
+    def for_reference(self, possible_timelines, present_nout_hash, indentation, seen):
+        # Shows how the Nouts ref recursively
+        if present_nout_hash.as_bytes() in seen:
+            return (indentation * " ") + ":..."
+
+        seen.add(present_nout_hash.as_bytes())
+        present_nout = possible_timelines.get(present_nout_hash)
+
+        if present_nout == NoutBegin():
+            result = ""
+        else:
+            result = self.for_reference(possible_timelines, present_nout.previous_hash, indentation, seen) + "\n\n"
+
+        if hasattr(present_nout, 'note') and hasattr(present_nout.note, 'nout_hash'):
+            horizontal_recursion = "\n" + self.for_reference(
+                possible_timelines, present_nout.note.nout_hash, indentation + 4, seen)
+        else:
+            horizontal_recursion = ""
+
+        return result + (indentation * " ") + repr(present_nout) + horizontal_recursion
+
+    def _render_box(self, box):
+        # Pure copy/pasta.
+        for o, t in box.offset_terminals:
+            with apply_offset(self.canvas, o):
+                for instruction in t.instructions:
+                    self.canvas.add(instruction)
+
+        for o, nt in box.offset_nonterminals:
+            with apply_offset(self.canvas, o):
+                self._render_box(nt)
+
+    def _t_for_text(self, text, is_cursor):
+        # Pure copy/pasta
+        text_texture = self._texture_for_text(text)
+        content_height = text_texture.height
+        content_width = text_texture.width
+
+        top_left = 0, 0
+        bottom_left = (top_left[X], top_left[Y] - PADDING - MARGIN - content_height - MARGIN - PADDING)
+        bottom_right = (bottom_left[X] + PADDING + MARGIN + content_width + MARGIN + PADDING, bottom_left[Y])
+
+        if is_cursor:
+            box_color = Color(0.95, 0.95, 0.95, 1)  # Ad Hoc Grey
+        else:
+            box_color = Color(1, 1, 0.97, 1)  # Ad Hoc Light Yellow
+
+        instructions = [
+            box_color,
+            Rectangle(
+                pos=(bottom_left[0] + PADDING, bottom_left[1] + PADDING),
+                size=(content_width + 2 * MARGIN, content_height + 2 * MARGIN),
+                ),
+            Color(0, 115/255, 230/255, 1),  # Blue
+            Rectangle(
+                pos=(bottom_left[0] + PADDING + MARGIN, bottom_left[1] + PADDING + MARGIN),
+                size=text_texture.size,
+                texture=text_texture,
+                ),
+        ]
+
+        return BoxTerminal(instructions, bottom_right)
+
+    def _texture_for_text(self, text):
+        kw = {
+            'font_size': pt(13),
+            'font_name': 'DejaVuSans',
+            'bold': True,
+            'anchor_x': 'left',
+            'anchor_y': 'top',
+            'padding_x': 0,
+            'padding_y': 0,
+            'padding': (0, 0)}
+
+        label = Label(text=text, **kw)
+        label.refresh()
+        return label.texture
+
+
 class TestApp(App):
 
     def build(self):
         layout = BoxLayout(spacing=10, orientation='horizontal')
         tree = TreeWidget(size_hint=(.7, 1))
 
-        textinput = TextInput(text='placeholder', size_hint=(.3, 1))
+        history_widget = HistoryWidget(size_hint=(.3, 1), possible_timelines=tree.possible_timelines)
+        layout.add_widget(history_widget)
         layout.add_widget(tree)
-        layout.add_widget(textinput)
 
-        from cli import print_nouts_2
-
-        def update_ti_text(nout_hash):
-            textinput.text = print_nouts_2(tree.possible_timelines, nout_hash, 0, set())
-
-        tree.cursor_channel.connect(update_ti_text)
+        tree.cursor_channel.connect(history_widget.update_nout_hash)
 
         tree.focus = True
 
