@@ -719,8 +719,16 @@ class HistoryWidget(Widget):
             return
 
         with apply_offset(self.canvas, self.offset):
-            self.box_structure = self.some_recursive_thing(self.nout_hash, ColWidths(70, 70, 15, 100))
+            self.box_structure = self.some_recursive_thing(self.nout_hash, ColWidths(150, 150, 30, 100))
             self._render_box(self.box_structure)
+
+    NOTES_T = {
+        BecomeNode: 'N',
+        TextBecome: 'T',
+        Insert: 'I',
+        Replace: 'R',
+        Delete: 'D',
+    }
 
     def some_recursive_thing(self, nout_hash, col_widths):
         nout = self.possible_timelines.get(nout_hash)
@@ -730,15 +738,31 @@ class HistoryWidget(Widget):
 
         else:
             recursive_result = self.some_recursive_thing(nout.previous_hash, col_widths)
-            recursive_offset_y = recursive_result.outer_dimensions[Y]
-            horizontal_recursive_offset_x = recursive_result.outer_dimensions[X]
+            offset_y = recursive_result.outer_dimensions[Y]
 
-            terminals = [OffsetBox((0, recursive_offset_y), self._t_for_text(repr(nout), False))]
+            offset_x = 0
+            terminals = []
+
+            terminals.append(OffsetBox((offset_x, offset_y), self._t_for_text(repr(nout_hash), False)))
+            offset_x += col_widths.my_hash
+
+            terminals.append(OffsetBox((offset_x, offset_y), self._t_for_text(repr(nout.previous_hash), False)))
+            offset_x += col_widths.prev_hash
+
+            terminals.append(OffsetBox((offset_x, offset_y), self._t_for_text(self.NOTES_T[type(nout.note)], False)))
+            offset_x += col_widths.note
+
+            if hasattr(nout.note, 'unicode_'):
+                terminals.append(OffsetBox((offset_x, offset_y), self._t_for_text(nout.note.unicode_, False)))
+            elif hasattr(nout.note, 'index'):
+                terminals.append(OffsetBox((offset_x, offset_y), self._t_for_text(repr(nout.note.index), False)))
+            offset_x += col_widths.payload
+
             non_terminals = [no_offset(recursive_result)]
 
-        if hasattr(nout, 'note') and hasattr(nout.note, 'nout_hash'):
+        if hasattr(nout.note, 'nout_hash'):
             horizontal_recursion = self.some_recursive_thing(nout.note.nout_hash, col_widths)
-            non_terminals.append(OffsetBox((horizontal_recursive_offset_x, recursive_offset_y), horizontal_recursion))
+            non_terminals.append(OffsetBox((offset_x, offset_y), horizontal_recursion))
 
         # TODO: continuation of history.
         # how to do it? not sure, we'll see in a sec
@@ -828,9 +852,9 @@ class TestApp(App):
 
     def build(self):
         layout = BoxLayout(spacing=10, orientation='horizontal')
-        tree = TreeWidget(size_hint=(.7, 1))
+        tree = TreeWidget(size_hint=(.2, 1))
 
-        history_widget = HistoryWidget(size_hint=(.3, 1), possible_timelines=tree.possible_timelines)
+        history_widget = HistoryWidget(size_hint=(.8, 1), possible_timelines=tree.possible_timelines)
         layout.add_widget(history_widget)
         layout.add_widget(tree)
 
