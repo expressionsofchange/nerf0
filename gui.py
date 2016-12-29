@@ -743,19 +743,24 @@ class HistoryWidget(Widget):
             offset_x = 0
             terminals = []
 
-            terminals.append(OffsetBox((offset_x, offset_y), self._t_for_text(repr(nout_hash), False)))
+            terminals.append(OffsetBox((offset_x, offset_y), self._t_for_text(repr(nout_hash), False,
+                                                                              col_widths.my_hash)))
             offset_x += col_widths.my_hash
 
-            terminals.append(OffsetBox((offset_x, offset_y), self._t_for_text(repr(nout.previous_hash), False)))
+            terminals.append(OffsetBox((offset_x, offset_y), self._t_for_text(repr(nout.previous_hash), False,
+                             col_widths.prev_hash)))
             offset_x += col_widths.prev_hash
 
-            terminals.append(OffsetBox((offset_x, offset_y), self._t_for_text(self.NOTES_T[type(nout.note)], False)))
+            terminals.append(OffsetBox((offset_x, offset_y), self._t_for_text(self.NOTES_T[type(nout.note)], False,
+                             col_widths.note)))
             offset_x += col_widths.note
 
             if hasattr(nout.note, 'unicode_'):
-                terminals.append(OffsetBox((offset_x, offset_y), self._t_for_text(nout.note.unicode_, False)))
+                terminals.append(OffsetBox((offset_x, offset_y), self._t_for_text(nout.note.unicode_, False,
+                                                                                  col_widths.payload)))
             elif hasattr(nout.note, 'index'):
-                terminals.append(OffsetBox((offset_x, offset_y), self._t_for_text(repr(nout.note.index), False)))
+                terminals.append(OffsetBox((offset_x, offset_y), self._t_for_text(repr(nout.note.index), False,
+                                                                                  col_widths.payload)))
             offset_x += col_widths.payload
 
             non_terminals = [no_offset(recursive_result)]
@@ -801,11 +806,26 @@ class HistoryWidget(Widget):
             with apply_offset(self.canvas, o):
                 self._render_box(nt)
 
-    def _t_for_text(self, text, is_cursor):
-        # Pure copy/pasta
+    def _t_for_text(self, text, is_cursor, max_width):
+        # copy/pasta with adaptations; we'll factor out the commonalities once they're' known
+        # max_width is defined as "max inner width" (arbitrarily; we'll see how that works out; alternatives are
+        # outer_width or between margin & padding
+
         text_texture = self._texture_for_text(text)
         content_height = text_texture.height
-        content_width = text_texture.width
+        content_width = min(text_texture.width, max_width)
+
+        # I've found the correct formula for horizontal_scaling (and argument-order of tex_coords) by experimentation
+        # rather than understanding. Which is why I'm documenting my findings here.
+
+        # The problem to solve is: when drawing a smaller rectangle than the original (i.e. when cropping for max_width)
+        # the original texture is simply scaled to fit the smaller rectangle. This is generally not what we want. As a
+        # way around this I discovered tex_coords. The documentation says that the argument order is as such:
+        # tex_coords = u, v, u + w, v, u + w, v + h, u, v + h; however, actually reading the value showed the following:
+        # tex_coords=(0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0) (i.e. starting in the bottom right)
+        # Seeing that the values are in the [0, 1] range, it's obvious that this is a relative expression of scale. In
+        # other words: the sought value is the ratio of displayed texture, which is:
+        horizontal_scaling = 1 if text_texture.width == 0 else content_width / text_texture.width
 
         top_left = 0, 0
         bottom_left = (top_left[X], top_left[Y] - PADDING - MARGIN - content_height - MARGIN - PADDING)
@@ -823,10 +843,12 @@ class HistoryWidget(Widget):
                 size=(content_width + 2 * MARGIN, content_height + 2 * MARGIN),
                 ),
             Color(0, 115/255, 230/255, 1),  # Blue
+
             Rectangle(
                 pos=(bottom_left[0] + PADDING + MARGIN, bottom_left[1] + PADDING + MARGIN),
-                size=text_texture.size,
+                size=(content_width, text_texture.height),
                 texture=text_texture,
+                tex_coords=(0.0, 1.0, horizontal_scaling, 1.0, horizontal_scaling, 0.0, 0.0, 0.0),
                 ),
         ]
 
@@ -842,6 +864,12 @@ class HistoryWidget(Widget):
             'padding_x': 0,
             'padding_y': 0,
             'padding': (0, 0)}
+
+        # While researching max_width I ran into the following potential solution: add the below 3 parameters to the
+        # `kw`.  In the end I didn't choose it, because I wanted something even simpler (and without '...' dots)
+        # 'text_size': (some_width, None),
+        # 'shorten': True,
+        # 'shorten_from': 'right',
 
         label = Label(text=text, **kw)
         label.refresh()
