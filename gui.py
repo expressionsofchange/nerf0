@@ -719,7 +719,7 @@ class HistoryWidget(Widget):
             return
 
         with apply_offset(self.canvas, self.offset):
-            self.box_structure = self.some_recursive_thing(self.nout_hash, ColWidths(150, 150, 30, 100))
+            self.box_structure = self.some_recursive_thing(self.nout_hash, ColWidths(0, 0, 30, 100))
             self._render_box(self.box_structure)
 
     NOTES_T = {
@@ -743,25 +743,21 @@ class HistoryWidget(Widget):
             offset_x = 0
             terminals = []
 
-            terminals.append(OffsetBox((offset_x, offset_y), self._t_for_text(repr(nout_hash), False,
-                                                                              col_widths.my_hash)))
-            offset_x += col_widths.my_hash
-
-            terminals.append(OffsetBox((offset_x, offset_y), self._t_for_text(repr(nout.previous_hash), False,
-                             col_widths.prev_hash)))
-            offset_x += col_widths.prev_hash
-
-            terminals.append(OffsetBox((offset_x, offset_y), self._t_for_text(self.NOTES_T[type(nout.note)], False,
-                             col_widths.note)))
-            offset_x += col_widths.note
+            cols = [
+                (repr(nout_hash), col_widths.my_hash),
+                (repr(nout.previous_hash), col_widths.prev_hash),
+                (self.NOTES_T[type(nout.note)], col_widths.note),
+            ]
 
             if hasattr(nout.note, 'unicode_'):
-                terminals.append(OffsetBox((offset_x, offset_y), self._t_for_text(nout.note.unicode_, False,
-                                                                                  col_widths.payload)))
+                cols.append((nout.note.unicode_, col_widths.payload))
             elif hasattr(nout.note, 'index'):
-                terminals.append(OffsetBox((offset_x, offset_y), self._t_for_text(repr(nout.note.index), False,
-                                                                                  col_widths.payload)))
-            offset_x += col_widths.payload
+                cols.append((repr(nout.note.index), col_widths.payload))
+
+            for col_text, col_width in cols:
+                if col_width > 0:
+                    terminals.append(OffsetBox((offset_x, offset_y), self._t_for_text(col_text, False, col_width)))
+                    offset_x += col_width
 
             non_terminals = [no_offset(recursive_result)]
 
