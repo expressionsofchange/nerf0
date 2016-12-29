@@ -692,6 +692,7 @@ class HistoryWidget(Widget):
 
     def __init__(self, **kwargs):
         self.possible_timelines = kwargs.pop('possible_timelines')
+        self.all_trees = kwargs.pop('all_trees')
 
         super(HistoryWidget, self).__init__(**kwargs)
 
@@ -719,7 +720,7 @@ class HistoryWidget(Widget):
             return
 
         with apply_offset(self.canvas, self.offset):
-            self.box_structure = self.some_recursive_thing(self.nout_hash, ColWidths(0, 0, 30, 100))
+            self.box_structure = self.some_recursive_thing(self.nout_hash, None, ColWidths(0, 0, 30, 100))
             self._render_box(self.box_structure)
 
     NOTES_T = {
@@ -730,14 +731,20 @@ class HistoryWidget(Widget):
         Delete: 'D',
     }
 
-    def some_recursive_thing(self, nout_hash, col_widths):
+    def some_recursive_thing(self, nout_hash, br_nout_hash, col_widths):
         nout = self.possible_timelines.get(nout_hash)
         if nout == NoutBegin():
             # in a later version, we could display BEGIN if that ever proves useful
             return BoxNonTerminal(nout, [], [])
 
+        elif br_nout_hash == nout_hash:
+            # we you've drawn this in another branch... stop here.
+            # (later, we can draw this in a more fancy way)
+            terminals = []  #  [no_offset(self._t_for_text("^^^", False, 999))]
+            return BoxNonTerminal(nout, [], terminals)
+
         else:
-            recursive_result = self.some_recursive_thing(nout.previous_hash, col_widths)
+            recursive_result = self.some_recursive_thing(nout.previous_hash, br_nout_hash, col_widths)
             offset_y = recursive_result.outer_dimensions[Y]
 
             offset_x = 0
@@ -762,7 +769,15 @@ class HistoryWidget(Widget):
             non_terminals = [no_offset(recursive_result)]
 
         if hasattr(nout.note, 'nout_hash'):
-            horizontal_recursion = self.some_recursive_thing(nout.note.nout_hash, col_widths)
+            before_replacement = None
+            if isinstance(nout.note, Replace):
+                # rebuilding the tree for each of these is lazy programming; we'll fix it after the PoC;
+                # (because we cache all trees anyway, it's not _that expensive_; but caching all trees is an underlying
+                # lazyness)
+                tree_before_r = construct_x(self.all_trees, self.possible_timelines, nout.previous_hash)
+                before_replacement = tree_before_r.children[nout.note.index].metadata.nout_hash
+
+            horizontal_recursion = self.some_recursive_thing(nout.note.nout_hash, before_replacement, col_widths)
             non_terminals.append(OffsetBox((offset_x, offset_y), horizontal_recursion))
 
         # TODO: continuation of history.
@@ -878,7 +893,11 @@ class TestApp(App):
         layout = BoxLayout(spacing=10, orientation='horizontal')
         tree = TreeWidget(size_hint=(.2, 1))
 
-        history_widget = HistoryWidget(size_hint=(.8, 1), possible_timelines=tree.possible_timelines)
+        history_widget = HistoryWidget(
+            size_hint=(.8, 1),
+            possible_timelines=tree.possible_timelines,
+            all_trees=tree.all_trees,
+            )
         layout.add_widget(history_widget)
         layout.add_widget(tree)
 

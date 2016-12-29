@@ -50,6 +50,11 @@ class Hash(object):
         pmts(byte_stream, bytes_iterator)
         return Hash(rfs(byte_stream, 32))
 
+    def __eq__(self, other):
+        if not isinstance(other, Hash):
+            return False
+        return self.hash_bytes == other.hash_bytes
+
 
 class YourOwnHash(object):
     def __init__(self, nout_hash):
