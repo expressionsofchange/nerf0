@@ -1,4 +1,14 @@
-from datastructure import NoutBegin
+from copy import copy
+
+from datastructure import (
+    NoutBegin,
+    TextBecome,
+    TreeText,
+    BecomeNode,
+    Insert,
+    Replace,
+    Delete,
+)
 
 
 def riter(i):
@@ -47,7 +57,23 @@ class H2(object):
         # points of divergence is expressed as: index_in_h2 => hash
         self.points_of_divergence = []
 
+        # TODO explain the idea of top/used
+        self.top = -1
+        self.used = False
+
     def append(self, nout_hash):
+        if self.used:
+            # better prose is required here.
+            raise Exception("Each H2 can only be appended to once")
+
+        copied = copy(self)
+        self.used = True
+
+        copied._do_append(nout_hash)
+        copied.top += 1
+        return copied
+
+    def _do_append(self, nout_hash):
         self.h2.append(nout_hash)
 
         full_history = follow_nouts(self.possible_timelines, nout_hash)
@@ -76,13 +102,22 @@ class H2(object):
         self.len_l_after_append.append(len(self.l))
         self.points_of_divergence.append(point_of_divergence)
 
-    def whats_new(self, index_in_h2):
-        if index_in_h2 == 0:
-            return self.l[0:self.len_l_after_append[index_in_h2]]
+    def whats_new(self):
+        if self.top == -1:
+            raise Exception("Uninititalized yekyek")
 
-        return self.l[self.len_l_after_append[index_in_h2 - 1]:self.len_l_after_append[index_in_h2]]
+        if self.top == 0:
+            return self.l[0:self.len_l_after_append[self.top]]
 
-    def live_path(self, nout_hash):
+        return self.l[self.len_l_after_append[self.top - 1]:self.len_l_after_append[self.top]]
+
+    def live_path(self):
+        if self.top == -1:
+            raise Exception("Uninititalized yekyek")
+
+        return self._r_live_path(self.h2[self.top])
+
+    def _r_live_path(self, nout_hash):
         index_in_l = self.index_in_l[nout_hash]
         index_in_h2 = self.l_to_first_h2[index_in_l]
 
@@ -92,7 +127,7 @@ class H2(object):
         # If a point of divergence exists: recurse to it.
         pod = self.points_of_divergence[index_in_h2]
         if pod is not None:
-            for x in self.live_path(self.l[pod]):
+            for x in self._r_live_path(self.l[pod]):
                 yield x
 
         # * we use the index to yield the new items, but only from the nout_hash (each
@@ -101,9 +136,11 @@ class H2(object):
         for x in riter(once_seen(riter(self.whats_new(index_in_h2)), nout_hash)):
             yield x
 
-    # possibly: live_path... think about it as a datastructure that's modifiable in-place
+    # possibly: _r_live_path... think about it as a datastructure that's modifiable in-place
+
 
 """
+NO LONGER WORKS; I've moved on from the initial playing around
 >>> from datastructure import NoutBlock, NoutBegin, parse_nout
 >>> from datastructure import TextBecome
 >>> from hashstore import HashStore
@@ -132,3 +169,91 @@ class H2(object):
 >>> list(h2.live_path(h_abc))
 [6e340b9cffb3, 1f2cf5ca7d0d, a360f667d6fe, 6bd2fb15d352]
 """
+
+
+class YetAnotherTreeNode(object):
+
+    def __init__(self, children, historiographies):
+        self.children = children
+        self.historiographies = historiographies
+
+    def __repr__(self):
+        return "YATN"
+
+
+# I think I'll need to get rid of the idea that Notes take care of their own playing... we'll see if that's indeed so
+# generally. For starters, I will not replicate that idea here, but rather imlement it in a single function.
+
+
+def y_note_play(possible_timelines, structure, note, recurse):
+    # whether we do hash-to-note here or below is of less importance
+
+    if isinstance(note, BecomeNode):
+        return YetAnotherTreeNode([], [])
+
+    if isinstance(note, Insert):
+        existing_structure = "Nothing"  # unused variable b/c Begin is never reached.
+        existing_h2 = H2(possible_timelines)
+
+        s, h2 = recurse(existing_structure, existing_h2, note.nout_hash)
+
+        l = structure.children[:]
+        l.insert(note.index, s)
+
+        h = structure.historiographies[:]
+        h.insert(note.index, h2)
+
+        return YetAnotherTreeNode(l, h)
+
+    if isinstance(note, Delete):
+        l = structure.children[:]
+        del l[note.index]
+
+        h = structure.historiographies[:]
+        del h[note.index]
+
+        return YetAnotherTreeNode(l, h)
+
+    if isinstance(note, Replace):
+        existing_structure = structure.children[note.index]
+        existing_h2 = structure.historiographies[note.index]
+
+        s, h2 = recurse(existing_structure, existing_h2, note.nout_hash)
+
+        l = structure.children[:]
+        h = structure.historiographies[:]
+
+        l[note.index] = s
+        h[note.index] = h2
+
+        return YetAnotherTreeNode(l, h)
+
+    if isinstance(note, TextBecome):
+        return TreeText(note.unicode_, 'no metadata available')
+
+    raise Exception("Unkonwn Note")
+
+
+def construct_y(possible_timelines, existing_structure, existing_h2, edge_nout_hash):
+    def recurse(s, h, enh):
+        return construct_y(possible_timelines, s, h, enh)
+
+    existing_h2 = existing_h2.append(edge_nout_hash)
+
+    new_hashes = existing_h2.whats_new()
+
+    for new_hash in new_hashes:
+        new_nout = possible_timelines.get(new_hash)
+        if new_nout == NoutBegin():
+            # this assymmetry is present elsewhere too... up for consideration
+            continue
+
+        # Note: y_note_play does _not_ operate on historiographies; it only knows about them in the sense that it
+        # calls construct_y using the already-present historiograhpy for the Replace note.
+        existing_structure = y_note_play(possible_timelines, existing_structure, new_nout.note, recurse)
+
+    return existing_structure, existing_h2
+
+
+def xxx_construct_y(possible_timelines, edge_nout_hash):
+    return construct_y(possible_timelines, "ignored... b/c begining is assumed", H2(possible_timelines), edge_nout_hash)

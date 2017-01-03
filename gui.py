@@ -28,6 +28,8 @@ from datastructure import (
     TreeText,
 )
 
+from this_years_datastructure import xxx_construct_y
+
 from hashstore import Hash
 from posacts import Possibility, Actuality
 from channel import Channel
@@ -740,7 +742,7 @@ class HistoryWidget(Widget):
         elif br_nout_hash == nout_hash:
             # we you've drawn this in another branch... stop here.
             # (later, we can draw this in a more fancy way)
-            terminals = []  #  [no_offset(self._t_for_text("^^^", False, 999))]
+            terminals = []  # [no_offset(self._t_for_text("^^^", False, 999))]
             return BoxNonTerminal(nout, [], terminals)
 
         else:
