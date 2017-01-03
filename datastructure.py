@@ -50,6 +50,12 @@ class Hash(object):
         pmts(byte_stream, bytes_iterator)
         return Hash(rfs(byte_stream, 32))
 
+    def __hash__(self):
+        # Based on the following understanding:
+        # * AFAIK, Python's hash function works w/ 64-bit ints; hence I take 8 bytes
+        # * byteorder was picked arbitrarily
+        return int.from_bytes(self.hash_bytes[:8], byteorder='big')
+
     def __eq__(self, other):
         if not isinstance(other, Hash):
             return False
