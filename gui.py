@@ -176,7 +176,7 @@ class TreeWidget(Widget):
         # In this version the file-handling and history-channel are maintained by the GUI widget itself. I can imagine
         # they'll be moved out once we get multiple windows.
 
-        filename = 'test2'
+        filename = 'test3'
         history_channel = Channel()  # Pun not intended
 
         self.cursor_channel = Channel()
@@ -304,20 +304,50 @@ class TreeWidget(Widget):
 
         struc, h2, xxx_b = xxx_construct_y(self.possible_timelines, self.present_nout_hash)
 
-        def r_xxx(xxx_b, ind):
+        def some_lookup(struc, t_path):
+            if t_path == []:
+                return struc
+
+            s_addr = struc.t_to_s[t_path[0]]
+            if s_addr is None:
+                return None
+
+            result = some_lookup(struc.children[s_addr], t_path[1:])
+            return result
+
+        def r_xxx(struc, xxx_b, ind, t_path, alive_at_my_level):
             result = ""
             for (h, xxx) in xxx_b:
                 result += (ind * " ") + repr(h)
+
+                if alive_at_my_level is None:
+                    result += " PARENT DELETED"
+                elif h not in alive_at_my_level:
+                    result += " DEAD BRANCH"
+
                 if xxx is not None:
                     addr, top, rec_data = xxx
-                    result += " @%s top %s: " % (addr, top) + '\n'
-                    result += r_xxx(rec_data, ind + 1)
+                    result += " @%s top %s: " % (addr, top)
+
+                    aap = some_lookup(struc, t_path + [addr])
+                    if aap is None:
+                        result += " DELETED"
+
+                    noot = some_lookup(struc, t_path)  # N.B.: path one shorter than aap
+                    wim = noot.t_to_s[addr]
+                    if wim is not None:
+                        alive_at_child_level = list(noot.historiographies[wim].live_path())
+                    else:
+                        alive_at_child_level = None
+
+                    result += '\n'
+                    result += r_xxx(struc, rec_data, ind + 1, t_path + [addr], alive_at_child_level)
                     result += '\n'
                 else:
                     result += '\n'
 
             return result
-        print(r_xxx(xxx_b, 0))
+        print(r_xxx(struc, xxx_b, 0, [], list(h2.live_path())))
 
     def on_touch_down(self, touch):
         # see https://kivy.org/docs/guide/inputs.html#touch-event-basics
@@ -739,7 +769,7 @@ class HistoryWidget(Widget):
             return
 
         with apply_offset(self.canvas, self.offset):
-            self.box_structure = self.some_recursive_thing(self.nout_hash, None, ColWidths(0, 0, 30, 100))
+            self.box_structure = self.some_recursive_thing(self.nout_hash, None, ColWidths(150, 150, 30, 100))
             self._render_box(self.box_structure)
 
     NOTES_T = {

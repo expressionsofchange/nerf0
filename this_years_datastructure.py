@@ -11,6 +11,17 @@ from datastructure import (
 )
 
 
+def st_sanity(t_to_s, s_to_t):
+    try:
+        for (t, s) in enumerate(t_to_s):
+            assert s is None or s_to_t[s] == t, "%s <X> %s" % (s_to_t, t_to_s)
+
+        for (s, t) in enumerate(s_to_t):
+            assert t_to_s[t] == s, "%s <X> %s" % (s_to_t, t_to_s)
+    except:
+        assert False, "%s <X> %s" % (s_to_t, t_to_s)
+
+
 def riter(i):
     return reversed(list(i))
 
@@ -106,10 +117,13 @@ class H2(object):
         if self.top == -1:
             raise Exception("Uninititalized yekyek")
 
-        if self.top == 0:
-            return self.l[0:self.len_l_after_append[self.top]]
+        return self.r_whats_new(self.top)
 
-        return self.l[self.len_l_after_append[self.top - 1]:self.len_l_after_append[self.top]]
+    def r_whats_new(self, index):
+        if index == 0:
+            return self.l[0:self.len_l_after_append[index]]
+
+        return self.l[self.len_l_after_append[index - 1]:self.len_l_after_append[index]]
 
     def live_path(self):
         if self.top == -1:
@@ -133,7 +147,7 @@ class H2(object):
         # * we use the index to yield the new items, but only from the nout_hash (each
         # until or from? depends on the ordering. The answer is "only those that are older than it"
         # which happens to be the same as "once seen, when the yielding is ant-chronological"
-        for x in riter(once_seen(riter(self.whats_new(index_in_h2)), nout_hash)):
+        for x in riter(once_seen(riter(self.r_whats_new(index_in_h2)), nout_hash)):
             yield x
 
     # possibly: _r_live_path... think about it as a datastructure that's modifiable in-place
@@ -174,6 +188,7 @@ NO LONGER WORKS; I've moved on from the initial playing around
 class YetAnotherTreeNode(object):
 
     def __init__(self, children, historiographies, t_to_s, s_to_t):
+        st_sanity(t_to_s, s_to_t)
         self.children = children
         self.historiographies = historiographies
         self.t_to_s = t_to_s
@@ -220,7 +235,7 @@ def y_note_play(possible_timelines, structure, note, recurse):
         historiography = structure.historiographies[:]
         del historiography[note.index]
 
-        t_to_s = structure.t_to_s[:]
+        t_to_s = [(i if (i is None or i < note.index) else i - 1) for i in structure.t_to_s]
         t_to_s[structure.s_to_t[note.index]] = None
 
         s_to_t = structure.s_to_t[:]
