@@ -1,4 +1,30 @@
 class Channel(object):
+    """
+    >>> from channel import Channel
+    >>> c = Channel()
+    >>> def r0(data):
+    ...     print("R0 RECEIVED", data)
+    ...
+    >>> def r1(data):
+    ...     print("R1 RECEIVED", data)
+    ...
+    >>> s0 = c.connect(r0)
+    >>> s1 = c.connect(r1)
+    >>> s0("hallo")
+    R1 RECEIVED hallo
+    >>> s1("hallo")
+    R0 RECEIVED hallo
+    >>> def r2(data):
+    ...     print("R2 RECEIVED", data)
+    ...
+    >>> s2 = c.connect(r2)
+    >>> s2("hallo")
+    R0 RECEIVED hallo
+    R1 RECEIVED hallo
+    >>> s0("hallo")
+    R1 RECEIVED hallo
+    R2 RECEIVED hallo
+    """
 
     def __init__(self):
         self.receivers = []
@@ -21,8 +47,30 @@ class Channel(object):
 
 
 class ClosableChannel(object):
-    # Channel w/ an explicit close() call; alternatively this could be modelled by sending either Open(data) or Close()
-    # over a regular Channel.
+    """
+    Channel w/ an explicit close() call; alternatively this could be modelled by sending either Open(data) or Close()
+    over a regular Channel.
+    >>> from channel import ClosableChannel
+    >>> c = ClosableChannel()
+    >>>
+    >>> def r0(data):
+    ...     print("R0 RECEIVED", data)
+    ...
+    >>> def c0():
+    ...     print("C0 RECEIVED")
+    ...
+    >>> def r1(data):
+    ...     print("R1 RECEIVED", data)
+    ...
+    >>> def c1():
+    ...     print("C1 RECEIVED")
+    ...
+    >>> s0, close0 = c.connect(r0, c0)
+    >>> s1, close1 = c.connect(r1, c1)
+    >>>
+    >>> close0()
+    C1 RECEIVED
+    """
 
     def __init__(self):
         self.receivers = []
@@ -52,52 +100,3 @@ class ClosableChannel(object):
                     c()
 
         return send, close
-
-
-"""
->>> from channel import Channel
->>> c = Channel()
->>> def r0(data):
-...     print("R0 RECEIVED", data)
-...
->>> def r1(data):
-...     print("R1 RECEIVED", data)
-...
->>> s0 = c.connect(r0)
->>> s1 = c.connect(r1)
->>> s0("hallo")
-R1 RECEIVED hallo
->>> s1("hallo")
-R0 RECEIVED hallo
->>> def r2(data):
-...     print("R2 RECEIVED", data)
-...
->>> s2 = c.connect(r2)
->>> s2("hallo")
-R0 RECEIVED hallo
-R1 RECEIVED hallo
->>> s0("hallo")
-R1 RECEIVED hallo
-R2 RECEIVED hallo
-
->>> from channel import ClosableChannel
->>> c = ClosableChannel()
->>>
->>> def r0(data):
-...     print("R0 RECEIVED", data)
-...
->>> def c0():
-...     print("C0 RECEIVED")
-...
->>> def r1(data):
-...     print("R1 RECEIVED", data)
-...
->>> def c1():
-...     print("C1 RECEIVED")
-...
->>> s0, close0 = c.connect(r0, c0)
->>> s1, close1 = c.connect(r1, c1)
->>>
->>> close0()
-C1 RECEIVED
-"""
