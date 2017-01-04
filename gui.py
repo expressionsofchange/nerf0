@@ -302,6 +302,23 @@ class TreeWidget(Widget):
         cursor_node = self._node_for_s_cursor(self.present_tree, self.s_cursor)
         self.cursor_channel.broadcast(cursor_node.metadata.nout_hash)
 
+        struc, h2, xxx_b = xxx_construct_y(self.possible_timelines, self.present_nout_hash)
+
+        def r_xxx(xxx_b, ind):
+            result = ""
+            for (h, xxx) in xxx_b:
+                result += (ind * " ") + repr(h)
+                if xxx is not None:
+                    addr, top, rec_data = xxx
+                    result += " @%s top %s: " % (addr, top) + '\n'
+                    result += r_xxx(rec_data, ind + 1)
+                    result += '\n'
+                else:
+                    result += '\n'
+
+            return result
+        print(r_xxx(xxx_b, 0))
+
     def on_touch_down(self, touch):
         # see https://kivy.org/docs/guide/inputs.html#touch-event-basics
         # Basically:
