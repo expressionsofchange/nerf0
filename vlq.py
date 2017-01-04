@@ -1,4 +1,4 @@
-"""
+r"""
 From wikipedia:
 https://en.wikipedia.org/wiki/Variable-length_quantity
 
@@ -17,6 +17,20 @@ I've taken the opposite approach from the Wiki definition, putting the least sig
 Implementation seems to be much more straightforward if the least significant bits are first.  Perhaps this is simply a
 rehashing of the old war of little and big endianness.  In any case... this is perhaps simply my lazyness, I might
 reconsider.
+
+>>> interesting = [0, 1, 42, 127, 128, 128 * 128 - 1, 128 * 128, 1234567890]
+>>> for i in interesting:
+...     print("%12d: %s" % (i, to_vlq(i)))
+...     assert from_vlq(iter(to_vlq(i))) == i
+...
+           0: b'\x00'
+           1: b'\x01'
+          42: b'*'
+         127: b'\x7f'
+         128: b'\x80\x01'
+       16383: b'\xff\x7f'
+       16384: b'\x80\x80\x01'
+  1234567890: b'\xd2\x85\xd8\xcc\x04'
 """
 
 

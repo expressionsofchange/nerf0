@@ -1,3 +1,34 @@
+"""
+Come into being; add a first item
+>>> t2s, s2t = st_become()
+>>> t2s, s2t
+([], [])
+>>> t2s, s2t = st_insert(t2s, s2t, 0)
+>>> t2s, s2t
+([0], [0])
+
+Insert at the beginning, after which s_address 0 maps to t_address 1
+>>> t2s, s2t = st_insert(t2s, s2t, 0)
+>>> t2s, s2t
+([1, 0], [1, 0])
+
+Delete the first item (s_address 0, t_address 1)
+>>> t2s, s2t = st_delete(t2s, s2t, 0)
+>>> t2s, s2t
+([0, None], [0])
+
+Insert a new (t_address: 2) item at the end (s_address: 1)
+>>> t2s, s2t = st_insert(t2s, s2t, 1)
+>>> t2s, s2t
+([0, None, 1], [0, 2])
+
+Delete the first item (s_address 0, t_address 0)
+>>> t2s, s2t = st_delete(t2s, s2t, 0)
+>>> t2s, s2t
+([None, None, 0], [2])
+"""
+
+
 def st_sanity(t2s, s2t):
     for (t, s) in enumerate(t2s):
         assert s is None or (0 <= s <= len(t2s) - 1 and s2t[s] == t), "%s <X> %s" % (s2t, t2s)
