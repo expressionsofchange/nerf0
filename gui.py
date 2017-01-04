@@ -36,12 +36,11 @@ from trees import (
 from construct_y import xxx_construct_y
 
 from hashstore import Hash
-from posacts import Possibility, Actuality
+from posacts import Possibility, Actuality, HashStoreChannelListener
 from channel import Channel
 
 from filehandler import (
     FileWriter,
-    RealmOfThePossible,
     initialize_history,
     read_from_file
 )
@@ -186,7 +185,7 @@ class TreeWidget(Widget):
 
         self.cursor_channel = Channel()
 
-        self.possible_timelines = RealmOfThePossible(history_channel).possible_timelines
+        self.possible_timelines = HashStoreChannelListener(history_channel).possible_timelines
         self.send_to_channel = history_channel.connect(self.receive_from_channel)
 
         if isfile(filename):

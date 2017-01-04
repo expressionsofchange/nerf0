@@ -2,21 +2,27 @@
 from os.path import isfile
 
 from channel import Channel
-from datastructure import (
+
+from clef import (
     BecomeNode,
     Delete,
     Insert,
-    NoutBegin,
-    NoutBlock,
-    construct_x,
     Replace,
     TextBecome,
-    TreeNode,
 )
+from legato import (
+    NoutBegin,
+    NoutBlock,
+)
+
+from construct_x import construct_x
+
+from trees import TreeNode
 
 from posacts import (
     Actuality,
     Possibility,
+    HashStoreChannelListener,
 )
 from hashstore import (
     Hash,
@@ -24,7 +30,6 @@ from hashstore import (
 
 from filehandler import (
     FileWriter,
-    RealmOfThePossible,
     initialize_history,
     read_from_file
 )
@@ -245,7 +250,7 @@ class CLI(object):
 def edit(filename):
     channel = Channel()
 
-    possible_timelines = RealmOfThePossible(channel).possible_timelines
+    possible_timelines = HashStoreChannelListener(channel).possible_timelines
     cli = CLI(channel, possible_timelines, False)
 
     if isfile(filename):

@@ -1,6 +1,6 @@
 from utils import pmts
 from legato import Nout, parse_nout
-from hashstore import Hash
+from hashstore import Hash, HashStore
 
 POSSIBILITY = 0
 ACTUALITY = 1
@@ -44,3 +44,17 @@ def parse_pos_act(byte_stream):
 def parse_pos_acts(byte_stream):
     while True:
         yield parse_pos_act(byte_stream)  # Transparently yields the StopIteration at the lower level
+
+
+class HashStoreChannelListener(object):
+    def __init__(self, channel):
+        self.possible_timelines = HashStore(parse_nout)
+
+        # receive-only connection: HashStoreChannelListener's outwards communication goes via others reading
+        # self.possible_timelines
+        channel.connect(self.receive)
+
+    def receive(self, data):
+        # Receives: Possibility | Actuality; the former are stored, the latter ignored.
+        if isinstance(data, Possibility):
+            self.possible_timelines.add(data.nout)
