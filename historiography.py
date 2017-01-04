@@ -10,6 +10,35 @@ def riter(i):
 
 
 class Historiograhpy(object):
+    """
+    >>> from legato import NoutBlock, NoutBegin, parse_nout
+    >>> from clef import TextBecome
+    >>> from hashstore import HashStore
+    >>>
+    >>> from historiography import Historiograhpy
+    >>>
+    >>> possible_timelines = HashStore(parse_nout)
+    >>>
+    >>> begin = NoutBegin()
+    >>>
+    >>> hash_begin = possible_timelines.add(begin)
+    >>>
+    >>> hash_a = possible_timelines.add(NoutBlock(TextBecome("a"), hash_begin))
+    >>>
+    >>> hash_ab = possible_timelines.add(NoutBlock(TextBecome("ab"), hash_a))
+    >>> hash_abc = possible_timelines.add(NoutBlock(TextBecome("abc"), hash_ab))
+    >>>
+    >>> hash_ad = possible_timelines.add(NoutBlock(TextBecome("ad"), hash_a))
+    >>>
+    >>> historiography = Historiograhpy(possible_timelines)
+    >>> historiography_abc = historiography.append(hash_abc)
+    >>> historiography_ad = historiography_abc.append(hash_ad)
+    >>>
+    >>> list(historiography_abc.live_path())
+    [6e340b9cffb3, 1f2cf5ca7d0d, a360f667d6fe, 6bd2fb15d352]
+    >>> list(historiography_ad.live_path())
+    [6e340b9cffb3, 1f2cf5ca7d0d, 30017b836d55]
+    """
 
     def __init__(self, possible_timelines):
         self.possible_timelines = possible_timelines
@@ -112,38 +141,6 @@ class Historiograhpy(object):
             yield x
 
     # possibly: _r_live_path... think about it as a datastructure that's modifiable in-place
-
-
-"""
-NO LONGER WORKS; I've moved on from the initial playing around
->>> from datastructure import NoutBlock, NoutBegin, parse_nout
->>> from datastructure import TextBecome
->>> from hashstore import HashStore
->>>
->>> from this_years_datastructure import Historiograhpy
->>>
->>> pt = HashStore(parse_nout)
->>>
->>> nb = NoutBegin()
->>>
->>> h_nb = pt.add(nb)
->>>
->>> h_a = pt.add(NoutBlock(TextBecome("a"), h_nb))
->>>
->>> h_ab = pt.add(NoutBlock(TextBecome("ab"), h_a))
->>> h_abc = pt.add(NoutBlock(TextBecome("abc"), h_ab))
->>>
->>> h_ad = pt.add(NoutBlock(TextBecome("ad"), h_a))
->>>
->>> h2 = Historiograhpy(pt)
->>> h2.append(h_abc)
->>> h2.append(h_ad)
->>>
->>> list(h2.live_path(h_ad))
-[6e340b9cffb3, 1f2cf5ca7d0d, 30017b836d55]
->>> list(h2.live_path(h_abc))
-[6e340b9cffb3, 1f2cf5ca7d0d, a360f667d6fe, 6bd2fb15d352]
-"""
 
 
 class YetAnotherTreeNode(object):
