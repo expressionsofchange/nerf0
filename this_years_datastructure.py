@@ -192,46 +192,46 @@ def y_note_play(possible_timelines, structure, note, recurse):
         return YetAnotherTreeNode([], [])
 
     if isinstance(note, Insert):
-        existing_structure = "Nothing"  # unused variable b/c Begin is never reached.
-        existing_h2 = H2(possible_timelines)
+        empty_structure = "Nothing"  # unused variable b/c Begin is never reached.
+        empty_historiography = H2(possible_timelines)
 
-        s, h2 = recurse(existing_structure, existing_h2, note.nout_hash)
+        child, child_historiography = recurse(empty_structure, empty_historiography, note.nout_hash)
 
-        l = structure.children[:]
-        l.insert(note.index, s)
+        children = structure.children[:]
+        children.insert(note.index, child)
 
-        h = structure.historiographies[:]
-        h.insert(note.index, h2)
+        historiography = structure.historiographies[:]
+        historiography.insert(note.index, child_historiography)
 
-        return YetAnotherTreeNode(l, h)
+        return YetAnotherTreeNode(children, historiography)
 
     if isinstance(note, Delete):
-        l = structure.children[:]
-        del l[note.index]
+        children = structure.children[:]
+        del children[note.index]
 
-        h = structure.historiographies[:]
-        del h[note.index]
+        historiography = structure.historiographies[:]
+        del historiography[note.index]
 
-        return YetAnotherTreeNode(l, h)
+        return YetAnotherTreeNode(children, historiography)
 
     if isinstance(note, Replace):
         existing_structure = structure.children[note.index]
-        existing_h2 = structure.historiographies[note.index]
+        existing_historiography = structure.historiographies[note.index]
 
-        s, h2 = recurse(existing_structure, existing_h2, note.nout_hash)
+        child, child_historiography = recurse(existing_structure, existing_historiography, note.nout_hash)
 
-        l = structure.children[:]
-        h = structure.historiographies[:]
+        children = structure.children[:]
+        historiographies = structure.historiographies[:]
 
-        l[note.index] = s
-        h[note.index] = h2
+        children[note.index] = child
+        historiographies[note.index] = child_historiography
 
-        return YetAnotherTreeNode(l, h)
+        return YetAnotherTreeNode(children, historiographies)
 
     if isinstance(note, TextBecome):
         return TreeText(note.unicode_, 'no metadata available')
 
-    raise Exception("Unkonwn Note")
+    raise Exception("Unknown Note")
 
 
 def construct_y(possible_timelines, existing_structure, existing_h2, edge_nout_hash):
@@ -249,7 +249,7 @@ def construct_y(possible_timelines, existing_structure, existing_h2, edge_nout_h
             continue
 
         # Note: y_note_play does _not_ operate on historiographies; it only knows about them in the sense that it
-        # calls construct_y using the already-present historiograhpy for the Replace note.
+        # calls construct_y using the already-present historiography for the Replace note.
         existing_structure = y_note_play(possible_timelines, existing_structure, new_nout.note, recurse)
 
     return existing_structure, existing_h2
