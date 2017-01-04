@@ -1,4 +1,5 @@
-from datastructure import NoutBegin, NoutBlock, BecomeNode, parse_nout
+from legato import NoutBegin, NoutBlock, parse_nout
+from clef import BecomeNode
 from posacts import parse_pos_acts, Possibility, Actuality
 from hashstore import HashStore, Hash
 

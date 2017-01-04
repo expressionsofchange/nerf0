@@ -15,20 +15,25 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.button import Button
 from kivy.uix.boxlayout import BoxLayout
 
-from datastructure import (
+from clef import (
     BecomeNode,
     Delete,
     Insert,
-    NoutBegin,
-    NoutBlock,
-    construct_x,
     Replace,
     TextBecome,
+)
+from legato import (
+    NoutBegin,
+    NoutBlock,
+)
+from construct_x import construct_x
+
+from trees import (
     TreeNode,
     TreeText,
 )
 
-from this_years_datastructure import xxx_construct_y
+from construct_y import xxx_construct_y
 
 from hashstore import Hash
 from posacts import Possibility, Actuality
@@ -308,7 +313,7 @@ class TreeWidget(Widget):
             if t_path == []:
                 return struc
 
-            s_addr = struc.t_to_s[t_path[0]]
+            s_addr = struc.t2s[t_path[0]]
             if s_addr is None:
                 return None
 
@@ -334,7 +339,7 @@ class TreeWidget(Widget):
                         result += " DELETED"
 
                     noot = some_lookup(struc, t_path)  # N.B.: path one shorter than aap
-                    wim = noot.t_to_s[addr]
+                    wim = noot.t2s[addr]
                     if wim is not None:
                         alive_at_child_level = list(noot.historiographies[wim].live_path())
                     else:

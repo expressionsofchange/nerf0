@@ -1,5 +1,6 @@
 from utils import pmts
-from datastructure import Nout, parse_nout, Hash
+from legato import Nout, parse_nout
+from hashstore import Hash
 
 POSSIBILITY = 0
 ACTUALITY = 1
