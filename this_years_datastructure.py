@@ -176,6 +176,8 @@ class YetAnotherTreeNode(object):
     def __init__(self, children, historiographies):
         self.children = children
         self.historiographies = historiographies
+        self.t_to_s = []
+        self.s_to_t = []
 
     def __repr__(self):
         return "YATN"
@@ -189,7 +191,7 @@ def y_note_play(possible_timelines, structure, note, recurse):
     # whether we do hash-to-note here or below is of less importance
 
     if isinstance(note, BecomeNode):
-        return YetAnotherTreeNode([], [])
+        return YetAnotherTreeNode([], [], [], [])
 
     if isinstance(note, Insert):
         empty_structure = "Nothing"  # unused variable b/c Begin is never reached.
@@ -203,7 +205,11 @@ def y_note_play(possible_timelines, structure, note, recurse):
         historiography = structure.historiographies[:]
         historiography.insert(note.index, child_historiography)
 
-        return YetAnotherTreeNode(children, historiography)
+        t_to_s = [(i if i < note.index else i + 1) for i in structure.t_to_s] + [note.index]
+        s_to_t = structure.s_to_t[:]
+        s_to_t.insert(note.index, len(t_to_s) - 1)
+
+        return YetAnotherTreeNode(children, historiography, t_to_s, s_to_t)
 
     if isinstance(note, Delete):
         children = structure.children[:]
@@ -212,7 +218,13 @@ def y_note_play(possible_timelines, structure, note, recurse):
         historiography = structure.historiographies[:]
         del historiography[note.index]
 
-        return YetAnotherTreeNode(children, historiography)
+        t_to_s = structure.t_to_s[:]
+        t_to_s[structure.s_to_t[note.index]] = None
+
+        s_to_t = structure.s_to_t[:]
+        del s_to_t[note.index]
+
+        return YetAnotherTreeNode(children, historiography, t_to_s, s_to_t)
 
     if isinstance(note, Replace):
         existing_structure = structure.children[note.index]
@@ -226,7 +238,10 @@ def y_note_play(possible_timelines, structure, note, recurse):
         children[note.index] = child
         historiographies[note.index] = child_historiography
 
-        return YetAnotherTreeNode(children, historiographies)
+        t_to_s = structure.t_to_s[:]
+        s_to_t = structure.s_to_t[:]
+
+        return YetAnotherTreeNode(children, historiographies, t_to_s, s_to_t)
 
     if isinstance(note, TextBecome):
         return TreeText(note.unicode_, 'no metadata available')
