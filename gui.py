@@ -35,6 +35,7 @@ from trees import (
 )
 
 from construct_y import xxx_construct_y
+from historiography import t_lookup
 
 from hashstore import Hash
 from posacts import Possibility, Actuality, HashStoreChannelListener
@@ -307,53 +308,45 @@ class TreeWidget(Widget):
         cursor_node = self._node_for_s_cursor(self.present_tree, self.s_cursor)
         self.cursor_channel.broadcast(cursor_node.metadata.nout_hash)
 
-        struc, h2, xxx_b = xxx_construct_y(self.possible_timelines, self.present_nout_hash)
+        yatn, h2, per_step_info = xxx_construct_y(self.possible_timelines, self.present_nout_hash)
 
-        def some_lookup(struc, t_path):
-            if t_path == []:
-                return struc
-
-            s_addr = struc.t2s[t_path[0]]
-            if s_addr is None:
-                return None
-
-            result = some_lookup(struc.children[s_addr], t_path[1:])
-            return result
-
-        def r_xxx(struc, xxx_b, ind, t_path, alive_at_my_level):
+        def pp(present_root_yatn, per_step_info, t_path, alive_at_my_level):
+            indentation = (len(t_path) * 4) * " "
             result = ""
-            for (h, xxx) in xxx_b:
-                result += (ind * " ") + repr(h)
+            for (hash_, rhi) in per_step_info:
+                result += indentation + repr(hash_)
 
                 if alive_at_my_level is None:
                     result += " PARENT DELETED"
-                elif h not in alive_at_my_level:
-                    result += " DEAD BRANCH"
+                else:
+                    if hash_ not in alive_at_my_level:
+                        result += " DEAD BRANCH"
 
-                if xxx is not None:
-                    addr, top, rec_data = xxx
-                    result += " @%s top %s: " % (addr, top)
+                if rhi is not None:
+                    t_address, children_steps = rhi
 
-                    aap = some_lookup(struc, t_path + [addr])
-                    if aap is None:
+                    child_yatn = t_lookup(present_root_yatn, t_path + [t_address])
+                    if child_yatn is None:
                         result += " DELETED"
 
-                    noot = some_lookup(struc, t_path)  # N.B.: path one shorter than aap
-                    wim = noot.t2s[addr]
-                    if wim is not None:
-                        asdf = noot.historiographies[wim]
-                        alive_at_child_level = list(follow_nouts(self.possible_timelines, asdf.set_values[top]))
+                    this_yatn = t_lookup(present_root_yatn, t_path)
+                    child_s_address = this_yatn.t2s[t_address]
+                    if child_s_address is not None:
+                        child_historiography_in_present = this_yatn.historiographies[child_s_address]
+                        alive_at_child_level = list(
+                            follow_nouts(self.possible_timelines, child_historiography_in_present.nout_hash()))
                     else:
                         alive_at_child_level = None
 
                     result += '\n'
-                    result += r_xxx(struc, rec_data, ind + 1, t_path + [addr], alive_at_child_level)
+                    result += pp(present_root_yatn, children_steps, t_path + [t_address], alive_at_child_level)
                     result += '\n'
                 else:
                     result += '\n'
 
             return result
-        print(r_xxx(struc, xxx_b, 0, [], list(follow_nouts(self.possible_timelines, self.present_tree.metadata.nout_hash))))
+
+        print(pp(yatn, per_step_info, [], list(follow_nouts(self.possible_timelines, self.present_tree.metadata.nout_hash))))
 
     def on_touch_down(self, touch):
         # see https://kivy.org/docs/guide/inputs.html#touch-event-basics

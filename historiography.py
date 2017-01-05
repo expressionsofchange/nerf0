@@ -1,7 +1,7 @@
 from legato import follow_nouts
 from spacetime import st_sanity
 from itertools import takewhile
-from utils import i_flat_zip_longest
+from utils import i_flat_zip_longest, pmts
 
 
 class Historiograhpy(object):
@@ -71,6 +71,10 @@ class Historiograhpy(object):
 
         self.length = 0
 
+    def x_append(self, nout_hash):
+        index = self.append(nout_hash)
+        return HistoriograhpyAt(self, index)
+
     def append(self, nout_hash):
         self.set_values.append(nout_hash)
 
@@ -120,6 +124,27 @@ class Historiograhpy(object):
             follow_nouts(self.possible_timelines, self.set_values[index - 1]))
 
 
+class HistoriograhpyAt(object):
+    """Represents a particular point in time in the Historiograhpy's life"""
+
+    def __init__(self, historiography, index):
+        pmts(index, int)
+        self.historiography = historiography
+        self.index = index
+
+    def nout_hash(self):
+        return self.historiography.set_values[self.index]
+
+    def whats_new(self):
+        return self.historiography.whats_new(self.index)
+
+    def whats_made_alive(self):
+        return self.historiography.made_alive(self.index)
+
+    def whats_made_dead(self):
+        return self.historiography.made_dead(self.index)
+
+
 def find_point_of_divergence(history_a, history_b):
     seen = set([])
 
@@ -142,3 +167,15 @@ class YetAnotherTreeNode(object):
 
     def __repr__(self):
         return "YATN"
+
+
+def t_lookup(yatn, t_path):
+    if t_path == []:
+        return yatn
+
+    s_addr = yatn.t2s[t_path[0]]
+    if s_addr is None:
+        return None
+
+    result = t_lookup(yatn.children[s_addr], t_path[1:])
+    return result

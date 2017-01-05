@@ -4,6 +4,13 @@ from historiography import Historiograhpy, YetAnotherTreeNode
 from clef import BecomeNode, TextBecome, Insert, Replace, Delete
 from legato import NoutBegin
 from spacetime import st_become, st_insert, st_replace, st_delete
+from collections import namedtuple
+
+
+# A tuple containing information about histories at a lower level
+RecursiveHistoryInfo = namedtuple('RecursiveHistory', (
+    't_address',  # the history at the lower level takes place at a certain t_address
+    'children_steps'))
 
 
 def y_note_play(possible_timelines, structure, note, recurse):
@@ -17,18 +24,20 @@ def y_note_play(possible_timelines, structure, note, recurse):
         empty_structure = "Nothing"  # unused variable b/c Begin is never reached.
         empty_historiography = Historiograhpy(possible_timelines)
 
-        child, (child_historiography, ch_top), xxx_b = recurse(empty_structure, empty_historiography, note.nout_hash)
+        child, child_historiography_at, child_per_step_info = recurse(empty_structure, empty_historiography, note.nout_hash)
 
         children = structure.children[:]
         children.insert(note.index, child)
 
         historiographies = structure.historiographies[:]
-        historiographies.insert(note.index, child_historiography)
+        historiographies.insert(note.index, child_historiography_at)
 
         t2s, s2t = st_insert(structure.t2s, structure.s2t, note.index)
         new_t = len(t2s) - 1
 
-        return YetAnotherTreeNode(children, historiographies, t2s, s2t), (new_t, ch_top, xxx_b)
+        rhi = RecursiveHistoryInfo(new_t, child_per_step_info)
+
+        return YetAnotherTreeNode(children, historiographies, t2s, s2t), rhi
 
     if isinstance(note, Delete):
         children = structure.children[:]
@@ -43,20 +52,21 @@ def y_note_play(possible_timelines, structure, note, recurse):
 
     if isinstance(note, Replace):
         existing_structure = structure.children[note.index]
-        existing_historiography = structure.historiographies[note.index]
+        existing_historiography = structure.historiographies[note.index].historiography
 
-        child, (child_historiography, ch_top), xxx_b = recurse(existing_structure, existing_historiography, note.nout_hash)
+        child, child_historiography_at, child_per_step_info = recurse(existing_structure, existing_historiography, note.nout_hash)
 
         children = structure.children[:]
         historiographies = structure.historiographies[:]
 
         children[note.index] = child
-        historiographies[note.index] = child_historiography
+        historiographies[note.index] = child_historiography_at
 
         t2s, s2t = st_replace(structure.t2s, structure.s2t, note.index)
 
-        xxx = (s2t[note.index], ch_top, xxx_b)
-        return YetAnotherTreeNode(children, historiographies, t2s, s2t), xxx
+        rhi = RecursiveHistoryInfo(s2t[note.index], child_per_step_info)
+
+        return YetAnotherTreeNode(children, historiographies, t2s, s2t), rhi
 
     if isinstance(note, TextBecome):
         return TreeText(note.unicode_, 'no metadata available'), None
@@ -64,14 +74,14 @@ def y_note_play(possible_timelines, structure, note, recurse):
     raise Exception("Unknown Note")
 
 
-def construct_y(possible_timelines, existing_structure, existing_h2, edge_nout_hash):
+def construct_y(possible_timelines, existing_structure, existing_historiography, edge_nout_hash):
     def recurse(s, h, enh):
         return construct_y(possible_timelines, s, h, enh)
 
-    h2_top = existing_h2.append(edge_nout_hash)
+    historiography_at = existing_historiography.x_append(edge_nout_hash)
 
-    new_hashes = reversed(list(existing_h2.whats_new(h2_top)))
-    xxx_b = []
+    new_hashes = reversed(list(historiography_at.whats_new()))
+    per_step_info = []
 
     for new_hash in new_hashes:
         new_nout = possible_timelines.get(new_hash)
@@ -79,12 +89,10 @@ def construct_y(possible_timelines, existing_structure, existing_h2, edge_nout_h
             # this assymmetry is present elsewhere too... up for consideration
             continue
 
-        # Note: y_note_play does _not_ operate on historiographies; it only knows about them in the sense that it
-        # calls construct_y using the already-present historiography for the Replace note.
-        existing_structure, xxx = y_note_play(possible_timelines, existing_structure, new_nout.note, recurse)
-        xxx_b.append((new_hash, xxx))
+        existing_structure, rhi = y_note_play(possible_timelines, existing_structure, new_nout.note, recurse)
+        per_step_info.append((new_hash, rhi))
 
-    return existing_structure, (existing_h2, h2_top), xxx_b
+    return existing_structure, historiography_at, per_step_info
 
 
 def xxx_construct_y(possible_timelines, edge_nout_hash):
