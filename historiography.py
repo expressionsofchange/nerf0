@@ -1,4 +1,3 @@
-from itertools import dropwhile
 from copy import copy
 from legato import follow_nouts
 from spacetime import st_sanity
@@ -43,20 +42,18 @@ class Historiograhpy(object):
     def __init__(self, possible_timelines):
         self.possible_timelines = possible_timelines
 
-        self.h2 = []
+        # `set_values` model the consecutive "states" of the Historiograhpy.
+        self.set_values = []
 
-        # contains more & less information than h2:
-        # * more: it contains all hashes back to "begin"
-        # * less: it contains no duplicates
-        self.l = []
+        # `all_nout_hashes` contains all nout_hashes that can be deduced from any set value, in double chronological
+        # order (each history chronologically, and chronologically as flowing from the order of setting the values)
+        self.all_nout_hashes = []
 
-        self.index_in_l = {}
-        self.l_to_first_h2 = {}
+        # Reverse lookup: nout_hash => index in all_nout_hashes
+        self.r_all_nout_hashes = {}
 
-        self.len_l_after_append = []
-
-        # points of divergence is expressed as: index_in_h2 => hash
-        self.points_of_divergence = []
+        #
+        self.len_l_after = []
 
         # TODO explain the idea of top/used
         self.top = -1
@@ -75,33 +72,21 @@ class Historiograhpy(object):
         return copied
 
     def _do_append(self, nout_hash):
-        self.h2.append(nout_hash)
+        self.set_values.append(nout_hash)
 
-        full_history = follow_nouts(self.possible_timelines, nout_hash)
-
-        point_of_divergence = None  # when this is the first add, there is no point of divergence
         to_be_added = []
 
-        # Note: handling of [pre-]BEGIN is not necessary; it's implied by full_history, and the special-case for
-        # point_of_divergence
-
-        for nout_hash in full_history:
+        for nout_hash in follow_nouts(self.possible_timelines, nout_hash):
             if nout_hash in self.index_in_l:
-                # points of divergence are determined on _l_ (a divergence can occur at a more granular level than
-                # 'actually appended to Historiograhpy)
-                point_of_divergence = self.index_in_l[nout_hash]
+                # this is also the point of divergence, which we could (re)consider storing for certain optimizations.
                 break
-
             to_be_added.append(nout_hash)
-            # they must be collected, because we need to add in reverse order
 
         for nout_hash in reversed(to_be_added):
-            self.l.append(nout_hash)
-            self.index_in_l[nout_hash] = len(self.l) - 1
-            self.l_to_first_h2[len(self.l) - 1] = len(self.h2) - 1
+            self.all_nout_hashes.append(nout_hash)
+            self.index_in_l[nout_hash] = len(self.all_nout_hashes) - 1
 
-        self.len_l_after_append.append(len(self.l))
-        self.points_of_divergence.append(point_of_divergence)
+        self.len_l_after_append.append(len(self.all_nout_hashes))
 
     def whats_new(self):
         if self.top == -1:
@@ -111,36 +96,25 @@ class Historiograhpy(object):
 
     def r_whats_new(self, index):
         if index == 0:
-            return self.l[0:self.len_l_after_append[index]]
+            return self.all_nout_hashes[0:self.len_l_after_append[index]]
 
-        return self.l[self.len_l_after_append[index - 1]:self.len_l_after_append[index]]
+        return self.all_nout_hashes[self.len_l_after_append[index - 1]:self.len_l_after_append[index]]
 
     def live_path(self):
-        if self.top == -1:
-            raise Exception("Uninititalized yekyek")
+        """
+        At some point there was an implementation of a getter for the "live path" (both for the last value in
+        self.latests_nouts, and for any nout) here. However, it was not more performant than simply calling
+        follow_nouts, and much more complicated.
 
-        return self._r_live_path(self.h2[self.top])
+        Under certain very particular circumstances an optimization is useful though:
 
-    def _r_live_path(self, nout_hash):
-        index_in_l = self.index_in_l[nout_hash]
-        index_in_h2 = self.l_to_first_h2[index_in_l]
+        * The Historiograhpy is kept in memory between updates; especially if related data (e.g. drawing instructions in
+            a gui-context) are also kept in-memory between updates as much as possible.
+        * The Historiograhpy is "long enough" (what that is should be measured empirically)
 
-        # TODO Let's think about the ordering! In any case, the most logical thing is to do everything backwards, or
-        # everything forwards.
-
-        # If a point of divergence exists: recurse to it.
-        pod = self.points_of_divergence[index_in_h2]
-        if pod is not None:
-            for x in self._r_live_path(self.l[pod]):
-                yield x
-
-        # * we use the index to yield the new items, but only from the nout_hash (each
-        # until or from? depends on the ordering. The answer is "only those that are older than it"
-        # which happens to be the same as "once seen, when the yielding is ant-chronological"
-        for x in riter(dropwhile(lambda v: v != nout_hash, riter(self.r_whats_new(index_in_h2)))):
-            yield x
-
-    # possibly: _r_live_path... think about it as a datastructure that's modifiable in-place
+        * Updates to the latest_present are usually extensions of history.
+        """
+        raise NotImplemented()
 
 
 class YetAnotherTreeNode(object):
