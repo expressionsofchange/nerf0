@@ -25,6 +25,7 @@ from clef import (
 from legato import (
     NoutBegin,
     NoutBlock,
+    follow_nouts,
 )
 from construct_x import construct_x
 
@@ -340,7 +341,8 @@ class TreeWidget(Widget):
                     noot = some_lookup(struc, t_path)  # N.B.: path one shorter than aap
                     wim = noot.t2s[addr]
                     if wim is not None:
-                        alive_at_child_level = list(noot.historiographies[wim].live_path())
+                        asdf = noot.historiographies[wim]
+                        alive_at_child_level = list(follow_nouts(self.possible_timelines, asdf.set_values[top]))
                     else:
                         alive_at_child_level = None
 
@@ -351,7 +353,7 @@ class TreeWidget(Widget):
                     result += '\n'
 
             return result
-        print(r_xxx(struc, xxx_b, 0, [], list(h2.live_path())))
+        print(r_xxx(struc, xxx_b, 0, [], list(follow_nouts(self.possible_timelines, self.present_tree.metadata.nout_hash))))
 
     def on_touch_down(self, touch):
         # see https://kivy.org/docs/guide/inputs.html#touch-event-basics

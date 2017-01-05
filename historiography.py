@@ -1,15 +1,21 @@
-from copy import copy
 from legato import follow_nouts
 from spacetime import st_sanity
-
-
-def riter(i):
-    # TODO this is lazy; reveals problems elsewhwere
-    return reversed(list(i))
+from itertools import takewhile
+from utils import i_flat_zip_longest
 
 
 class Historiograhpy(object):
     """
+    This module contains several equivalent approaches at dealing with a "Historiography" (for lack of a better word):
+    An append-only list of nout-for-note hashes, that may or may not be somehow related.
+
+    Another way of saying this is: it's a mutable (grow only) structure that allows you to keep track of the present,
+    assigning a unique consecutive number to each version of the present.
+
+    The need for this concept flows directly from a Clef with an operation Replace(index, any_nout_hash)
+
+    The idea is: the nout-hashes are often related, and you want to be able to express how that's so.
+
     >>> from legato import NoutBlock, NoutBegin, parse_nout
     >>> from clef import TextBecome
     >>> from hashstore import HashStore
@@ -23,20 +29,34 @@ class Historiograhpy(object):
     >>> hash_begin = possible_timelines.add(begin)
     >>>
     >>> hash_a = possible_timelines.add(NoutBlock(TextBecome("a"), hash_begin))
-    >>>
-    >>> hash_ab = possible_timelines.add(NoutBlock(TextBecome("ab"), hash_a))
-    >>> hash_abc = possible_timelines.add(NoutBlock(TextBecome("abc"), hash_ab))
-    >>>
-    >>> hash_ad = possible_timelines.add(NoutBlock(TextBecome("ad"), hash_a))
+    >>> hash_b = possible_timelines.add(NoutBlock(TextBecome("b"), hash_begin))
+    >>> hash_ac = possible_timelines.add(NoutBlock(TextBecome("ac"), hash_a))
     >>>
     >>> historiography = Historiograhpy(possible_timelines)
-    >>> historiography_abc = historiography.append(hash_abc)
-    >>> historiography_ad = historiography_abc.append(hash_ad)
+    >>> a = historiography.append(hash_a)
+    >>> b = historiography.append(hash_b)
+    >>> ac = historiography.append(hash_ac)
     >>>
-    >>> list(historiography_abc.live_path())
-    [6e340b9cffb3, 1f2cf5ca7d0d, a360f667d6fe, 6bd2fb15d352]
-    >>> list(historiography_ad.live_path())
-    [6e340b9cffb3, 1f2cf5ca7d0d, 30017b836d55]
+    >>> list(historiography.whats_new(a)) == [hash_a, hash_begin]
+    True
+    >>> list(historiography.whats_made_alive(a)) == [hash_a, hash_begin]
+    True
+    >>> list(historiography.whats_made_dead(a)) == []
+    True
+    >>>
+    >>> list(historiography.whats_new(b)) == [hash_b]
+    True
+    >>> list(historiography.whats_made_alive(b)) == [hash_b]
+    True
+    >>> list(historiography.whats_made_dead(b)) == [hash_a]
+    True
+    >>>
+    >>> list(historiography.whats_new(ac)) == [hash_ac]
+    True
+    >>> list(historiography.whats_made_alive(ac)) == [hash_ac, hash_a]
+    True
+    >>> list(historiography.whats_made_dead(ac)) == [hash_b]
+    True
     """
 
     def __init__(self, possible_timelines):
@@ -45,76 +65,70 @@ class Historiograhpy(object):
         # `set_values` model the consecutive "states" of the Historiograhpy.
         self.set_values = []
 
-        # `all_nout_hashes` contains all nout_hashes that can be deduced from any set value, in double chronological
-        # order (each history chronologically, and chronologically as flowing from the order of setting the values)
-        self.all_nout_hashes = []
+        # self.all_nouts & self.prev_seen_in_all_nouts are the internal bookkeeping structures.
+        self.all_nouts = set([])
+        self.prev_seen_in_all_nouts = []
 
-        # Reverse lookup: nout_hash => index in all_nout_hashes
-        self.r_all_nout_hashes = {}
-
-        #
-        self.len_l_after = []
-
-        # TODO explain the idea of top/used
-        self.top = -1
-        self.used = False
+        self.length = 0
 
     def append(self, nout_hash):
-        if self.used:
-            # better prose is required here.
-            raise Exception("Each Historiograhpy can only be appended to once")
-
-        copied = copy(self)
-        self.used = True
-
-        copied._do_append(nout_hash)
-        copied.top += 1
-        return copied
-
-    def _do_append(self, nout_hash):
         self.set_values.append(nout_hash)
 
-        to_be_added = []
+        prev_seen_in_all_nouts = None
 
         for nout_hash in follow_nouts(self.possible_timelines, nout_hash):
-            if nout_hash in self.index_in_l:
-                # this is also the point of divergence, which we could (re)consider storing for certain optimizations.
+            if nout_hash in self.all_nouts:
+                prev_seen_in_all_nouts = nout_hash
                 break
-            to_be_added.append(nout_hash)
 
-        for nout_hash in reversed(to_be_added):
-            self.all_nout_hashes.append(nout_hash)
-            self.index_in_l[nout_hash] = len(self.all_nout_hashes) - 1
+            self.all_nouts.add(nout_hash)
 
-        self.len_l_after_append.append(len(self.all_nout_hashes))
+        self.prev_seen_in_all_nouts.append(prev_seen_in_all_nouts)
 
-    def whats_new(self):
-        if self.top == -1:
-            raise Exception("Uninititalized yekyek")
+        self.length += 1
+        return self.length - 1
 
-        return self.r_whats_new(self.top)
+    def whats_new(self, index):
+        """in anti-chronological order"""
+        return takewhile(
+            lambda v: v != self.prev_seen_in_all_nouts[index],
+            follow_nouts(self.possible_timelines, self.set_values[index]))
 
-    def r_whats_new(self, index):
+    def whats_made_alive(self, index):
+        """in anti-chronological order"""
         if index == 0:
-            return self.all_nout_hashes[0:self.len_l_after_append[index]]
+            return self.whats_new(index)
 
-        return self.all_nout_hashes[self.len_l_after_append[index - 1]:self.len_l_after_append[index]]
+        pod = find_point_of_divergence(
+            follow_nouts(self.possible_timelines, self.set_values[index]),
+            follow_nouts(self.possible_timelines, self.set_values[index - 1]))
 
-    def live_path(self):
-        """
-        At some point there was an implementation of a getter for the "live path" (both for the last value in
-        self.latests_nouts, and for any nout) here. However, it was not more performant than simply calling
-        follow_nouts, and much more complicated.
+        return takewhile(
+            lambda v: v != pod,
+            follow_nouts(self.possible_timelines, self.set_values[index]))
 
-        Under certain very particular circumstances an optimization is useful though:
+    def whats_made_dead(self, index):
+        if index == 0:
+            return iter([])
 
-        * The Historiograhpy is kept in memory between updates; especially if related data (e.g. drawing instructions in
-            a gui-context) are also kept in-memory between updates as much as possible.
-        * The Historiograhpy is "long enough" (what that is should be measured empirically)
+        pod = find_point_of_divergence(
+            follow_nouts(self.possible_timelines, self.set_values[index]),
+            follow_nouts(self.possible_timelines, self.set_values[index - 1]))
 
-        * Updates to the latest_present are usually extensions of history.
-        """
-        raise NotImplemented()
+        return takewhile(
+            lambda v: v != pod,
+            follow_nouts(self.possible_timelines, self.set_values[index - 1]))
+
+
+def find_point_of_divergence(history_a, history_b):
+    seen = set([])
+
+    for nout_hash in i_flat_zip_longest(history_a, history_b):
+        if nout_hash in seen:
+            return nout_hash
+        seen.add(nout_hash)
+
+    return None
 
 
 class YetAnotherTreeNode(object):
