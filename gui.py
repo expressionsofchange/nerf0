@@ -833,27 +833,6 @@ class HistoryWidget(Widget):
 
         return BoxNonTerminal(nout, non_terminals, terminals)
 
-    def for_reference(self, possible_timelines, present_nout_hash, indentation, seen):
-        # Shows how the Nouts ref recursively
-        if present_nout_hash.as_bytes() in seen:
-            return (indentation * " ") + ":..."
-
-        seen.add(present_nout_hash.as_bytes())
-        present_nout = possible_timelines.get(present_nout_hash)
-
-        if present_nout == NoutBegin():
-            result = ""
-        else:
-            result = self.for_reference(possible_timelines, present_nout.previous_hash, indentation, seen) + "\n\n"
-
-        if hasattr(present_nout, 'note') and hasattr(present_nout.note, 'nout_hash'):
-            horizontal_recursion = "\n" + self.for_reference(
-                possible_timelines, present_nout.note.nout_hash, indentation + 4, seen)
-        else:
-            horizontal_recursion = ""
-
-        return result + (indentation * " ") + repr(present_nout) + horizontal_recursion
-
     def _render_box(self, box):
         # Pure copy/pasta.
         for o, t in box.offset_terminals:
