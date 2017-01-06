@@ -308,46 +308,6 @@ class TreeWidget(Widget):
         cursor_node = self._node_for_s_cursor(self.present_tree, self.s_cursor)
         self.cursor_channel.broadcast(cursor_node.metadata.nout_hash)
 
-        yatn, h2, per_step_info = xxx_construct_y(self.possible_timelines, self.present_nout_hash)
-
-        def pp(present_root_yatn, per_step_info, t_path, alive_at_my_level):
-            indentation = (len(t_path) * 4) * " "
-            result = ""
-            for (hash_, rhi) in per_step_info:
-                result += indentation + repr(hash_)
-
-                if alive_at_my_level is None:
-                    result += " PARENT DELETED"
-                else:
-                    if hash_ not in alive_at_my_level:
-                        result += " DEAD BRANCH"
-
-                if rhi is not None:
-                    t_address, children_steps = rhi
-
-                    child_yatn = t_lookup(present_root_yatn, t_path + [t_address])
-                    if child_yatn is None:
-                        result += " DELETED"
-
-                    this_yatn = t_lookup(present_root_yatn, t_path)
-                    child_s_address = this_yatn.t2s[t_address]
-                    if child_s_address is not None:
-                        child_historiography_in_present = this_yatn.historiographies[child_s_address]
-                        alive_at_child_level = list(
-                            all_preceding_nout_hashes(self.possible_timelines, child_historiography_in_present.nout_hash()))
-                    else:
-                        alive_at_child_level = None
-
-                    result += '\n'
-                    result += pp(present_root_yatn, children_steps, t_path + [t_address], alive_at_child_level)
-                    result += '\n'
-                else:
-                    result += '\n'
-
-            return result
-
-        print(pp(yatn, per_step_info, [], list(all_preceding_nout_hashes(self.possible_timelines, self.present_tree.metadata.nout_hash))))
-
     def on_touch_down(self, touch):
         # see https://kivy.org/docs/guide/inputs.html#touch-event-basics
         # Basically:
@@ -735,6 +695,11 @@ class TreeWidget(Widget):
 
 ColWidths = namedtuple('ColWidths', ('my_hash', 'prev_hash', 'note', 'payload'))
 
+GREY = Color(0.95, 0.95, 0.95, 1)  # Ad Hoc Grey
+LIGHT_YELLOW = Color(1, 1, 0.97, 1)  # Ad Hoc Light Yellow
+RED = Color(1, 0.8, 0.8, 1)  # ad hoc; fine-tune please
+DARK_GREY = Color(0.5, 0.5, 0.5, 1)  # ad hoc; fine-tune please
+
 
 class HistoryWidget(Widget):
 
@@ -768,8 +733,16 @@ class HistoryWidget(Widget):
             return
 
         with apply_offset(self.canvas, self.offset):
-            self.box_structure = self.some_recursive_thing(self.nout_hash, None, ColWidths(150, 150, 30, 100))
-            self._render_box(self.box_structure)
+            yatn, h2, per_step_info = xxx_construct_y(self.possible_timelines, self.nout_hash)
+            offset_nonterminals = self.some_recursive_thing(
+                yatn,
+                per_step_info,
+                [],
+                list(all_preceding_nout_hashes(self.possible_timelines, self.nout_hash)),
+                ColWidths(150, 150, 30, 100),
+                )
+
+            self._render_box(BoxNonTerminal("root", offset_nonterminals, []))
 
     NOTES_T = {
         BecomeNode: 'N',
@@ -779,21 +752,20 @@ class HistoryWidget(Widget):
         Delete: 'D',
     }
 
-    def some_recursive_thing(self, nout_hash, br_nout_hash, col_widths):
-        nout = self.possible_timelines.get(nout_hash)
-        if nout == NoutBegin():
-            # in a later version, we could display BEGIN if that ever proves useful
-            return BoxNonTerminal(nout, [], [])
+    def some_recursive_thing(self, present_root_yatn, per_step_info, t_path, alive_at_my_level, col_widths):
+        per_step_offset_non_terminals = []
+        offset_y = 0
 
-        elif br_nout_hash == nout_hash:
-            # we you've drawn this in another branch... stop here.
-            # (later, we can draw this in a more fancy way)
-            terminals = []  # [no_offset(self._t_for_text("^^^", False, 999))]
-            return BoxNonTerminal(nout, [], terminals)
+        for nout_hash, rhi in per_step_info:
+            box_color = LIGHT_YELLOW
 
-        else:
-            recursive_result = self.some_recursive_thing(nout.previous_hash, br_nout_hash, col_widths)
-            offset_y = recursive_result.outer_dimensions[Y]
+            if alive_at_my_level is None:
+                box_color = RED  # deleted b/c of parent
+            else:
+                if nout_hash not in alive_at_my_level:
+                    box_color = DARK_GREY  # dead branch
+
+            nout = self.possible_timelines.get(nout_hash)
 
             offset_x = 0
             terminals = []
@@ -811,27 +783,35 @@ class HistoryWidget(Widget):
 
             for col_text, col_width in cols:
                 if col_width > 0:
-                    terminals.append(OffsetBox((offset_x, offset_y), self._t_for_text(col_text, False, col_width)))
+                    terminals.append(OffsetBox((offset_x, 0), self._t_for_text(col_text, box_color, col_width)))
                     offset_x += col_width
 
-            non_terminals = [no_offset(recursive_result)]
+            if rhi is not None:
+                t_address, children_steps = rhi
 
-        if hasattr(nout.note, 'nout_hash'):
-            before_replacement = None
-            if isinstance(nout.note, Replace):
-                # rebuilding the tree for each of these is lazy programming; we'll fix it after the PoC;
-                # (because we cache all trees anyway, it's not _that expensive_; but caching all trees is an underlying
-                # lazyness)
-                tree_before_r = construct_x(self.all_trees, self.possible_timelines, nout.previous_hash)
-                before_replacement = tree_before_r.children[nout.note.index].metadata.nout_hash
+                this_yatn = t_lookup(present_root_yatn, t_path)
+                child_s_address = None if this_yatn is None else this_yatn.t2s[t_address]
+                if child_s_address is not None:
+                    child_historiography_in_present = this_yatn.historiographies[child_s_address]
+                    alive_at_child_level = list(
+                        all_preceding_nout_hashes(self.possible_timelines, child_historiography_in_present.nout_hash()))
+                else:
+                    alive_at_child_level = None
 
-            horizontal_recursion = self.some_recursive_thing(nout.note.nout_hash, before_replacement, col_widths)
-            non_terminals.append(OffsetBox((offset_x, offset_y), horizontal_recursion))
+                recursive_result = self.some_recursive_thing(
+                    present_root_yatn, children_steps, t_path + [t_address], alive_at_child_level, col_widths)
 
-        # TODO: continuation of history.
-        # how to do it? not sure, we'll see in a sec
+                non_terminals = [OffsetBox((offset_x, o[Y]), nt) for (o, nt) in recursive_result]
+            else:
+                non_terminals = []
 
-        return BoxNonTerminal(nout, non_terminals, terminals)
+            per_step_result = BoxNonTerminal(nout, non_terminals, terminals)
+            per_step_offset_non_terminals.append(
+                OffsetBox((0, offset_y), per_step_result))
+
+            offset_y += per_step_result.outer_dimensions[Y]
+
+        return per_step_offset_non_terminals
 
     def _render_box(self, box):
         # Pure copy/pasta.
@@ -844,7 +824,7 @@ class HistoryWidget(Widget):
             with apply_offset(self.canvas, o):
                 self._render_box(nt)
 
-    def _t_for_text(self, text, is_cursor, max_width):
+    def _t_for_text(self, text, box_color, max_width):
         # copy/pasta with adaptations; we'll factor out the commonalities once they're' known
         # max_width is defined as "max inner width" (arbitrarily; we'll see how that works out; alternatives are
         # outer_width or between margin & padding
@@ -868,11 +848,6 @@ class HistoryWidget(Widget):
         top_left = 0, 0
         bottom_left = (top_left[X], top_left[Y] - PADDING - MARGIN - content_height - MARGIN - PADDING)
         bottom_right = (bottom_left[X] + PADDING + MARGIN + content_width + MARGIN + PADDING, bottom_left[Y])
-
-        if is_cursor:
-            box_color = Color(0.95, 0.95, 0.95, 1)  # Ad Hoc Grey
-        else:
-            box_color = Color(1, 1, 0.97, 1)  # Ad Hoc Light Yellow
 
         instructions = [
             box_color,
