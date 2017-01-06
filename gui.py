@@ -25,7 +25,7 @@ from clef import (
 from legato import (
     NoutBegin,
     NoutBlock,
-    follow_nouts,
+    all_preceding_nout_hashes,
 )
 from construct_x import construct_x
 
@@ -334,7 +334,7 @@ class TreeWidget(Widget):
                     if child_s_address is not None:
                         child_historiography_in_present = this_yatn.historiographies[child_s_address]
                         alive_at_child_level = list(
-                            follow_nouts(self.possible_timelines, child_historiography_in_present.nout_hash()))
+                            all_preceding_nout_hashes(self.possible_timelines, child_historiography_in_present.nout_hash()))
                     else:
                         alive_at_child_level = None
 
@@ -346,7 +346,7 @@ class TreeWidget(Widget):
 
             return result
 
-        print(pp(yatn, per_step_info, [], list(follow_nouts(self.possible_timelines, self.present_tree.metadata.nout_hash))))
+        print(pp(yatn, per_step_info, [], list(all_preceding_nout_hashes(self.possible_timelines, self.present_tree.metadata.nout_hash))))
 
     def on_touch_down(self, touch):
         # see https://kivy.org/docs/guide/inputs.html#touch-event-basics

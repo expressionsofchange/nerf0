@@ -2,7 +2,6 @@ from trees import TreeText
 from historiography import Historiograhpy, YetAnotherTreeNode
 
 from clef import BecomeNode, TextBecome, Insert, Replace, Delete
-from legato import NoutBegin
 from spacetime import st_become, st_insert, st_replace, st_delete
 from collections import namedtuple
 
@@ -21,7 +20,7 @@ def y_note_play(possible_timelines, structure, note, recurse):
         return YetAnotherTreeNode([], [], t2s, s2t), None
 
     if isinstance(note, Insert):
-        empty_structure = "Nothing"  # unused variable b/c Begin is never reached.
+        empty_structure = None
         empty_historiography = Historiograhpy(possible_timelines)
 
         child, child_historiography_at, child_per_step_info = recurse(empty_structure, empty_historiography, note.nout_hash)
@@ -85,9 +84,6 @@ def construct_y(possible_timelines, existing_structure, existing_historiography,
 
     for new_hash in new_hashes:
         new_nout = possible_timelines.get(new_hash)
-        if new_nout == NoutBegin():
-            # this assymmetry is present elsewhere too... up for consideration
-            continue
 
         existing_structure, rhi = y_note_play(possible_timelines, existing_structure, new_nout.note, recurse)
         per_step_info.append((new_hash, rhi))
@@ -96,4 +92,4 @@ def construct_y(possible_timelines, existing_structure, existing_historiography,
 
 
 def xxx_construct_y(possible_timelines, edge_nout_hash):
-    return construct_y(possible_timelines, "ignored... b/c begi", Historiograhpy(possible_timelines), edge_nout_hash)
+    return construct_y(possible_timelines, None, Historiograhpy(possible_timelines), edge_nout_hash)

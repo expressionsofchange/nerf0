@@ -65,17 +65,6 @@ def parse_nout(byte_stream):
     }[byte0].from_stream(byte_stream)
 
 
-def follow_nouts(possible_timelines, nout_hash):
-    yield nout_hash
-
-    nout = possible_timelines.get(nout_hash)
-    if nout == NoutBegin():
-        raise StopIteration()
-
-    for x in follow_nouts(possible_timelines, nout.previous_hash):
-        yield x
-
-
 def all_nhtups_for_nout_hash(possible_timelines, nout_hash):
     while True:
         nout = possible_timelines.get(nout_hash)
@@ -84,3 +73,7 @@ def all_nhtups_for_nout_hash(possible_timelines, nout_hash):
 
         yield NoutAndHash(nout, nout_hash)
         nout_hash = nout.previous_hash
+
+
+def all_preceding_nout_hashes(possible_timelines, nout_hash):
+    return (t.nout_hash for t in all_nhtups_for_nout_hash(possible_timelines, nout_hash))

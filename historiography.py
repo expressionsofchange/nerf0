@@ -1,4 +1,4 @@
-from legato import follow_nouts
+from legato import all_preceding_nout_hashes
 from spacetime import st_sanity
 from itertools import takewhile
 from utils import i_flat_zip_longest, pmts
@@ -37,9 +37,9 @@ class Historiograhpy(object):
     >>> b = historiography.append(hash_b)
     >>> ac = historiography.append(hash_ac)
     >>>
-    >>> list(historiography.whats_new(a)) == [hash_a, hash_begin]
+    >>> list(historiography.whats_new(a)) == [hash_a]
     True
-    >>> list(historiography.whats_made_alive(a)) == [hash_a, hash_begin]
+    >>> list(historiography.whats_made_alive(a)) == [hash_a]
     True
     >>> list(historiography.whats_made_dead(a)) == []
     True
@@ -80,7 +80,7 @@ class Historiograhpy(object):
 
         prev_seen_in_all_nouts = None
 
-        for nout_hash in follow_nouts(self.possible_timelines, nout_hash):
+        for nout_hash in all_preceding_nout_hashes(self.possible_timelines, nout_hash):
             if nout_hash in self.all_nouts:
                 prev_seen_in_all_nouts = nout_hash
                 break
@@ -96,7 +96,7 @@ class Historiograhpy(object):
         """in anti-chronological order"""
         return takewhile(
             lambda v: v != self.prev_seen_in_all_nouts[index],
-            follow_nouts(self.possible_timelines, self.set_values[index]))
+            all_preceding_nout_hashes(self.possible_timelines, self.set_values[index]))
 
     def whats_made_alive(self, index):
         """in anti-chronological order"""
@@ -104,24 +104,24 @@ class Historiograhpy(object):
             return self.whats_new(index)
 
         pod = find_point_of_divergence(
-            follow_nouts(self.possible_timelines, self.set_values[index]),
-            follow_nouts(self.possible_timelines, self.set_values[index - 1]))
+            all_preceding_nout_hashes(self.possible_timelines, self.set_values[index]),
+            all_preceding_nout_hashes(self.possible_timelines, self.set_values[index - 1]))
 
         return takewhile(
             lambda v: v != pod,
-            follow_nouts(self.possible_timelines, self.set_values[index]))
+            all_preceding_nout_hashes(self.possible_timelines, self.set_values[index]))
 
     def whats_made_dead(self, index):
         if index == 0:
             return iter([])
 
         pod = find_point_of_divergence(
-            follow_nouts(self.possible_timelines, self.set_values[index]),
-            follow_nouts(self.possible_timelines, self.set_values[index - 1]))
+            all_preceding_nout_hashes(self.possible_timelines, self.set_values[index]),
+            all_preceding_nout_hashes(self.possible_timelines, self.set_values[index - 1]))
 
         return takewhile(
             lambda v: v != pod,
-            follow_nouts(self.possible_timelines, self.set_values[index - 1]))
+            all_preceding_nout_hashes(self.possible_timelines, self.set_values[index - 1]))
 
 
 class HistoriograhpyAt(object):
