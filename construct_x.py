@@ -1,11 +1,14 @@
 from clef import BecomeNode, Insert, Delete, Replace, TextBecome
 from trees import TreeNode, TreeText, YourOwnHash
-from legato import NoutBegin
-from hashstore import Hash
+from legato import all_nhtups_for_nout_hash
 
 
 def x_note_play(note, structure, recurse, metadata):
+    # Note an assymmetry between the *Become* notes and the others; the former requiring nothingness to precede them,
+    # the latter requiring an existing structure to further manipulate.
+
     if isinstance(note, BecomeNode):
+        assert structure is None, "You can only BecomeNode out of nothingness"
         return TreeNode([], metadata)
 
     if isinstance(note, Insert):
@@ -25,6 +28,8 @@ def x_note_play(note, structure, recurse, metadata):
         return TreeNode(l, metadata)
 
     if isinstance(note, TextBecome):
+        # assert structure is None  -- in the present version, TextBecome _can_ actually be called on an existing
+        # TreeText; This interpretation is tentative.
         return TreeText(note.unicode_, metadata)
 
     raise Exception("Unknown Note")
@@ -60,32 +65,25 @@ def construct_x(results_lookup, possible_timelines, edge_nout_hash):
     * the `_x` in the present method's name
     """
     def recurse(nout_hash):
+        # This is used for by `play` to construct Trees for nouts, i.e. for Replace & Insert.
         return construct_x(results_lookup, possible_timelines, nout_hash)
 
-    if edge_nout_hash.as_bytes() in results_lookup:
-        return results_lookup[edge_nout_hash.as_bytes()]
+    tree = None  # In the beginning, there is nothing, which we model as `None`
 
-    edge_nout = possible_timelines.get(edge_nout_hash)
+    todo = []
+    for tup in all_nhtups_for_nout_hash(possible_timelines, edge_nout_hash):
+        if tup.nout_hash.as_bytes() in results_lookup:
+            tree = results_lookup[tup.nout_hash.as_bytes()]
+            break
+        todo.append(tup)
 
-    if edge_nout == NoutBegin():
-        # Does it make sense to allow for the "playing" of "begin only"?
-        # Only if you think "nothing" is a thing; let's build a version which doesn't do that first.
-        raise Exception("In this version, I don't think playing empty history makes sense")
+    for tup in reversed(todo):
+        edge_nout = tup.nout
+        edge_nout_hash = tup.nout_hash
 
-    last_nout_hash = edge_nout.previous_hash
-    last_nout = possible_timelines.get(last_nout_hash)
-    if last_nout == NoutBegin():
-        tree_before_edge = None  # in theory: ignored, because the first note should always be a "Become" note
-    else:
-        tree_before_edge = construct_x(results_lookup, possible_timelines, last_nout_hash)
+        note = edge_nout.note
 
-    note = edge_nout.note
+        tree = x_note_play(note, tree, recurse, YourOwnHash(edge_nout_hash))
+        results_lookup[edge_nout_hash.as_bytes()] = tree
 
-    def hash_for(nout):
-        # copy/pasta... e.g. from cli.py (at the time of copy/pasting)
-        bytes_ = nout.as_bytes()
-        return Hash.for_bytes(bytes_)
-
-    result = x_note_play(note, tree_before_edge, recurse, YourOwnHash(hash_for(edge_nout)))
-    results_lookup[edge_nout_hash.as_bytes()] = result
-    return result
+    return tree

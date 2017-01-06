@@ -1,6 +1,12 @@
 from utils import pmts
 from hashstore import Hash
 from clef import Note, parse_note
+from collections import namedtuple
+
+
+NoutAndHash = namedtuple('NoutAndHash', (
+    'nout',
+    'nout_hash'))
 
 
 NOUT_BEGIN = 0
@@ -68,3 +74,13 @@ def follow_nouts(possible_timelines, nout_hash):
 
     for x in follow_nouts(possible_timelines, nout.previous_hash):
         yield x
+
+
+def all_nhtups_for_nout_hash(possible_timelines, nout_hash):
+    while True:
+        nout = possible_timelines.get(nout_hash)
+        if nout == NoutBegin():
+            raise StopIteration()
+
+        yield NoutAndHash(nout, nout_hash)
+        nout_hash = nout.previous_hash
