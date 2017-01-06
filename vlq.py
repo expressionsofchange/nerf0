@@ -15,15 +15,15 @@ arranged most significant first in a stream.
 ...     print("%12d: %s" % (i, to_vlq(i)))
 ...     assert from_vlq(iter(to_vlq(i))) == i
 ...
-               0: b'\x00'
-               1: b'\x01'
-              42: b'*'
-             127: b'\x7f'
-             128: b'\x81\x00'
-            8192: b'\xc0\x00'
-           16383: b'\xff\x7f'
-           16384: b'\x81\x80\x00'
-      1234567890: b'\x84\xcc\xd8\x85R'
+           0: b'\x00'
+           1: b'\x01'
+          42: b'*'
+         127: b'\x7f'
+         128: b'\x81\x00'
+        8192: b'\xc0\x00'
+       16383: b'\xff\x7f'
+       16384: b'\x81\x80\x00'
+  1234567890: b'\x84\xcc\xd8\x85R'
 
 """
 
