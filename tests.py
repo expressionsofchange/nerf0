@@ -6,6 +6,7 @@ import historiography
 import spacetime
 import vlq
 import utils
+import s_address
 
 
 def load_tests(loader, tests, ignore):
@@ -14,6 +15,7 @@ def load_tests(loader, tests, ignore):
     tests.addTests(doctest.DocTestSuite(historiography))
     tests.addTests(doctest.DocTestSuite(spacetime))
     tests.addTests(doctest.DocTestSuite(vlq))
+    tests.addTests(doctest.DocTestSuite(s_address))
     return tests
 
 
