@@ -1,4 +1,6 @@
 """
+`node_for_s_address`:
+
 >>> from trees import TreeNode
 >>>
 >>> node = TreeNode(children=[
@@ -19,6 +21,10 @@ Traceback (most recent call last):
 IndexError: s_address out of bounds: [0, 1, 4]
 >>> get_node_for_s_address(node, [0, 1, 4], 'sentinel value')
 'sentinel value'
+
+`s_dfs`:
+>>> s_dfs(node, [])
+[[], [0], [0, 0], [0, 1]]
 """
 
 
@@ -43,3 +49,13 @@ def get_node_for_s_address(node, s_address, default=None):
         return default  # Index out of bounds
 
     return get_node_for_s_address(node.children[s_address[0]], s_address[1:], default)
+
+
+def s_dfs(node, s_address):
+    """returns the depth first search of all s_addresses"""
+    result = [s_address]
+    if hasattr(node, 'children'):
+        for i, child in enumerate(node.children):
+            result.extend(s_dfs(child, s_address + [i]))
+
+    return result

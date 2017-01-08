@@ -23,11 +23,12 @@ from clef import (
     TextBecome,
 )
 from legato import (
-    NoutBegin,
-    NoutBlock,
     all_preceding_nout_hashes,
 )
 from construct_x import construct_x
+from s_address import node_for_s_address, get_node_for_s_address
+from edit_structure import EditStructure
+from construct_edits import edit_note_play
 
 from trees import (
     TreeNode,
@@ -37,14 +38,25 @@ from trees import (
 from construct_y import xxx_construct_y
 from historiography import t_lookup
 
-from hashstore import Hash
-from posacts import Possibility, Actuality, HashStoreChannelListener
+from posacts import Actuality, HashStoreChannelListener
 from channel import Channel
 
 from filehandler import (
     FileWriter,
     initialize_history,
     read_from_file
+)
+
+from edit_clef import (
+    CursorChild,
+    CursorDFS,
+    CursorParent,
+    CursorSet,
+    EDelete,
+    InsertNodeChild,
+    InsertNodeSibbling,
+    TextInsert,
+    TextReplace,
 )
 
 MARGIN = 5
@@ -174,10 +186,9 @@ class TreeWidget(Widget):
 
     def __init__(self, **kwargs):
         super(TreeWidget, self).__init__(**kwargs)
-        self.autosave = True
-
         self.all_trees = {}
-        self.s_cursor = []
+
+        self.ds = EditStructure(None, [])
 
         # In this version the file-handling and history-channel are maintained by the GUI widget itself. I can imagine
         # they'll be moved out once we get multiple windows.
@@ -216,36 +227,40 @@ class TreeWidget(Widget):
         # data :: Possibility | Actuality
         # there is no else branch: Possibility only travels _to_ the channel;
         if isinstance(data, Actuality):
-            self.present_nout_hash = data.nout_hash
-            self._present_nout_updated()
+            tree = construct_x(self.all_trees, self.possible_timelines, data.nout_hash)
 
-    def send_possibility_up(self, nout):
-        # Note: the're some duplication here of logic that's also elsewhere, e.g. the calculation of the hash was
-        # copy/pasted from the HashStore implementation; but we need it here again.
+            s_cursor = self.ds.s_cursor
+            while get_node_for_s_address(tree, self.ds.s_cursor) is None:
+                # Fall-back to parent if the state has changed in a way that broke the cursor.
+                # I know... the bubbling can surely be done in a more performant manner.
+                s_cursor = s_cursor[:-1]
 
-        bytes_ = nout.as_bytes()
-        hash_ = Hash.for_bytes(bytes_)
-        self.send_to_channel(Possibility(nout))
-        return hash_
+            self.ds = EditStructure(tree, s_cursor)
 
-    def send_actuality_up(self, nout_hash):
-        self.send_to_channel(Actuality(nout_hash))
+            self.cursor_channel.broadcast(node_for_s_address(self.ds.tree, self.ds.s_cursor).metadata.nout_hash)
+            self.refresh()
 
-    def set_present_nout(self, nout):
-        """Call only_from inside_ ! don't call this in response to parent updates, because this moves data in the
-        direction of the parent!"""
-        present_nout_hash = self.send_possibility_up(nout)
-        self.present_nout_hash = present_nout_hash
-        if self.autosave:
-            self.send_actuality_up(present_nout_hash)
-        self._present_nout_updated()
+    def _handle_edit_note(self, edit_note):
+        new_s_cursor, posacts, error = edit_note_play(self.ds, edit_note)
 
-    def _present_nout_updated(self):
-        """invalidation of any local caches that may depend on present_nout; must be called in response to _any_
-        update"""
-        self.present_tree = construct_x(
-            self.all_trees, self.possible_timelines, self.present_nout_hash)
+        last_actuality = None
+        for posact in posacts:
+            # Note: if we don't want to autosave, we should make Actuality-sending conditional here.
+            self.send_to_channel(posact)
 
+            if isinstance(posact, Actuality):
+                last_actuality = posact
+
+        if last_actuality is None:
+            new_tree = self.ds.tree
+        else:
+            new_tree = construct_x(self.all_trees, self.possible_timelines, last_actuality.nout_hash)
+
+        self.ds = EditStructure(
+            new_tree,
+            new_s_cursor,
+        )
+        self.cursor_channel.broadcast(node_for_s_address(self.ds.tree, self.ds.s_cursor).metadata.nout_hash)
         self.refresh()
 
     # ## Section for Keyboard / Mouse handling
@@ -258,33 +273,37 @@ class TreeWidget(Widget):
         code, textual_code = keycode
 
         if textual_code in ['left', 'h']:
-            self._set_s_cursor(self._parent_sc(self.s_cursor))
-            self.refresh()
+            self._handle_edit_note(CursorParent())
+
         elif textual_code in ['right', 'l']:
-            self._set_s_cursor(self._child_sc(self.s_cursor))
-            self.refresh()
+            self._handle_edit_note(CursorChild())
+
         elif textual_code in ['up', 'k']:
-            self._set_s_cursor(self._dfs_sibbling_sc(self.s_cursor, -1))
-            self.refresh()
+            self._handle_edit_note(CursorDFS(-1))
+
         elif textual_code in ['down', 'j']:
-            self._set_s_cursor(self._dfs_sibbling_sc(self.s_cursor, 1))
-            self.refresh()
+            self._handle_edit_note(CursorDFS(1))
 
         elif textual_code in ['q']:
             self._add_sibbling_text(INSERT_BEFORE)
+
         elif textual_code in ['w']:
             self._add_child_text()
+
         elif textual_code in ['e']:
             self._add_sibbling_text(INSERT_AFTER)
+
         elif textual_code in ['a']:
-            self._add_sibbling_node(INSERT_BEFORE)
+            self._handle_edit_note(InsertNodeSibbling(INSERT_BEFORE))
+
         elif textual_code in ['s']:
-            self._add_child_node()
+            self._handle_edit_note(InsertNodeChild())
+
         elif textual_code in ['d']:
-            self._add_sibbling_node(INSERT_AFTER)
+            self._handle_edit_note(InsertNodeSibbling(INSERT_AFTER))
 
         elif textual_code in ['x', 'del']:
-            self._delete_current_node()
+            self._handle_edit_note(EDelete())
 
         # Return True to accept the key. Otherwise, it will be used by the system.
         return True
@@ -300,13 +319,8 @@ class TreeWidget(Widget):
             Rectangle(pos=self.pos, size=self.size,)
 
         with apply_offset(self.canvas, self.offset):
-            self.box_structure = self._nt_for_node_as_lispy_layout(self.present_tree, [])
+            self.box_structure = self._nt_for_node_as_lispy_layout(self.ds.tree, [])
             self._render_box(self.box_structure)
-
-    def _set_s_cursor(self, s_cursor):
-        self.s_cursor = s_cursor
-        cursor_node = self._node_for_s_cursor(self.present_tree, self.s_cursor)
-        self.cursor_channel.broadcast(cursor_node.metadata.nout_hash)
 
     def on_touch_down(self, touch):
         # see https://kivy.org/docs/guide/inputs.html#touch-event-basics
@@ -322,170 +336,37 @@ class TreeWidget(Widget):
         clicked_item = self.box_structure.from_point(bring_into_offset(self.offset, (touch.x, touch.y)))
 
         if clicked_item is not None:
-            self._set_s_cursor(clicked_item.semantics)
-            self.refresh()
+            self._handle_edit_note(CursorSet(clicked_item.semantics))
 
         # TODO (potentially): grabbing, as documented here (including the caveats of that approach)
         # https://kivy.org/docs/guide/inputs.html#grabbing-touch-events
 
         return ret
 
-    # ## Section for s_cursor navigation
-    def _dfs(self, node, s_address):
-        # returns the depth first search of all s_addresses
-        result = [s_address]
-        if hasattr(node, 'children'):
-            for i, child in enumerate(node.children):
-                result.extend(self._dfs(child, s_address + [i]))
-
-        return result
-
-    def _node_for_s_cursor(self, node, s_cursor):
-        if s_cursor == []:
-            return node
-
-        if hasattr(node, 'children'):
-            # no bounds checking (yet?)
-            return self._node_for_s_cursor(node.children[s_cursor[0]], s_cursor[1:])
-
-    def _node_path_for_s_cursor(self, node, s_cursor):
-        if s_cursor == []:
-            return [node]
-
-        if hasattr(node, 'children'):
-            # no bounds checking (yet?)
-            return [node] + self._node_path_for_s_cursor(node.children[s_cursor[0]], s_cursor[1:])
-
-    def _parent_sc(self, s_cursor):
-        return s_cursor[:-1]
-
-    def _child_sc(self, s_cursor):
-        node = self._node_for_s_cursor(self.present_tree, s_cursor)
-        if not hasattr(node, 'children') or len(node.children) == 0:
-            return s_cursor  # the no-op
-        return s_cursor + [0]
-
-    def _sibbling_sc(self, s_cursor, direction):
-        if s_cursor == []:
-            return s_cursor  # root has no sibblings
-
-        parent = self._node_for_s_cursor(self.present_tree, self._parent_sc(s_cursor))
-        index = s_cursor[-1] + direction
-        bounded_index = max(0, min(len(parent.children) - 1, index))
-        return s_cursor[:-1] + [bounded_index]
-
-    def _dfs_sibbling_sc(self, s_cursor, direction):
-        dfs = self._dfs(self.present_tree, [])
-        dfs_index = dfs.index(s_cursor) + direction
-        bounded_index = max(0, min(len(dfs) - 1, dfs_index))
-        return dfs[bounded_index]
-
-    # ## Section for editing
-    def _add_child_node(self):
-        cursor_node = self._node_for_s_cursor(self.present_tree, self.s_cursor)
-        if not isinstance(cursor_node, TreeNode):
-            return  # for now... we just silently ignore the user's request when they ask to add a child to a non-node
-
-        index = len(cursor_node.children)
-        self._add_x_node(self.s_cursor, index)
-        self._set_s_cursor(self.s_cursor + [index])
-        self._present_nout_updated()
-
-    def _add_sibbling_node(self, direction):
-        if self.s_cursor == []:
-            return  # adding sibblings to the root is not possible (it would lead to a forrest)
-
-        # because direction is in [0, 1]... no need to minimize/maximize (PROVE!)
-        index = self.s_cursor[-1] + direction
-        self._add_x_node(self.s_cursor[:-1], index)
-        self._set_s_cursor(self.s_cursor[:-1] + [index])
-        self._present_nout_updated()
-
-    def _add_x_node(self, s_cursor, index):
-        cursor_node = self._node_for_s_cursor(self.present_tree, s_cursor)
-
-        begin = self.send_possibility_up(NoutBegin())
-        to_be_inserted = self.send_possibility_up(NoutBlock(BecomeNode(), begin))
-
-        self._bubble_history_up(self.send_possibility_up(
-            NoutBlock(Insert(index, to_be_inserted), cursor_node.metadata.nout_hash)), s_cursor)
-
-    def _bubble_history_up(self, hash_to_bubble, s_address):
-        """Recursively replace history to reflect a change (hash_to_bubble) at a lower level (s_address)"""
-
-        for i in reversed(range(len(s_address))):
-            # We slide a window of size 2 over the s_address from right to left, like so:
-            # [..., ..., ..., ..., ..., ..., ...]  <- s_address
-            #                              ^  ^
-            #                           [:i]  i
-            # For each such i, the sliced array s_address[:i] gives you the s_address of a node in which a replacement
-            # takes place, and s_address[i] gives you the index to replace at.
-            #
-            # Regarding the range (0, len(s_address)) the following:
-            # * len(s_address) means the s_address itself is the first thing to be replaced.
-            # * 0 means: the last replacement is _inside_ the root node (s_address=[]), at index s_address[0]
-            replace_in = self._node_for_s_cursor(self.present_tree, s_address[:i])
-
-            hash_to_bubble = self.send_possibility_up(
-                NoutBlock(Replace(s_address[i], hash_to_bubble), replace_in.metadata.nout_hash))
-
-        # The root node (s_address=[]) itself cannot be replaced, its replacement is represented as "Actuality updated"
-        self.present_nout_hash = hash_to_bubble
-        self.send_actuality_up(hash_to_bubble)
-
+    # ## Edit-actions that need further user input (i.e. Text-edits)
     def _add_child_text(self):
-        cursor_node = self._node_for_s_cursor(self.present_tree, self.s_cursor)
+        cursor_node = node_for_s_address(self.ds.tree, self.ds.s_cursor)
         if not isinstance(cursor_node, TreeNode):
-            # Add child-text to text node is interpreted as "edit that text node"
-            self._edit_x_text(cursor_node.unicode_, self.s_cursor[:-1], self.s_cursor[-1], self.s_cursor)
+            self._open_text_popup(cursor_node.unicode_, lambda text: self._handle_edit_note(
+                TextReplace(self.ds.s_cursor, text)
+            ))
             return
 
         index = len(cursor_node.children)
-        new_s_cursor = self.s_cursor + [index]
-        self._add_x_text(self.s_cursor, index, new_s_cursor)
+        self._open_text_popup("", lambda text: self._handle_edit_note(
+            TextInsert(self.ds.s_cursor, index, text)
+        ))
 
     def _add_sibbling_text(self, direction):
-        if self.s_cursor == []:
-            return  # adding sibblings to the root is not possible (it would lead to a forrest)
+        if self.ds.s_cursor == []:
+            return  # adding sibblings to the root is not possible (it would lead to a forest)
 
         # because direction is in [0, 1]... no need to minimize/maximize (PROVE!)
-        index = self.s_cursor[-1] + direction
-        new_s_cursor = self._set_s_cursor(self.s_cursor[:-1] + [index])
-        self._add_x_text(self.s_cursor[:-1], index, new_s_cursor)
+        self._open_text_popup("", lambda text: self._handle_edit_note(
+            TextInsert(self.ds.s_cursor[:-1], self.ds.s_cursor[-1] + direction, text)
+        ))
 
-    def _add_x_text(self, s_cursor, index, new_s_cursor):
-        layout = BoxLayout(spacing=10, orientation='vertical')
-        ti = TextInput(text="", size_hint=(1, .9))
-        btn = Button(text='Close and save', size_hint=(1, .1,))
-        layout.add_widget(ti)
-        layout.add_widget(btn)
-
-        popup = Popup(
-            title='Edit text', content=layout
-            )
-
-        def popup_dismiss(*args):
-            # Because of the Modal nature of the popup, we can take the naive approach here and simply insert the
-            # results of the popup, trigger the recalc etc. etc. as if this were sequential code.
-            cursor_node = self._node_for_s_cursor(self.present_tree, s_cursor)
-
-            begin = self.send_possibility_up(NoutBegin())
-            to_be_inserted = self.send_possibility_up(NoutBlock(TextBecome(ti.text), begin))
-
-            self._bubble_history_up(self.send_possibility_up(
-                NoutBlock(Insert(index, to_be_inserted), cursor_node.metadata.nout_hash)), s_cursor)
-
-            self._set_s_cursor(new_s_cursor)
-            self._present_nout_updated()
-            self.initialize_keyboard()
-
-        btn.bind(on_press=popup.dismiss)
-        popup.bind(on_dismiss=popup_dismiss)
-
-        popup.open()
-        ti.focus = True
-
-    def _edit_x_text(self, current_text, s_cursor, index, new_s_cursor):
+    def _open_text_popup(self, current_text, callback):
         layout = BoxLayout(spacing=10, orientation='vertical')
         ti = TextInput(text=current_text, size_hint=(1, .9))
         btn = Button(text='Close and save', size_hint=(1, .1,))
@@ -497,18 +378,10 @@ class TreeWidget(Widget):
             )
 
         def popup_dismiss(*args):
+            # (Tentative):
             # Because of the Modal nature of the popup, we can take the naive approach here and simply insert the
             # results of the popup, trigger the recalc etc. etc. as if this were sequential code.
-            cursor_node = self._node_for_s_cursor(self.present_tree, s_cursor)
-
-            begin = self.send_possibility_up(NoutBegin())
-            to_be_inserted = self.send_possibility_up(NoutBlock(TextBecome(ti.text), begin))
-
-            self._bubble_history_up(self.send_possibility_up(
-                NoutBlock(Replace(index, to_be_inserted), cursor_node.metadata.nout_hash)), s_cursor)
-
-            self._set_s_cursor(new_s_cursor)
-            self._present_nout_updated()
+            callback(ti.text)
             self.initialize_keyboard()
 
         btn.bind(on_press=popup.dismiss)
@@ -516,20 +389,6 @@ class TreeWidget(Widget):
 
         popup.open()
         ti.focus = True
-
-    def _delete_current_node(self):
-        if self.s_cursor == []:
-            # silently ignored ('delete root' is not defined, because the root is assumed to exist.)
-            return
-
-        delete_from = self.s_cursor[:-1]
-        delete_at = self.s_cursor[-1]
-
-        h = self.send_possibility_up(
-            NoutBlock(Delete(delete_at), self._node_for_s_cursor(self.present_tree, delete_from).metadata.nout_hash))
-
-        self._bubble_history_up(h, delete_from)
-        self._present_nout_updated()
 
     # ## Section for drawing boxes
     def _t_for_text(self, text, is_cursor):
@@ -563,7 +422,7 @@ class TreeWidget(Widget):
         return BoxTerminal(instructions, bottom_right)
 
     def _nt_for_node_single_line(self, node, s_address):
-        is_cursor = s_address == self.s_cursor
+        is_cursor = s_address == self.ds.s_cursor
         if isinstance(node, TreeText):
             return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text(node.unicode_, is_cursor))])
 
@@ -590,7 +449,7 @@ class TreeWidget(Widget):
             offset_terminals)
 
     def _nt_for_node_as_todo_list(self, node, s_address):
-        is_cursor = s_address == self.s_cursor
+        is_cursor = s_address == self.ds.s_cursor
 
         if isinstance(node, TreeText):
             return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text(node.unicode_, is_cursor))])
@@ -620,7 +479,7 @@ class TreeWidget(Widget):
     def _nt_for_node_as_lispy_layout(self, node, s_address):
         # "Lisp Style indentation, i.e. xxx yyy
         #                                   zzz
-        is_cursor = s_address == self.s_cursor
+        is_cursor = s_address == self.ds.s_cursor
 
         if isinstance(node, TreeText):
             return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text(node.unicode_, is_cursor))])
