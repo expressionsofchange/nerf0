@@ -38,7 +38,7 @@ from trees import (
 from construct_y import xxx_construct_y
 from historiography import t_lookup
 
-from posacts import Actuality, HashStoreChannelListener
+from posacts import Actuality, HashStoreChannelListener, LatestActualityListener
 from channel import Channel
 
 from filehandler import (
@@ -185,30 +185,17 @@ def bring_into_offset(offset, point):
 class TreeWidget(Widget, FocusBehavior):
 
     def __init__(self, **kwargs):
+        history_channel = kwargs.pop('history_channel')
+        self.possible_timelines = kwargs.pop('possible_timelines')
+
         super(TreeWidget, self).__init__(**kwargs)
         self.all_trees = {}
 
         self.ds = EditStructure(None, [])
 
-        # In this version the file-handling and history-channel are maintained by the GUI widget itself. I can imagine
-        # they'll be moved out once we get multiple windows.
-
-        filename = 'test3'
-        history_channel = Channel()  # Pun not intended
-
         self.cursor_channel = Channel()
 
-        self.possible_timelines = HashStoreChannelListener(history_channel).possible_timelines
         self.send_to_channel = history_channel.connect(self.receive_from_channel)
-
-        if isfile(filename):
-            # ReadFromFile before connecting to the Writer to ensure that reading from the file does not write to it
-            read_from_file(filename, history_channel)
-            FileWriter(history_channel, filename)
-        else:
-            # FileWriter first to ensure that the initialization becomes part of the file.
-            FileWriter(history_channel, filename)
-            initialize_history(history_channel)
 
         self.bind(pos=self.refresh)
         self.bind(size=self.refresh)
@@ -742,9 +729,39 @@ class HistoryWidget(Widget):
 
 class TestApp(App):
 
+    def __init__(self, *args, **kwargs):
+        super(TestApp, self).__init__(*args, **kwargs)
+
+        self.setup_channels()
+        self.do_initial_file_read()
+
+    def setup_channels(self):
+        # This is the main channel of PosActs for our application.
+        self.history_channel = Channel()  # Pun not intended
+        self.possible_timelines = HashStoreChannelListener(self.history_channel).possible_timelines
+        self.lnh = LatestActualityListener(self.history_channel)
+
+    def do_initial_file_read(self):
+        filename = 'test3'
+        if isfile(filename):
+            # ReadFromFile before connecting to the Writer to ensure that reading from the file does not write to it
+            read_from_file(filename, self.history_channel)
+            FileWriter(self.history_channel, filename)
+        else:
+            # FileWriter first to ensure that the initialization becomes part of the file.
+            FileWriter(self.history_channel, filename)
+            initialize_history(self.history_channel)
+
     def build(self):
         layout = BoxLayout(spacing=10, orientation='horizontal')
-        tree = TreeWidget(size_hint=(.2, 1))
+        tree = TreeWidget(
+            size_hint=(.2, 1),
+            possible_timelines=self.possible_timelines,
+            history_channel=self.history_channel,
+            )
+
+        # we kick off with the state so far
+        tree.receive_from_channel(Actuality(self.lnh.nout_hash))
 
         history_widget = HistoryWidget(
             size_hint=(.8, 1),
@@ -755,7 +772,6 @@ class TestApp(App):
         layout.add_widget(tree)
 
         tree.cursor_channel.connect(history_widget.update_nout_hash)
-
         tree.focus = True
 
         return layout

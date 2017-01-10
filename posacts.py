@@ -58,3 +58,17 @@ class HashStoreChannelListener(object):
         # Receives: Possibility | Actuality; the former are stored, the latter ignored.
         if isinstance(data, Possibility):
             self.possible_timelines.add(data.nout)
+
+
+class LatestActualityListener(object):
+    def __init__(self, channel):
+        self.nout_hash = None
+
+        # receive-only connection: LatestActualityListener's outwards communication goes via others reading
+        # self.nout_hash
+        channel.connect(self.receive)
+
+    def receive(self, data):
+        # Receives: Possibility | Actuality; the latter are stored, the former ignored.
+        if isinstance(data, Actuality):
+            self.nout_hash = data.nout_hash
