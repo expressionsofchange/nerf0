@@ -13,6 +13,7 @@ from kivy.uix.popup import Popup
 from kivy.uix.textinput import TextInput
 from kivy.uix.button import Button
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.gridlayout import GridLayout
 from kivy.uix.behaviors.focus import FocusBehavior
 
 from clef import (
@@ -533,10 +534,10 @@ class TreeWidget(Widget, FocusBehavior):
 
 ColWidths = namedtuple('ColWidths', ('my_hash', 'prev_hash', 'note', 'payload'))
 
-GREY = Color(0.95, 0.95, 0.95, 1)  # Ad Hoc Grey
-LIGHT_YELLOW = Color(1, 1, 0.97, 1)  # Ad Hoc Light Yellow
-RED = Color(1, 0.8, 0.8, 1)  # ad hoc; fine-tune please
-DARK_GREY = Color(0.5, 0.5, 0.5, 1)  # ad hoc; fine-tune please
+GREY = lambda: Color(0.95, 0.95, 0.95, 1)  # Ad Hoc Grey
+LIGHT_YELLOW = lambda: Color(1, 1, 0.97, 1)  # Ad Hoc Light Yellow
+RED = lambda: Color(1, 0.8, 0.8, 1)  # ad hoc; fine-tune please
+DARK_GREY = lambda: Color(0.5, 0.5, 0.5, 1)  # ad hoc; fine-tune please
 
 
 class HistoryWidget(Widget):
@@ -595,13 +596,13 @@ class HistoryWidget(Widget):
         offset_y = 0
 
         for nout_hash, rhi in per_step_info:
-            box_color = LIGHT_YELLOW
+            box_color = LIGHT_YELLOW()
 
             if alive_at_my_level is None:
-                box_color = RED  # deleted b/c of parent
+                box_color = RED()  # deleted b/c of parent
             else:
                 if nout_hash not in alive_at_my_level:
-                    box_color = DARK_GREY  # dead branch
+                    box_color = DARK_GREY()  # dead branch
 
             nout = self.possible_timelines.get(nout_hash)
 
@@ -752,28 +753,37 @@ class TestApp(App):
             FileWriter(self.history_channel, filename)
             initialize_history(self.history_channel)
 
-    def build(self):
-        layout = BoxLayout(spacing=10, orientation='horizontal')
+    def add_tree_and_stuff(self, history_channel):
+        horizontal_layout = BoxLayout(spacing=10, orientation='horizontal')
+
         tree = TreeWidget(
             size_hint=(.2, 1),
             possible_timelines=self.possible_timelines,
-            history_channel=self.history_channel,
+            history_channel=history_channel,
             )
-
-        # we kick off with the state so far
-        tree.receive_from_channel(Actuality(self.lnh.nout_hash))
 
         history_widget = HistoryWidget(
             size_hint=(.8, 1),
             possible_timelines=tree.possible_timelines,
             all_trees=tree.all_trees,
             )
-        layout.add_widget(history_widget)
-        layout.add_widget(tree)
+        horizontal_layout.add_widget(history_widget)
+        horizontal_layout.add_widget(tree)
+
+        self.vertical_layout.add_widget(horizontal_layout)
 
         tree.cursor_channel.connect(history_widget.update_nout_hash)
         tree.focus = True
+        return tree
 
-        return layout
+    def build(self):
+        self.vertical_layout = GridLayout(spacing=10, cols=1)
+        for x in range(4):
+            tree = self.add_tree_and_stuff(self.history_channel)
+
+            # we kick off with the state so far
+            tree.receive_from_channel(Actuality(self.lnh.nout_hash))
+
+        return self.vertical_layout
 
 TestApp().run()
