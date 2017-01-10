@@ -2,7 +2,6 @@ from collections import namedtuple
 from contextlib import contextmanager
 from os.path import isfile
 
-from kivy.core.window import Window
 from kivy.app import App
 from kivy.core.text import Label
 from kivy.uix.widget import Widget
@@ -14,6 +13,7 @@ from kivy.uix.popup import Popup
 from kivy.uix.textinput import TextInput
 from kivy.uix.button import Button
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.behaviors.focus import FocusBehavior
 
 from clef import (
     BecomeNode,
@@ -182,7 +182,7 @@ def bring_into_offset(offset, point):
     return point[X] - offset[X], point[Y] - offset[Y]
 
 
-class TreeWidget(Widget):
+class TreeWidget(Widget, FocusBehavior):
 
     def __init__(self, **kwargs):
         super(TreeWidget, self).__init__(**kwargs)
@@ -212,15 +212,6 @@ class TreeWidget(Widget):
 
         self.bind(pos=self.refresh)
         self.bind(size=self.refresh)
-
-        self._keyboard = None
-        self.initialize_keyboard()
-
-    def initialize_keyboard(self):
-        # not well-understood yet...
-        if self._keyboard is None:
-            self._keyboard = Window.request_keyboard(self._keyboard_closed, self, 'text')
-            self._keyboard.bind(on_key_down=self._on_keyboard_down)
 
     # ## Section for channel-communication
     def receive_from_channel(self, data):
@@ -263,13 +254,9 @@ class TreeWidget(Widget):
         self.cursor_channel.broadcast(node_for_s_address(self.ds.tree, self.ds.s_cursor).metadata.nout_hash)
         self.refresh()
 
-    # ## Section for Keyboard / Mouse handling
-    def _keyboard_closed(self):
-        # LATER: think about further handling of this scenario. (probably: only once I get into Mobile territory)
-        self._keyboard.unbind(on_key_down=self._on_keyboard_down)
-        self._keyboard = None
+    def keyboard_on_key_down(self, window, keycode, text, modifiers):
+        result = FocusBehavior.keyboard_on_key_down(self, window, keycode, text, modifiers)
 
-    def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
         code, textual_code = keycode
 
         if textual_code in ['left', 'h']:
@@ -305,8 +292,7 @@ class TreeWidget(Widget):
         elif textual_code in ['x', 'del']:
             self._handle_edit_note(EDelete())
 
-        # Return True to accept the key. Otherwise, it will be used by the system.
-        return True
+        return result
 
     def refresh(self, *args):
         """refresh means: redraw (I suppose we could rename, but I believe it's "canonical Kivy" to use 'refresh'"""
@@ -333,15 +319,22 @@ class TreeWidget(Widget):
         if not self.collide_point(*touch.pos):
             return ret
 
+        self.focus = True
+        touch.grab(self)
+
         clicked_item = self.box_structure.from_point(bring_into_offset(self.offset, (touch.x, touch.y)))
 
         if clicked_item is not None:
             self._handle_edit_note(CursorSet(clicked_item.semantics))
 
-        # TODO (potentially): grabbing, as documented here (including the caveats of that approach)
-        # https://kivy.org/docs/guide/inputs.html#grabbing-touch-events
-
         return ret
+
+    def on_touch_up(self, touch):
+        # Taken from the docs: https://kivy.org/docs/guide/inputs.html#grabbing-touch-events
+        if touch.grab_current is self:
+            self.focus = True
+            touch.ungrab(self)
+            return True
 
     # ## Edit-actions that need further user input (i.e. Text-edits)
     def _add_child_text(self):
@@ -382,7 +375,6 @@ class TreeWidget(Widget):
             # Because of the Modal nature of the popup, we can take the naive approach here and simply insert the
             # results of the popup, trigger the recalc etc. etc. as if this were sequential code.
             callback(ti.text)
-            self.initialize_keyboard()
 
         btn.bind(on_press=popup.dismiss)
         popup.bind(on_dismiss=popup_dismiss)
