@@ -27,7 +27,7 @@ from legato import (
     all_preceding_nout_hashes,
 )
 from construct_x import construct_x
-from s_address import node_for_s_address, get_node_for_s_address
+from s_address import node_for_s_address
 from edit_structure import EditStructure
 from construct_edits import edit_note_play
 
@@ -41,6 +41,7 @@ from historiography import t_lookup
 
 from posacts import Actuality, HashStoreChannelListener, LatestActualityListener
 from channel import Channel
+from spacetime import t_address_for_s_address, best_s_address_for_t_address
 
 from filehandler import (
     FileWriter,
@@ -206,13 +207,9 @@ class TreeWidget(Widget, FocusBehavior):
         # data :: Possibility | Actuality
         # there is no else branch: Possibility only travels _to_ the channel;
         if isinstance(data, Actuality):
+            t_cursor = t_address_for_s_address(self.ds.tree, self.ds.s_cursor)
             tree = construct_x(self.all_trees, self.possible_timelines, data.nout_hash)
-
-            s_cursor = self.ds.s_cursor
-            while get_node_for_s_address(tree, s_cursor) is None:
-                # Fall-back to parent if the state has changed in a way that broke the cursor.
-                # I know... the bubbling can surely be done in a more performant manner.
-                s_cursor = s_cursor[:-1]
+            s_cursor = best_s_address_for_t_address(tree, t_cursor)
 
             self.ds = EditStructure(tree, s_cursor)
 

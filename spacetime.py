@@ -61,3 +61,77 @@ def st_delete(prev_t2s, prev_s2t, index):
 def st_replace(prev_t2s, prev_s2t, index):
     # trivial, introduced here for reasons of symmetry
     return prev_t2s[:], prev_s2t[:]
+
+
+def t_address_for_s_address(node, s_address):
+    result = get_t_address_for_s_address(node, s_address)
+    if result is None:
+        raise IndexError("s_address out of bounds: %s" % s_address)
+
+    return result
+
+
+def get_t_address_for_s_address(node, s_address, _collected=[], default=None):
+    # `get` in analogy with {}.get(k, d), returns a default value for non-existing addresses
+
+    if s_address == []:
+        return _collected
+
+    if not hasattr(node, 's2t'):
+        return default
+
+    if not (0 <= s_address[0] <= len(node.s2t) - 1):
+        return default  # Index out of bounds
+
+    _collected += [node.s2t[s_address[0]]]
+    return get_t_address_for_s_address(node.children[s_address[0]], s_address[1:], _collected, default)
+
+
+# TODO factor out commonalities
+def s_address_for_t_address(node, t_address):
+    result = get_s_address_for_t_address(node, t_address)
+    if result is None:
+        raise IndexError("s_address out of bounds: %s" % t_address)
+
+    return result
+
+
+def get_s_address_for_t_address(node, t_address, _collected=None, default=None):
+    # `get` in analogy with {}.get(k, d), returns a default value for non-existing addresses
+    if _collected is None:
+        _collected = []
+
+    if t_address == []:
+        return _collected
+
+    if not hasattr(node, 't2s'):
+        return default
+
+    if not (0 <= t_address[0] <= len(node.t2s) - 1):
+        return default  # Index out of bounds
+
+    s_index = node.t2s[t_address[0]]
+    _collected += [s_index]
+    return get_s_address_for_t_address(node.children[s_index], t_address[1:], _collected, default)
+
+
+def best_s_address_for_t_address(node, t_address, _collected=None):
+    # TODO explain "best"
+    if _collected is None:
+        _collected = []
+
+    if t_address == []:
+        return _collected
+
+    if not hasattr(node, 't2s'):
+        return _collected
+
+    if not (0 <= t_address[0] <= len(node.t2s) - 1):
+        return _collected  # Index out of bounds
+
+    s_index = node.t2s[t_address[0]]
+    if s_index is None:
+        return _collected  # Removed in space
+
+    _collected += [s_index]
+    return best_s_address_for_t_address(node.children[s_index], t_address[1:], _collected)

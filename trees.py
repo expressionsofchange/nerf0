@@ -13,8 +13,11 @@ class YourOwnHash(object):
 
 class TreeNode(object):
 
-    def __init__(self, children, metadata=None):
+    def __init__(self, children, t2s=None, s2t=None, metadata=None):
         self.children = children
+        self.t2s = t2s
+        self.s2t = s2t
+
         self.metadata = metadata
 
     def __repr__(self):

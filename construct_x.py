@@ -1,5 +1,6 @@
 from clef import BecomeNode, Insert, Delete, Replace, TextBecome
 from trees import TreeNode, TreeText, YourOwnHash
+from spacetime import st_become, st_insert, st_replace, st_delete
 from legato import all_nhtups_for_nout_hash
 
 
@@ -9,23 +10,27 @@ def x_note_play(note, structure, recurse, metadata):
 
     if isinstance(note, BecomeNode):
         assert structure is None, "You can only BecomeNode out of nothingness"
-        return TreeNode([], metadata)
+        t2s, s2t = st_become()
+        return TreeNode([], t2s, s2t, metadata)
 
     if isinstance(note, Insert):
         l = structure.children[:]
         l.insert(note.index, recurse(note.nout_hash))
 
-        return TreeNode(l, metadata)
+        t2s, s2t = st_insert(structure.t2s, structure.s2t, note.index)
+        return TreeNode(l, t2s, s2t, metadata)
 
     if isinstance(note, Delete):
         l = structure.children[:]
         del l[note.index]
-        return TreeNode(l, metadata)
+        t2s, s2t = st_delete(structure.t2s, structure.s2t, note.index)
+        return TreeNode(l, t2s, s2t, metadata)
 
     if isinstance(note, Replace):
         l = structure.children[:]
         l[note.index] = recurse(note.nout_hash)
-        return TreeNode(l, metadata)
+        t2s, s2t = st_replace(structure.t2s, structure.s2t, note.index)
+        return TreeNode(l, t2s, s2t, metadata)
 
     if isinstance(note, TextBecome):
         # assert structure is None  -- in the present version, TextBecome _can_ actually be called on an existing
