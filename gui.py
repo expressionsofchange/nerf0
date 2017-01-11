@@ -186,7 +186,7 @@ def bring_into_offset(offset, point):
 class TreeWidget(Widget, FocusBehavior):
 
     def __init__(self, **kwargs):
-        history_channel = kwargs.pop('history_channel')
+        self.history_channel = kwargs.pop('history_channel')
         self.possible_timelines = kwargs.pop('possible_timelines')
 
         super(TreeWidget, self).__init__(**kwargs)
@@ -196,7 +196,7 @@ class TreeWidget(Widget, FocusBehavior):
 
         self.cursor_channel = Channel()
 
-        self.send_to_channel = history_channel.connect(self.receive_from_channel)
+        self.send_to_channel = self.history_channel.connect(self.receive_from_channel)
 
         self.bind(pos=self.refresh)
         self.bind(size=self.refresh)
@@ -279,6 +279,11 @@ class TreeWidget(Widget, FocusBehavior):
 
         elif textual_code in ['x', 'del']:
             self._handle_edit_note(EDelete())
+
+        elif textual_code in ['n']:
+            new_tree = self.report_new_tree_to_app(self.history_channel)
+            new_tree.receive_from_channel(Actuality(self.ds.tree.metadata.nout_hash))
+            new_tree.report_new_tree_to_app = self.report_new_tree_to_app
 
         return result
 
@@ -778,11 +783,12 @@ class TestApp(App):
 
     def build(self):
         self.vertical_layout = GridLayout(spacing=10, cols=1)
-        for x in range(4):
-            tree = self.add_tree_and_stuff(self.history_channel)
 
-            # we kick off with the state so far
-            tree.receive_from_channel(Actuality(self.lnh.nout_hash))
+        tree = self.add_tree_and_stuff(self.history_channel)
+        tree.report_new_tree_to_app = self.add_tree_and_stuff
+
+        # we kick off with the state so far
+        tree.receive_from_channel(Actuality(self.lnh.nout_hash))
 
         return self.vertical_layout
 
