@@ -71,6 +71,14 @@ def t_address_for_s_address(node, s_address):
     return t_address
 
 
+def get_s_address_for_t_address(node, t_address):
+    s_address = best_s_address_for_t_address(node, t_address)
+    if len(s_address) != len(t_address):
+        return None
+
+    return s_address
+
+
 def best_s_address_for_t_address(node, t_address):
     return _best_lookup(node, lookup_t, lambda s, t: s, t_address)
 

@@ -29,7 +29,7 @@ from legato import (
 from construct_x import construct_x
 from s_address import node_for_s_address
 from edit_structure import EditStructure
-from construct_edits import edit_note_play
+from construct_edits import edit_note_play, bubble_history_up
 
 from trees import (
     TreeNode,
@@ -39,9 +39,9 @@ from trees import (
 from construct_y import xxx_construct_y
 from historiography import t_lookup
 
-from posacts import Actuality, HashStoreChannelListener, LatestActualityListener
+from posacts import Possibility, Actuality, HashStoreChannelListener, LatestActualityListener
 from channel import Channel
-from spacetime import t_address_for_s_address, best_s_address_for_t_address
+from spacetime import t_address_for_s_address, best_s_address_for_t_address, get_s_address_for_t_address
 
 from filehandler import (
     FileWriter,
@@ -194,6 +194,7 @@ class TreeWidget(Widget, FocusBehavior):
         self.all_trees = {}
 
         self.ds = EditStructure(None, [])
+        self.notify_children = []
 
         self.cursor_channel = Channel()
 
@@ -216,10 +217,17 @@ class TreeWidget(Widget, FocusBehavior):
             self.cursor_channel.broadcast(node_for_s_address(self.ds.tree, self.ds.s_cursor).metadata.nout_hash)
             self.refresh()
 
+            for notify_child in self.notify_children:
+                notify_child()  # (data.nout_hash)
+
     def _handle_edit_note(self, edit_note):
         new_s_cursor, posacts, error = edit_note_play(self.ds, edit_note)
 
+        self._update_internal_state_for_posacts(posacts, new_s_cursor)
+
+    def _update_internal_state_for_posacts(self, posacts, new_s_cursor):
         last_actuality = None
+
         for posact in posacts:
             # Note: if we don't want to autosave, we should make Actuality-sending conditional here.
             self.send_to_channel(posact)
@@ -238,6 +246,10 @@ class TreeWidget(Widget, FocusBehavior):
         )
         self.cursor_channel.broadcast(node_for_s_address(self.ds.tree, self.ds.s_cursor).metadata.nout_hash)
         self.refresh()
+
+        if last_actuality is not None:
+            for notify_child in self.notify_children:
+                notify_child()  # (last_actuality.nout_hash)
 
     def keyboard_on_key_down(self, window, keycode, text, modifiers):
         result = FocusBehavior.keyboard_on_key_down(self, window, keycode, text, modifiers)
@@ -278,9 +290,54 @@ class TreeWidget(Widget, FocusBehavior):
             self._handle_edit_note(EDelete())
 
         elif textual_code in ['n']:
-            new_tree = self.report_new_tree_to_app(self.history_channel)
-            new_tree.receive_from_channel(Actuality(self.ds.tree.metadata.nout_hash))
-            new_tree.report_new_tree_to_app = self.report_new_tree_to_app
+            child_channel = Channel()
+            child_lives_at_t_address = t_address_for_s_address(self.ds.tree, self.ds.s_cursor)
+            cursor_node = node_for_s_address(self.ds.tree, self.ds.s_cursor)
+
+            def receive_from_child(data):
+                # data :: Possibility | Actuality
+                if isinstance(data, Possibility):
+                    self.send_to_channel(data)
+
+                else:  # i.e. isinstance(data, Actuality):
+                    s_address = get_s_address_for_t_address(self.ds.tree, child_lives_at_t_address)
+                    if s_address is None:
+                        return  # the child represents dead history; its updates are silently ignored
+
+                    posacts = bubble_history_up(data.nout_hash, self.ds.tree, s_address)
+
+                    # TODO: new_s_cursor should be determined by looking at the pre-change tree, deducing a t_cursor and
+                    # then setting the new s_cursor based on the t_cursor and the new tree; this is made more
+                    # complicated because of the current choices in methods (s_cursor-setting integrated w/
+                    # tree-creation)
+                    self._update_internal_state_for_posacts(posacts, self.ds.s_cursor)
+
+            send_to_child = child_channel.connect(receive_from_child)
+
+            def notify_child():
+                s_address = get_s_address_for_t_address(self.ds.tree, child_lives_at_t_address)
+                if s_address is None:
+                    return  # nothing to send to the child, the child represents dead history
+
+                node = node_for_s_address(self.ds.tree, s_address)
+                send_to_child(Actuality(node.metadata.nout_hash))  # this kind of always-send behavior can be optimized
+                """
+                wat wil ik? ik wil kunnen luisteren voor wijzigingen op een zeker t_address - _niet onder dat address,
+                dat gaat automatisch.._
+
+                hoe werkt dat? een functie: prev_nout_hash, current_nout_hash => [(t_address, new_hash)] ^- for all
+                t_addresses on which a change occurs
+
+                we kunnen bovenstaande ook schrijven als:
+                    * only one nout_hash (current; prev assumed) maar of dat uitmaakt weet ik niet; op lagere niveaus
+                    * zijn er geen dergelijke single-step garanties
+                """
+
+            self.notify_children.append(notify_child)
+
+            new_widget = self.report_new_tree_to_app(child_channel)
+            new_widget.receive_from_channel(Actuality(cursor_node.metadata.nout_hash))
+            new_widget.report_new_tree_to_app = self.report_new_tree_to_app
 
         return result
 
