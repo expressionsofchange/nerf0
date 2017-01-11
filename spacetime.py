@@ -64,74 +64,47 @@ def st_replace(prev_t2s, prev_s2t, index):
 
 
 def t_address_for_s_address(node, s_address):
-    result = get_t_address_for_s_address(node, s_address)
-    if result is None:
+    t_address = _best_lookup(node, lookup_s, lambda s, t: t, s_address)
+    if len(t_address) != len(s_address):
         raise IndexError("s_address out of bounds: %s" % s_address)
 
-    return result
+    return t_address
 
 
-def get_t_address_for_s_address(node, s_address, _collected=[], default=None):
-    # `get` in analogy with {}.get(k, d), returns a default value for non-existing addresses
-
-    if s_address == []:
-        return _collected
-
-    if not hasattr(node, 's2t'):
-        return default
-
-    if not (0 <= s_address[0] <= len(node.s2t) - 1):
-        return default  # Index out of bounds
-
-    _collected += [node.s2t[s_address[0]]]
-    return get_t_address_for_s_address(node.children[s_address[0]], s_address[1:], _collected, default)
+def best_s_address_for_t_address(node, t_address):
+    return _best_lookup(node, lookup_t, lambda s, t: s, t_address)
 
 
-# TODO factor out commonalities
-def s_address_for_t_address(node, t_address):
-    result = get_s_address_for_t_address(node, t_address)
-    if result is None:
-        raise IndexError("s_address out of bounds: %s" % t_address)
+def lookup_s(node, s_index):
+    if not (0 <= s_index <= len(node.s2t) - 1):
+        return None, None  # Index out of bounds
 
-    return result
+    t_index = node.s2t[s_index]
+    return s_index, t_index
 
 
-def get_s_address_for_t_address(node, t_address, _collected=None, default=None):
-    # `get` in analogy with {}.get(k, d), returns a default value for non-existing addresses
+def lookup_t(node, t_index):
+    if not (0 <= t_index <= len(node.t2s) - 1):
+        return None, None  # Index out of bounds
+
+    s_index = node.t2s[t_index]
+    return s_index, t_index  # s_index may be None (if it's removed in space)
+
+
+def _best_lookup(node, do_lookup, collect, lookup_value, _collected=None):
+    """Looks up an x_address (the `lookup_value`) using the function `do_lookup` and collecting using `collect`;
+    We return the longest matched prefix that we can find."""
     if _collected is None:
         _collected = []
 
-    if t_address == []:
+    if (lookup_value == []) or (not hasattr(node, 'children')):  # Done, or no way to proceed.
         return _collected
 
-    if not hasattr(node, 't2s'):
-        return default
-
-    if not (0 <= t_address[0] <= len(node.t2s) - 1):
-        return default  # Index out of bounds
-
-    s_index = node.t2s[t_address[0]]
-    _collected += [s_index]
-    return get_s_address_for_t_address(node.children[s_index], t_address[1:], _collected, default)
-
-
-def best_s_address_for_t_address(node, t_address, _collected=None):
-    # TODO explain "best"
-    if _collected is None:
-        _collected = []
-
-    if t_address == []:
-        return _collected
-
-    if not hasattr(node, 't2s'):
-        return _collected
-
-    if not (0 <= t_address[0] <= len(node.t2s) - 1):
-        return _collected  # Index out of bounds
-
-    s_index = node.t2s[t_address[0]]
+    s_index, t_index = do_lookup(node, lookup_value[0])
     if s_index is None:
-        return _collected  # Removed in space
+        return _collected
 
-    _collected += [s_index]
-    return best_s_address_for_t_address(node.children[s_index], t_address[1:], _collected)
+    _collected += [collect(s_index, t_index)]
+
+    child = node.children[s_index]
+    return _best_lookup(child, do_lookup, collect, lookup_value[1:], _collected)
