@@ -534,10 +534,10 @@ class TreeWidget(Widget, FocusBehavior):
 
 ColWidths = namedtuple('ColWidths', ('my_hash', 'prev_hash', 'note', 'payload'))
 
-GREY = lambda: Color(0.95, 0.95, 0.95, 1)  # Ad Hoc Grey
-LIGHT_YELLOW = lambda: Color(1, 1, 0.97, 1)  # Ad Hoc Light Yellow
-RED = lambda: Color(1, 0.8, 0.8, 1)  # ad hoc; fine-tune please
-DARK_GREY = lambda: Color(0.5, 0.5, 0.5, 1)  # ad hoc; fine-tune please
+GREY = (0.95, 0.95, 0.95, 1)  # Ad Hoc Grey
+LIGHT_YELLOW = (1, 1, 0.97, 1)  # Ad Hoc Light Yellow
+RED = (1, 0.8, 0.8, 1)  # ad hoc; fine-tune please
+DARK_GREY = (0.5, 0.5, 0.5, 1)  # ad hoc; fine-tune please
 
 
 class HistoryWidget(Widget):
@@ -596,13 +596,13 @@ class HistoryWidget(Widget):
         offset_y = 0
 
         for nout_hash, rhi in per_step_info:
-            box_color = LIGHT_YELLOW()
+            box_color = Color(*LIGHT_YELLOW)
 
             if alive_at_my_level is None:
-                box_color = RED()  # deleted b/c of parent
+                box_color = Color(*RED)  # deleted b/c of parent
             else:
                 if nout_hash not in alive_at_my_level:
-                    box_color = DARK_GREY()  # dead branch
+                    box_color = Color(*DARK_GREY)  # dead branch
 
             nout = self.possible_timelines.get(nout_hash)
 
