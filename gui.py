@@ -209,7 +209,7 @@ class TreeWidget(Widget, FocusBehavior):
             tree = construct_x(self.all_trees, self.possible_timelines, data.nout_hash)
 
             s_cursor = self.ds.s_cursor
-            while get_node_for_s_address(tree, self.ds.s_cursor) is None:
+            while get_node_for_s_address(tree, s_cursor) is None:
                 # Fall-back to parent if the state has changed in a way that broke the cursor.
                 # I know... the bubbling can surely be done in a more performant manner.
                 s_cursor = s_cursor[:-1]
