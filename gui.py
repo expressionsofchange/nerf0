@@ -27,10 +27,14 @@ from legato import (
     all_preceding_nout_hashes,
 )
 from construct_x import construct_x
+from construct_pp import construct_pp_tree
 from s_address import node_for_s_address
 from edit_structure import EditStructure
 from construct_edits import edit_note_play, bubble_history_up
 
+from pp_annotations import PPNone, PPSingleLine, PPLispy
+
+from annotations import Annotation
 from trees import (
     TreeNode,
     TreeText,
@@ -38,6 +42,8 @@ from trees import (
 
 from construct_y import xxx_construct_y
 from historiography import t_lookup
+
+from pp_clef import PPUnset, PPSetSingleLine, PPSetLispy
 
 from posacts import Possibility, Actuality, HashStoreChannelListener, LatestActualityListener
 from channel import Channel
@@ -193,7 +199,7 @@ class TreeWidget(Widget, FocusBehavior):
         super(TreeWidget, self).__init__(**kwargs)
         self.all_trees = {}
 
-        self.ds = EditStructure(None, [])
+        self.ds = EditStructure(None, [], [], None)
         self.notify_children = []
 
         self.cursor_channel = Channel()
@@ -211,8 +217,9 @@ class TreeWidget(Widget, FocusBehavior):
             t_cursor = t_address_for_s_address(self.ds.tree, self.ds.s_cursor)
             tree = construct_x(self.all_trees, self.possible_timelines, data.nout_hash)
             s_cursor = best_s_address_for_t_address(tree, t_cursor)
+            pp_annotations = self.ds.pp_annotations[:]
 
-            self.ds = EditStructure(tree, s_cursor)
+            self.ds = EditStructure(tree, s_cursor, pp_annotations, construct_pp_tree(tree, pp_annotations))
 
             self.cursor_channel.broadcast(node_for_s_address(self.ds.tree, self.ds.s_cursor).metadata.nout_hash)
             self.refresh()
@@ -243,6 +250,8 @@ class TreeWidget(Widget, FocusBehavior):
         self.ds = EditStructure(
             new_tree,
             new_s_cursor,
+            self.ds.pp_annotations[:],
+            construct_pp_tree(new_tree, self.ds.pp_annotations)
         )
         self.cursor_channel.broadcast(node_for_s_address(self.ds.tree, self.ds.s_cursor).metadata.nout_hash)
         self.refresh()
@@ -288,6 +297,30 @@ class TreeWidget(Widget, FocusBehavior):
 
         elif textual_code in ['x', 'del']:
             self._handle_edit_note(EDelete())
+
+        elif textual_code in ['u', 'i', 'o']:  # out of all the arbitrary keys, these are the most arbitrary :-)
+            pp_map = {
+                'u': PPUnset,
+                'i': PPSetSingleLine,
+                'o': PPSetLispy,
+            }
+
+            t_address = t_address_for_s_address(self.ds.tree, self.ds.s_cursor)
+            pp_note = pp_map[textual_code](t_address)
+            annotation = Annotation(self.ds.tree.metadata.nout_hash, pp_note)
+
+            pp_annotations = self.ds.pp_annotations[:] + [annotation]
+
+            pp_tree = construct_pp_tree(self.ds.tree, pp_annotations)
+
+            self.ds = EditStructure(
+                self.ds.tree,
+                self.ds.s_cursor,
+                pp_annotations,
+                pp_tree,
+            )
+
+            self.refresh()
 
         elif textual_code in ['n']:
             child_channel = Channel()
@@ -352,7 +385,7 @@ class TreeWidget(Widget, FocusBehavior):
             Rectangle(pos=self.pos, size=self.size,)
 
         with apply_offset(self.canvas, self.offset):
-            self.box_structure = self._nt_for_node_as_lispy_layout(self.ds.tree, [])
+            self.box_structure = self._nt_for_node(self.ds.pp_tree, [])
             self._render_box(self.box_structure)
 
     def on_touch_down(self, touch):
@@ -460,8 +493,20 @@ class TreeWidget(Widget, FocusBehavior):
 
         return BoxTerminal(instructions, bottom_right)
 
-    def _nt_for_node_single_line(self, node, s_address):
+    def _nt_for_node(self, annotated_node, s_address):
+        lookup = {
+            PPNone: self._nt_for_node_single_line,
+            PPSingleLine: self._nt_for_node_single_line,
+            PPLispy: self._nt_for_node_as_lispy_layout,
+        }
+        pp_annotation = annotated_node.annotation
+        m = lookup[type(pp_annotation)]
+        return m(annotated_node, s_address)
+
+    def _nt_for_node_single_line(self, annotated_node, s_address):
         is_cursor = s_address == self.ds.s_cursor
+        node = annotated_node.underlying_node
+
         if isinstance(node, TreeText):
             return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text(node.unicode_, is_cursor))])
 
@@ -474,7 +519,7 @@ class TreeWidget(Widget, FocusBehavior):
         offset_right = t.outer_dimensions[X]
         offset_down = 0
 
-        for i, child in enumerate(node.children):
+        for i, child in enumerate(annotated_node.children):
             nt = self._nt_for_node_single_line(child, s_address + [i])
             offset_nonterminals.append(OffsetBox((offset_right, offset_down), nt))
             offset_right += nt.outer_dimensions[X]
@@ -487,25 +532,28 @@ class TreeWidget(Widget, FocusBehavior):
             offset_nonterminals,
             offset_terminals)
 
-    def _nt_for_node_as_todo_list(self, node, s_address):
+    def _nt_for_node_as_todo_list(self, annotated_node, s_address):
+        raise Exception("Not updated for the introduction of PP-annotations")
         is_cursor = s_address == self.ds.s_cursor
+
+        node = annotated_node.underlying_node
 
         if isinstance(node, TreeText):
             return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text(node.unicode_, is_cursor))])
 
-        if len(node.children) == 0:
+        if len(annotated_node.children) == 0:
             return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text("(...)", is_cursor))])
 
         # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that we
         # are robust for (we render it as flat text); but it's not the expected use-case.
-        nt = self._nt_for_node_single_line(node.children[0], s_address + [0])
+        nt = self._nt_for_node_single_line(annotated_node.children[0], s_address + [0])
         offset_nonterminals = [
             no_offset(nt)
         ]
         offset_down = nt.outer_dimensions[Y]
         offset_right = 50  # Magic number for indentation
 
-        for i, child in enumerate(node.children[1:]):
+        for i, child in enumerate(annotated_node.children[1:]):
             nt = self._nt_for_node_as_todo_list(child, s_address + [i + 1])
             offset_nonterminals.append(OffsetBox((offset_right, offset_down), nt))
             offset_down += nt.outer_dimensions[Y]
@@ -515,10 +563,12 @@ class TreeWidget(Widget, FocusBehavior):
             offset_nonterminals,
             [])
 
-    def _nt_for_node_as_lispy_layout(self, node, s_address):
+    def _nt_for_node_as_lispy_layout(self, annotated_node, s_address):
         # "Lisp Style indentation, i.e. xxx yyy
         #                                   zzz
         is_cursor = s_address == self.ds.s_cursor
+
+        node = annotated_node.underlying_node
 
         if isinstance(node, TreeText):
             return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text(node.unicode_, is_cursor))])
@@ -532,18 +582,18 @@ class TreeWidget(Widget, FocusBehavior):
         ]
         offset_nonterminals = []
 
-        if len(node.children) > 0:
+        if len(annotated_node.children) > 0:
             # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that
             # we are robust for (we render it as flat text); but it's not the expected use-case.
-            nt = self._nt_for_node_single_line(node.children[0], s_address + [0])
+            nt = self._nt_for_node(annotated_node.children[0], s_address + [0])  # CHECK! (and potentially remove the warning?)
             offset_nonterminals.append(
                 OffsetBox((offset_right, offset_down), nt)
             )
             offset_right += nt.outer_dimensions[X]
 
-            if len(node.children) > 1:
-                for i, child_x in enumerate(node.children[1:]):
-                    nt = self._nt_for_node_as_lispy_layout(child_x, s_address + [i + 1])
+            if len(annotated_node.children) > 1:
+                for i, child_x in enumerate(annotated_node.children[1:]):
+                    nt = self._nt_for_node(child_x, s_address + [i + 1])
                     offset_nonterminals.append(OffsetBox((offset_right, offset_down), nt))
                     offset_down += nt.outer_dimensions[Y]
 
