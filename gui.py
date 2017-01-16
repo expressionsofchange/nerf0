@@ -657,6 +657,8 @@ class HistoryWidget(Widget):
 
         super(HistoryWidget, self).__init__(**kwargs)
 
+        self.s_cursor = None
+
         self.bind(pos=self.refresh)
         self.bind(size=self.refresh)
 
@@ -687,10 +689,12 @@ class HistoryWidget(Widget):
                 per_step_info,
                 [],
                 list(all_preceding_nout_hashes(self.possible_timelines, self.nout_hash)),
+                [],
                 ColWidths(150, 150, 30, 100),
                 )
 
-            self._render_box(BoxNonTerminal("root", offset_nonterminals, []))
+            self.box_structure = BoxNonTerminal([], offset_nonterminals, [])
+            self._render_box(self.box_structure)
 
     NOTES_T = {
         BecomeNode: 'N',
@@ -700,11 +704,18 @@ class HistoryWidget(Widget):
         Delete: 'D',
     }
 
-    def some_recursive_thing(self, present_root_yatn, per_step_info, t_path, alive_at_my_level, col_widths):
+    def some_recursive_thing(self, present_root_yatn, per_step_info, t_path, alive_at_my_level, s_path, col_widths):
+        """
+        s_path is an s_path at the level of the _history_
+        t_path is a t_path on the underlying structure (tree)
+        """
+
         per_step_offset_non_terminals = []
         offset_y = 0
 
-        for nout_hash, rhi in per_step_info:
+        for i, (nout_hash, rhi) in enumerate(per_step_info):
+            this_s_path = s_path + [i]
+
             box_color = Color(*LIGHT_YELLOW)
 
             if alive_at_my_level is None:
@@ -712,6 +723,9 @@ class HistoryWidget(Widget):
             else:
                 if nout_hash not in alive_at_my_level:
                     box_color = Color(*DARK_GREY)  # dead branch
+
+            if this_s_path == self.s_cursor:
+                box_color = Color(*GREY)
 
             nout = self.possible_timelines.get(nout_hash)
 
@@ -747,13 +761,19 @@ class HistoryWidget(Widget):
                     alive_at_child_level = None
 
                 recursive_result = self.some_recursive_thing(
-                    present_root_yatn, children_steps, t_path + [t_address], alive_at_child_level, col_widths)
+                    present_root_yatn,
+                    children_steps,
+                    t_path + [t_address],
+                    alive_at_child_level,
+                    this_s_path,
+                    col_widths,
+                    )
 
                 non_terminals = [OffsetBox((offset_x, o[Y]), nt) for (o, nt) in recursive_result]
             else:
                 non_terminals = []
 
-            per_step_result = BoxNonTerminal(nout, non_terminals, terminals)
+            per_step_result = BoxNonTerminal(this_s_path, non_terminals, terminals)
             per_step_offset_non_terminals.append(
                 OffsetBox((0, offset_y), per_step_result))
 
@@ -835,6 +855,38 @@ class HistoryWidget(Widget):
         label = Label(text=text, **kw)
         label.refresh()
         return label.texture
+
+    # Mouse handling: PURE COPY/PASTA (for now) from TreeWidget
+
+    def on_touch_down(self, touch):
+        # see https://kivy.org/docs/guide/inputs.html#touch-event-basics
+        # Basically:
+        # 1. Kivy (intentionally) does not limit its passing of touch events to widgets that it applies to, you
+        #   need to do this youself
+        # 2. You need to call super and return its value
+        ret = super(HistoryWidget, self).on_touch_down(touch)
+
+        if not self.collide_point(*touch.pos):
+            return ret
+
+        self.focus = True
+        touch.grab(self)
+
+        clicked_item = self.box_structure.from_point(bring_into_offset(self.offset, (touch.x, touch.y)))
+
+        if clicked_item is not None:
+            # THIS IS THE ONLY DIFFERENCE WHILE COPY/PASTING
+            self.s_cursor = clicked_item.semantics
+            self.refresh()
+
+        return ret
+
+    def on_touch_up(self, touch):
+        # Taken from the docs: https://kivy.org/docs/guide/inputs.html#grabbing-touch-events
+        if touch.grab_current is self:
+            self.focus = True
+            touch.ungrab(self)
+            return True
 
 
 class TestApp(App):
