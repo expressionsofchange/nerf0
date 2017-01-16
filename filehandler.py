@@ -8,8 +8,13 @@ class FileWriter(object):
     """For lack of a better name: Handles the writing of Possibility/Actuality objects to files."""
 
     def __init__(self, channel, filename):
-        self.file_ = open(filename, 'ab')  # LATER: proper file-closing too!
-        channel.connect(self.receive)  # receive-only connection: FileWriters are ChannelReaders
+        # LATER: proper file-closing too! In the status quo there's 2 (related) open ends:
+        # 1] we don't do any file closing ourselves at any point
+        # 2] we don't have an implementation for closing channels yet
+        self.file_ = open(filename, 'ab')
+
+        # receive-only connection: FileWriters are ChannelReaders
+        channel.connect(self.receive)
 
     def receive(self, data):
         # Receives: Possibility | Actuality; writes it to the connected file

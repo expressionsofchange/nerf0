@@ -1,3 +1,13 @@
+def ignore():
+    """Useful placeholder for e.g. close_receiver"""
+    pass
+
+
+def fail():
+    """Useful token for e.g. close_receiver (if that's unexpected)"""
+    pass
+
+
 class Channel(object):
     """
     >>> from channel import Channel
@@ -49,7 +59,8 @@ class Channel(object):
 class ClosableChannel(object):
     """
     Channel w/ an explicit close() call; alternatively this could be modelled by sending either Open(data) or Close()
-    over a regular Channel.
+    over a regular Channel, or by opening a second channel that will be used for communicating open/closed info.
+
     >>> from channel import ClosableChannel
     >>> c = ClosableChannel()
     >>>
@@ -77,7 +88,7 @@ class ClosableChannel(object):
         self.close_receivers = []
         self.closed = False
 
-    def connect(self, receiver, close_receiver):
+    def connect(self, receiver, close_receiver=fail):
         # receiver :: function that takes data;
         # close_receiver :: argless function
 
@@ -100,3 +111,7 @@ class ClosableChannel(object):
                     c()
 
         return send, close
+
+    def broadcast(self, data):
+        for r in self.receivers:
+            r(data)

@@ -46,7 +46,7 @@ from historiography import t_lookup
 from pp_clef import PPUnset, PPSetSingleLine, PPSetLispy
 
 from posacts import Possibility, Actuality, HashStoreChannelListener, LatestActualityListener
-from channel import Channel
+from channel import Channel, ClosableChannel, ignore
 from spacetime import t_address_for_s_address, best_s_address_for_t_address, get_s_address_for_t_address
 
 from filehandler import (
@@ -193,6 +193,15 @@ def bring_into_offset(offset, point):
 class TreeWidget(Widget, FocusBehavior):
 
     def __init__(self, **kwargs):
+        # The we keep track of whether we received a "closed" signal from the history_channel; if so we turn grey and
+        # immutable. (the latter is implemented, for now, by simply no longer listening to the keyboard).
+        #
+        # Another option would be to stay mutable (though make it obvious that the changes will not propagate), but not
+        # communicate any information back to the (closed) history_channel. A problem with that (in the current
+        # architecture) is that "Possibilities" flow over the same channel. This is not possible once the channel is
+        # closed, and we'll fail to fetch hashes back from the shared HashStoreChannelListener.
+        self.closed = False
+
         self.history_channel = kwargs.pop('history_channel')
         self.possible_timelines = kwargs.pop('possible_timelines')
 
@@ -204,7 +213,7 @@ class TreeWidget(Widget, FocusBehavior):
 
         self.cursor_channel = Channel()
 
-        self.send_to_channel = self.history_channel.connect(self.receive_from_channel)
+        self.send_to_channel, _ = self.history_channel.connect(self.receive_from_channel, self.channel_closed)
 
         self.bind(pos=self.refresh)
         self.bind(size=self.refresh)
@@ -228,6 +237,10 @@ class TreeWidget(Widget, FocusBehavior):
 
             for notify_child in self.notify_children:
                 notify_child()  # (data.nout_hash)
+
+    def channel_closed(self):
+        self.closed = True
+        self.refresh()
 
     def _handle_edit_note(self, edit_note):
         new_s_cursor, posacts, error = edit_note_play(self.ds, edit_note)
@@ -264,6 +277,10 @@ class TreeWidget(Widget, FocusBehavior):
                 notify_child()  # (last_actuality.nout_hash)
 
     def keyboard_on_key_down(self, window, keycode, text, modifiers):
+        if self.closed:
+            # See the remarks in __init__
+            return
+
         result = FocusBehavior.keyboard_on_key_down(self, window, keycode, text, modifiers)
 
         code, textual_code = keycode
@@ -326,7 +343,7 @@ class TreeWidget(Widget, FocusBehavior):
             self.refresh()
 
         elif textual_code in ['n']:
-            child_channel = Channel()
+            child_channel = ClosableChannel()
             child_lives_at_t_address = t_address_for_s_address(self.ds.tree, self.ds.s_cursor)
             cursor_node = node_for_s_address(self.ds.tree, self.ds.s_cursor)
 
@@ -338,7 +355,10 @@ class TreeWidget(Widget, FocusBehavior):
                 else:  # i.e. isinstance(data, Actuality):
                     s_address = get_s_address_for_t_address(self.ds.tree, child_lives_at_t_address)
                     if s_address is None:
-                        return  # the child represents dead history; its updates are silently ignored
+                        # the child represents dead history; its updates are silently ignored.
+                        # in practice this "shouldn't happen" in the current version, because closed children no longer
+                        # communicate back to us.
+                        return
 
                     posacts = bubble_history_up(data.nout_hash, self.ds.tree, s_address)
 
@@ -348,7 +368,8 @@ class TreeWidget(Widget, FocusBehavior):
                     # tree-creation)
                     self._update_internal_state_for_posacts(posacts, self.ds.s_cursor)
 
-            send_to_child = child_channel.connect(receive_from_child)
+            # children don't close themselves (yet) so we don't have to listen for it
+            send_to_child, close_child = child_channel.connect(receive_from_child, ignore)
 
             def notify_child():
                 # Optimization (and: mental optimization) notes: The present version of notify_child takes no arguments.
@@ -373,7 +394,12 @@ class TreeWidget(Widget, FocusBehavior):
 
                 s_address = get_s_address_for_t_address(self.ds.tree, child_lives_at_t_address)
                 if s_address is None:
-                    return  # nothing to send to the child, the child represents dead history
+                    # as it stands, it's possible to call close_child() multiple times (which we do). This is ugly but
+                    # it works (the calls are idempotent)
+                    close_child()
+
+                    # nothing to send to the child, the child represents dead history
+                    return
 
                 node = node_for_s_address(self.ds.tree, s_address)
                 send_to_child(Actuality(node.metadata.nout_hash))  # this kind of always-send behavior can be optimized
@@ -393,7 +419,11 @@ class TreeWidget(Widget, FocusBehavior):
         self.offset = (self.pos[X], self.pos[Y] + self.size[Y])  # default offset: start on top_left
 
         with self.canvas:
-            Color(1, 1, 1, 1)
+            if self.closed:
+                Color(0.5, 0.5, 0.5, 1)
+            else:
+                Color(1, 1, 1, 1)
+
             Rectangle(pos=self.pos, size=self.size,)
 
         with apply_offset(self.canvas, self.offset):
@@ -911,7 +941,7 @@ class TestApp(App):
 
     def setup_channels(self):
         # This is the main channel of PosActs for our application.
-        self.history_channel = Channel()  # Pun not intended
+        self.history_channel = ClosableChannel()  # Pun not intended
         self.possible_timelines = HashStoreChannelListener(self.history_channel).possible_timelines
         self.lnh = LatestActualityListener(self.history_channel)
 
