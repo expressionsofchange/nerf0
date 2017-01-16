@@ -5,37 +5,71 @@ from legato import all_nhtups_for_nout_hash
 
 
 def x_note_play(note, structure, recurse, metadata):
-    # Note an assymmetry between the *Become* notes and the others; the former requiring nothingness to precede them,
-    # the latter requiring an existing structure to further manipulate.
+    """
+    Plays a single note.
+    :: .... => tree, error
+
+    Note an assymmetry between the *Become* notes and the others; the former requiring nothingness to precede them,
+    the latter requiring an existing structure to further manipulate.
+    """
 
     if isinstance(note, BecomeNode):
-        assert structure is None, "You can only BecomeNode out of nothingness"
+        if structure is not None:
+            return structure, True  # "You can only BecomeNode out of nothingness"
+
         t2s, s2t = st_become()
-        return TreeNode([], t2s, s2t, metadata)
+        return TreeNode([], t2s, s2t, metadata), False
+
+    if isinstance(note, TextBecome):
+        # if structure is not None... return error -- in the present version, TextBecome _can_ actually be called on
+        # an existing TreeText; This interpretation is tentative.
+        return TreeText(note.unicode_, metadata), False
 
     if isinstance(note, Insert):
+        if not (0 <= note.index <= len(structure.children)):  # Note: insert _at_ len(..) is ok (a.k.a. append)
+            return structure, True  # "Out of bounds: %s" % note.index
+
+        child, error = recurse(note.nout_hash)
+        if error:
+            # TODO thoughts about "as much as possible" at the lower level
+            # one reason _not_ to do that... what if the lower level doesn't even succesfully recurse from None to a
+            # tree?? then you'd construct a non-typed tree at this point.
+            # we'll see... once we have this integrated in the GUI
+
+            # Counterpoint: we could also say that construct_x should always at least return a tree (whether it's stuck
+            # on an error or not)
+
+            # who's enforcing these things? and what is enforced in terms of the notes?
+            # let's start with the _what_.
+            # as long as your first note is a become (of some kind), you'll have some tree constructed.
+            # I'm not sure who's providing that guarantee.... but for now I'm going to assume it.
+            return structure, error
+
         l = structure.children[:]
-        l.insert(note.index, recurse(note.nout_hash))
+        l.insert(note.index, child)
 
         t2s, s2t = st_insert(structure.t2s, structure.s2t, note.index)
-        return TreeNode(l, t2s, s2t, metadata)
+        return TreeNode(l, t2s, s2t, metadata), False
+
+    if not (0 <= note.index <= len(structure.children) - 1):  # For Delete/Replace the check is "inside bounds"
+        return structure, True  # "Out of bounds: %s" % note.index
 
     if isinstance(note, Delete):
         l = structure.children[:]
         del l[note.index]
         t2s, s2t = st_delete(structure.t2s, structure.s2t, note.index)
-        return TreeNode(l, t2s, s2t, metadata)
+        return TreeNode(l, t2s, s2t, metadata), False
 
     if isinstance(note, Replace):
-        l = structure.children[:]
-        l[note.index] = recurse(note.nout_hash)
-        t2s, s2t = st_replace(structure.t2s, structure.s2t, note.index)
-        return TreeNode(l, t2s, s2t, metadata)
+        child, error = recurse(note.nout_hash)
+        if error:
+            # similar remarks as above apply!
+            return structure, error
 
-    if isinstance(note, TextBecome):
-        # assert structure is None  -- in the present version, TextBecome _can_ actually be called on an existing
-        # TreeText; This interpretation is tentative.
-        return TreeText(note.unicode_, metadata)
+        l = structure.children[:]
+        l[note.index] = child
+        t2s, s2t = st_replace(structure.t2s, structure.s2t, note.index)
+        return TreeNode(l, t2s, s2t, metadata), False
 
     raise Exception("Unknown Note")
 
@@ -88,7 +122,10 @@ def construct_x(results_lookup, possible_timelines, edge_nout_hash):
 
         note = edge_nout.note
 
-        tree = x_note_play(note, tree, recurse, YourOwnHash(edge_nout_hash))
+        tree, error = x_note_play(note, tree, recurse, YourOwnHash(edge_nout_hash))
+        if error:
+            return tree, True
+
         results_lookup[edge_nout_hash.as_bytes()] = tree
 
-    return tree
+    return tree, False
