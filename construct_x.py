@@ -29,27 +29,16 @@ def x_note_play(note, structure, recurse, metadata):
         if not (0 <= note.index <= len(structure.children)):  # Note: insert _at_ len(..) is ok (a.k.a. append)
             return structure, True  # "Out of bounds: %s" % note.index
 
+        # rather than not play on a recursive error, we play (in this case: insert), but propagate the error. This
+        # ensures we keep constructing up onto the point of failure. recurse is guaranteed (though this is not yet
+        # implemented) to give us some tree always (its result is never None) so this is always possible.
         child, error = recurse(note.nout_hash)
-        if error:
-            # TODO thoughts about "as much as possible" at the lower level
-            # one reason _not_ to do that... what if the lower level doesn't even succesfully recurse from None to a
-            # tree?? then you'd construct a non-typed tree at this point.
-            # we'll see... once we have this integrated in the GUI
-
-            # Counterpoint: we could also say that construct_x should always at least return a tree (whether it's stuck
-            # on an error or not)
-
-            # who's enforcing these things? and what is enforced in terms of the notes?
-            # let's start with the _what_.
-            # as long as your first note is a become (of some kind), you'll have some tree constructed.
-            # I'm not sure who's providing that guarantee.... but for now I'm going to assume it.
-            return structure, error
 
         l = structure.children[:]
         l.insert(note.index, child)
 
         t2s, s2t = st_insert(structure.t2s, structure.s2t, note.index)
-        return TreeNode(l, t2s, s2t, metadata), False
+        return TreeNode(l, t2s, s2t, metadata), error
 
     if not (0 <= note.index <= len(structure.children) - 1):  # For Delete/Replace the check is "inside bounds"
         return structure, True  # "Out of bounds: %s" % note.index
@@ -61,15 +50,13 @@ def x_note_play(note, structure, recurse, metadata):
         return TreeNode(l, t2s, s2t, metadata), False
 
     if isinstance(note, Replace):
+        # See notes on error-handling in Insert
         child, error = recurse(note.nout_hash)
-        if error:
-            # similar remarks as above apply!
-            return structure, error
 
         l = structure.children[:]
         l[note.index] = child
         t2s, s2t = st_replace(structure.t2s, structure.s2t, note.index)
-        return TreeNode(l, t2s, s2t, metadata), False
+        return TreeNode(l, t2s, s2t, metadata), error
 
     raise Exception("Unknown Note")
 

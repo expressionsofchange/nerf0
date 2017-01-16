@@ -1,0 +1,59 @@
+>>> from hashstore import Hash
+>>> from clef import BecomeNode, TextBecome, Insert, Replace, Delete
+>>> from trees import TreeNode, TreeText
+>>> from construct_x import x_note_play
+>>> 
+>>> metadata = 'ignored for these tests'
+>>> hash = Hash.for_bytes(b'')
+>>> 
+>>> test_tree = TreeNode([
+...     TreeNode([
+...         TreeText('original', 'metadata'),
+...     ], [0], [0], 'metadata'),
+... ], [0], [0], 'metadata')
+>>> 
+
+The parameter `recurse` is used to construct arbitrary sub-histories. It's useful in testing; we can simply
+mock "don't call", "successful call" and "dissonant".
+
+>>> def do_no_recurse(nout_hash):
+...     raise Exception("Do _not_ recurse")  # i.e. this is unexpected for this note
+... 
+>>> def recurse_success(nout_hash):
+...     return TreeNode([], [], [], metadata), False
+... 
+>>> def recurse_dissonant(nout_hash):
+...     return TreeNode([], [], [], metadata), True
+
+Normal usages:
+
+>>> x_note_play(BecomeNode(), None, do_no_recurse, metadata)
+((), False)
+>>> x_note_play(TextBecome("foo"), None, do_no_recurse, metadata)
+(foo, False)
+>>> x_note_play(Delete(0), test_tree, do_no_recurse, metadata)
+((), False)
+>>> x_note_play(Insert(0, hash), test_tree, recurse_success, metadata)
+((() (original)), False)
+>>> x_note_play(Insert(1, hash), test_tree, recurse_success, metadata)
+(((original) ()), False)
+>>> x_note_play(Replace(0, hash), test_tree, recurse_success, metadata)
+((()), False)
+
+# Out of range failures:
+
+>>> x_note_play(Delete(1), test_tree, do_no_recurse, metadata)
+(((original)), True)
+>>> x_note_play(Insert(2, hash), test_tree, recurse_success, metadata)
+(((original)), True)
+>>> x_note_play(Replace(1, hash), test_tree, recurse_success, metadata)
+(((original)), True)
+>>> 
+
+Recursive failures:
+just because there was a failure _somewhere_ in the chain, doesn't mean we shouldn't use the usable bit.
+
+>>> x_note_play(Insert(0, hash), test_tree, recurse_dissonant, metadata)
+((() (original)), True)
+>>> x_note_play(Replace(0, hash), test_tree, recurse_dissonant, metadata)
+((()), True)

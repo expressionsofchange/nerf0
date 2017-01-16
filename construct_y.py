@@ -13,8 +13,6 @@ RecursiveHistoryInfo = namedtuple('RecursiveHistory', (
 
 
 def y_note_play(possible_timelines, structure, note, recurse):
-    # whether we do hash-to-note here or below is of less importance
-
     if isinstance(note, BecomeNode):
         t2s, s2t = st_become()
         return YetAnotherTreeNode([], [], t2s, s2t), None
