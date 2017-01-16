@@ -351,23 +351,32 @@ class TreeWidget(Widget, FocusBehavior):
             send_to_child = child_channel.connect(receive_from_child)
 
             def notify_child():
+                # Optimization (and: mental optimization) notes: The present version of notify_child takes no arguments.
+                # It simply looks at the latest version of the tree, calculates the node where the child lives and sends
+                # that node's hash to the child widget. This also means that we send information to the child when
+                # really nothing changed.
+
+                # However, in practice this function is called precisely when new information about the latest hash (for
+                # the root node) is available. We could therefore:
+
+                # a] figure out the differences between the 2 hashes (in terms of historiography's live & dead
+                #       operations)
+                # b] figure out which t_addresses are affected by these changes.
+                # c] send the update-information only to children that listen those addresses.
+                #       (because a change to a child node always affects all its ancesters, there is no need to be smart
+                #       here, it's enough to send the precise match information)
+                #
+                # This has the additional advantage of being cleaner for the case of deletions: in the optimized
+                # algorithm, the deletion is always automatically the last bit of information that happens at a
+                # particular t_address (further changes cannot affect the address); [caveats may apply for deletions
+                # that become dead because they are on a dead branch]
+
                 s_address = get_s_address_for_t_address(self.ds.tree, child_lives_at_t_address)
                 if s_address is None:
                     return  # nothing to send to the child, the child represents dead history
 
                 node = node_for_s_address(self.ds.tree, s_address)
                 send_to_child(Actuality(node.metadata.nout_hash))  # this kind of always-send behavior can be optimized
-                """
-                wat wil ik? ik wil kunnen luisteren voor wijzigingen op een zeker t_address - _niet onder dat address,
-                dat gaat automatisch.._
-
-                hoe werkt dat? een functie: prev_nout_hash, current_nout_hash => [(t_address, new_hash)] ^- for all
-                t_addresses on which a change occurs
-
-                we kunnen bovenstaande ook schrijven als:
-                    * only one nout_hash (current; prev assumed) maar of dat uitmaakt weet ik niet; op lagere niveaus
-                    * zijn er geen dergelijke single-step garanties
-                """
 
             self.notify_children.append(notify_child)
 
