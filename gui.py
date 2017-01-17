@@ -324,93 +324,99 @@ class TreeWidget(Widget, FocusBehavior):
                 'i': PPSetSingleLine,
                 'o': PPSetLispy,
             }
-
-            t_address = t_address_for_s_address(self.ds.tree, self.ds.s_cursor)
-            pp_note = pp_map[textual_code](t_address)
-            annotation = Annotation(self.ds.tree.metadata.nout_hash, pp_note)
-
-            pp_annotations = self.ds.pp_annotations[:] + [annotation]
-
-            pp_tree = construct_pp_tree(self.ds.tree, pp_annotations)
-
-            self.ds = EditStructure(
-                self.ds.tree,
-                self.ds.s_cursor,
-                pp_annotations,
-                pp_tree,
-            )
-
-            self.refresh()
+            pp_note_type = pp_map[textual_code]
+            self._change_pp_style(pp_note_type)
 
         elif textual_code in ['n']:
-            child_channel = ClosableChannel()
-            child_lives_at_t_address = t_address_for_s_address(self.ds.tree, self.ds.s_cursor)
-            cursor_node = node_for_s_address(self.ds.tree, self.ds.s_cursor)
-
-            def receive_from_child(data):
-                # data :: Possibility | Actuality
-                if isinstance(data, Possibility):
-                    self.send_to_channel(data)
-
-                else:  # i.e. isinstance(data, Actuality):
-                    s_address = get_s_address_for_t_address(self.ds.tree, child_lives_at_t_address)
-                    if s_address is None:
-                        # the child represents dead history; its updates are silently ignored.
-                        # in practice this "shouldn't happen" in the current version, because closed children no longer
-                        # communicate back to us.
-                        return
-
-                    posacts = bubble_history_up(data.nout_hash, self.ds.tree, s_address)
-
-                    # TODO: new_s_cursor should be determined by looking at the pre-change tree, deducing a t_cursor and
-                    # then setting the new s_cursor based on the t_cursor and the new tree; this is made more
-                    # complicated because of the current choices in methods (s_cursor-setting integrated w/
-                    # tree-creation)
-                    self._update_internal_state_for_posacts(posacts, self.ds.s_cursor)
-
-            # children don't close themselves (yet) so we don't have to listen for it
-            send_to_child, close_child = child_channel.connect(receive_from_child, ignore)
-
-            def notify_child():
-                # Optimization (and: mental optimization) notes: The present version of notify_child takes no arguments.
-                # It simply looks at the latest version of the tree, calculates the node where the child lives and sends
-                # that node's hash to the child widget. This also means that we send information to the child when
-                # really nothing changed.
-
-                # However, in practice this function is called precisely when new information about the latest hash (for
-                # the root node) is available. We could therefore:
-
-                # a] figure out the differences between the 2 hashes (in terms of historiography's live & dead
-                #       operations)
-                # b] figure out which t_addresses are affected by these changes.
-                # c] send the update-information only to children that listen those addresses.
-                #       (because a change to a child node always affects all its ancesters, there is no need to be smart
-                #       here, it's enough to send the precise match information)
-                #
-                # This has the additional advantage of being cleaner for the case of deletions: in the optimized
-                # algorithm, the deletion is always automatically the last bit of information that happens at a
-                # particular t_address (further changes cannot affect the address); [caveats may apply for deletions
-                # that become dead because they are on a dead branch]
-
-                s_address = get_s_address_for_t_address(self.ds.tree, child_lives_at_t_address)
-                if s_address is None:
-                    # as it stands, it's possible to call close_child() multiple times (which we do). This is ugly but
-                    # it works (the calls are idempotent)
-                    close_child()
-
-                    # nothing to send to the child, the child represents dead history
-                    return
-
-                node = node_for_s_address(self.ds.tree, s_address)
-                send_to_child(Actuality(node.metadata.nout_hash))  # this kind of always-send behavior can be optimized
-
-            self.notify_children.append(notify_child)
-
-            new_widget = self.report_new_tree_to_app(child_channel)
-            new_widget.receive_from_channel(Actuality(cursor_node.metadata.nout_hash))
-            new_widget.report_new_tree_to_app = self.report_new_tree_to_app
+            self._create_child_window()
 
         return result
+
+    def _change_pp_style(self, pp_note_type):
+        t_address = t_address_for_s_address(self.ds.tree, self.ds.s_cursor)
+        pp_note = pp_note_type(t_address)
+        annotation = Annotation(self.ds.tree.metadata.nout_hash, pp_note)
+
+        pp_annotations = self.ds.pp_annotations[:] + [annotation]
+
+        pp_tree = construct_pp_tree(self.ds.tree, pp_annotations)
+
+        self.ds = EditStructure(
+            self.ds.tree,
+            self.ds.s_cursor,
+            pp_annotations,
+            pp_tree,
+        )
+
+        self.refresh()
+
+    def _create_child_window(self):
+        child_channel = ClosableChannel()
+        child_lives_at_t_address = t_address_for_s_address(self.ds.tree, self.ds.s_cursor)
+        cursor_node = node_for_s_address(self.ds.tree, self.ds.s_cursor)
+
+        def receive_from_child(data):
+            # data :: Possibility | Actuality
+            if isinstance(data, Possibility):
+                self.send_to_channel(data)
+
+            else:  # i.e. isinstance(data, Actuality):
+                s_address = get_s_address_for_t_address(self.ds.tree, child_lives_at_t_address)
+                if s_address is None:
+                    # the child represents dead history; its updates are silently ignored.
+                    # in practice this "shouldn't happen" in the current version, because closed children no longer
+                    # communicate back to us.
+                    return
+
+                posacts = bubble_history_up(data.nout_hash, self.ds.tree, s_address)
+
+                # TODO: new_s_cursor should be determined by looking at the pre-change tree, deducing a t_cursor and
+                # then setting the new s_cursor based on the t_cursor and the new tree; this is made more
+                # complicated because of the current choices in methods (s_cursor-setting integrated w/
+                # tree-creation)
+                self._update_internal_state_for_posacts(posacts, self.ds.s_cursor)
+
+        # children don't close themselves (yet) so we don't have to listen for it
+        send_to_child, close_child = child_channel.connect(receive_from_child, ignore)
+
+        def notify_child():
+            # Optimization (and: mental optimization) notes: The present version of notify_child takes no arguments.
+            # It simply looks at the latest version of the tree, calculates the node where the child lives and sends
+            # that node's hash to the child widget. This also means that we send information to the child when
+            # really nothing changed.
+
+            # However, in practice this function is called precisely when new information about the latest hash (for
+            # the root node) is available. We could therefore:
+
+            # a] figure out the differences between the 2 hashes (in terms of historiography's live & dead
+            #       operations)
+            # b] figure out which t_addresses are affected by these changes.
+            # c] send the update-information only to children that listen those addresses.
+            #       (because a change to a child node always affects all its ancesters, there is no need to be smart
+            #       here, it's enough to send the precise match information)
+            #
+            # This has the additional advantage of being cleaner for the case of deletions: in the optimized
+            # algorithm, the deletion is always automatically the last bit of information that happens at a
+            # particular t_address (further changes cannot affect the address); [caveats may apply for deletions
+            # that become dead because they are on a dead branch]
+
+            s_address = get_s_address_for_t_address(self.ds.tree, child_lives_at_t_address)
+            if s_address is None:
+                # as it stands, it's possible to call close_child() multiple times (which we do). This is ugly but
+                # it works (the calls are idempotent)
+                close_child()
+
+                # nothing to send to the child, the child represents dead history
+                return
+
+            node = node_for_s_address(self.ds.tree, s_address)
+            send_to_child(Actuality(node.metadata.nout_hash))  # this kind of always-send behavior can be optimized
+
+        self.notify_children.append(notify_child)
+
+        new_widget = self.report_new_tree_to_app(child_channel)
+        new_widget.receive_from_channel(Actuality(cursor_node.metadata.nout_hash))
+        new_widget.report_new_tree_to_app = self.report_new_tree_to_app
 
     def refresh(self, *args):
         """refresh means: redraw (I suppose we could rename, but I believe it's "canonical Kivy" to use 'refresh'"""
