@@ -40,7 +40,7 @@ from trees import (
     TreeText,
 )
 
-from construct_y import xxx_construct_y
+from construct_y import construct_y_from_scratch
 from historiography import t_lookup
 
 from pp_clef import PPUnset, PPSetSingleLine, PPSetLispy
@@ -731,7 +731,7 @@ class HistoryWidget(Widget):
             return
 
         with apply_offset(self.canvas, self.offset):
-            yatn, h2, per_step_info = xxx_construct_y(self.possible_timelines, self.nout_hash)
+            yatn, h2, per_step_info = construct_y_from_scratch(self.possible_timelines, self.nout_hash)
             offset_nonterminals = self.some_recursive_thing(
                 yatn,
                 per_step_info,
