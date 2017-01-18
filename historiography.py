@@ -81,9 +81,29 @@ class Historiography(object):
 
         self.length = 0
 
+        # When using Historiography to model a single historiography, a single grow-only datastructure is a nice
+        # optimization: the objects produced by x_append are not affected by further append-actions.
+
+        # Of course, Historiography is not always used to model a single historiography (especially now that we cache
+        # multiple ones in a results_lookup)
+
+        # I'm unwilling to let go of the optimization (I think it provides a nice hint on how to go forward) so I'm
+        # leaving it in, but with the cludge "self.x_appended" which copies if x_append has already been called once.
+        self.x_appended = False
+
     def x_append(self, nout_hash):
-        index = self.append(nout_hash)
-        return HistoriographyAt(self, index)
+        if self.x_appended:
+            use = Historiography(self.possible_timelines)
+            use.set_values = self.set_values[:]
+            use.all_nouts = self.all_nouts.copy()
+            use.prev_seen_in_all_nouts = self.prev_seen_in_all_nouts[:]
+            use.length = self.length
+        else:
+            self.x_appended = True
+            use = self
+
+        index = use.append(nout_hash)
+        return HistoriographyAt(use, index)
 
     def append(self, nout_hash):
         self.set_values.append(nout_hash)

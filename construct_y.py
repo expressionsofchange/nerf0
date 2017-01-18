@@ -69,7 +69,7 @@ def construct_y(tree_lookup, possible_timelines, historiography, edge_nout_hash)
     construct_y constructs a structure that can be used to understand history (e.g. display it in a GUI to humans)
 
     In particular, it takes:
-    * The historiography [mutable! insert notes about "use once"] TODO
+    * The historiography
     * An edge_nout_hash to advance to
 
     And it returns:
