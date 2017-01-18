@@ -96,8 +96,8 @@ def construct_x(results_lookup, possible_timelines, edge_nout_hash):
 
     todo = []
     for tup in all_nhtups_for_nout_hash(possible_timelines, edge_nout_hash):
-        if tup.nout_hash.as_bytes() in results_lookup:
-            tree = results_lookup[tup.nout_hash.as_bytes()]
+        if tup.nout_hash in results_lookup:
+            tree = results_lookup[tup.nout_hash]
             break
         todo.append(tup)
 
@@ -111,6 +111,6 @@ def construct_x(results_lookup, possible_timelines, edge_nout_hash):
         if error:
             return tree, True
 
-        results_lookup[edge_nout_hash.as_bytes()] = tree
+        results_lookup[edge_nout_hash] = tree
 
     return tree, False
