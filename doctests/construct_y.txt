@@ -1,10 +1,13 @@
 >>> from hashstore import HashStore
->>> from legato import parse_nout, NoutBlock, NoutBegin
+>>> from legato import parse_nout, NoutBlock, NoutBegin, all_preceding_nout_hashes
 >>> from clef import BecomeNode, TextBecome, Insert, Replace
 >>> from construct_y import construct_y_from_scratch
 >>> 
 >>> possible_timelines = HashStore(parse_nout)
 >>> 
+
+The structure of Nouts & Notes below matches the drawing in green in the blue booklet of my private notes.
+
 >>> begin = NoutBegin()
 >>> hash_begin = possible_timelines.add(begin)
 >>> 
@@ -20,7 +23,34 @@
 >>> 
 >>> tree, historiography_at, per_step_info = construct_y_from_scratch(possible_timelines, hash_replace_00b)
 >>> 
->>> # this is just a regression-test (it was 2, due to inproper reuse of 'structure');
->>> # we'll work towards a meaningful suite of tests
->>> len(tree.children[0].children)
-1
+>>> def steps_recursively(indentation, per_step_info):
+...     for nout_hash, rhi in per_step_info:
+...         print(" " * indentation, nout_hash)
+...         if rhi is not None:
+...             t_address, children_steps = rhi
+...             steps_recursively(indentation + 4, children_steps)
+... 
+
+Though a bit obfuscated w/ all the hashes, the below shows us at least: that the second usage of "BecomeNode" is not 
+repeated (25bc3c945eb5 is not preceded by 437ba946fac9). This is because it's not new.
+
+>>> steps_recursively(0, per_step_info)
+ 437ba946fac9
+ 3f888761eecb
+     437ba946fac9
+     1e2072cbda0a
+         1f2cf5ca7d0d
+ afeab8636e2b
+     25bc3c945eb5
+         81e6591ff251
+
+>>> tree.historiographies[0].nout_hash()
+25bc3c945eb5
+
+So, what's actually alive at "level 1"?
+
+>>> list(all_preceding_nout_hashes(possible_timelines, tree.historiographies[0].nout_hash()))
+[25bc3c945eb5, 437ba946fac9]
+
+Note that there is no historiography that contains the node for the Text "a" (1f2cf5ca7d0d); this is a consequence of
+(and OK because of) the fact that 1e2072cbda0a is not alive.
