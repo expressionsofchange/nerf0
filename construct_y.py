@@ -12,7 +12,7 @@ RecursiveHistoryInfo = namedtuple('RecursiveHistory', (
     'children_steps'))
 
 
-def y_note_play(possible_timelines, structure, note, recurse):
+def y_note_play(note, structure, recurse, possible_timelines):
     if isinstance(note, BecomeNode):
         t2s, s2t = st_become()
         return YetAnotherTreeNode([], [], t2s, s2t), None
@@ -21,7 +21,8 @@ def y_note_play(possible_timelines, structure, note, recurse):
         empty_structure = None
         empty_historiography = Historiograhpy(possible_timelines)
 
-        child, child_historiography_at, child_per_step_info = recurse(empty_structure, empty_historiography, note.nout_hash)
+        child, child_historiography_at, child_per_step_info = recurse(
+            empty_structure, empty_historiography, note.nout_hash)
 
         children = structure.children[:]
         children.insert(note.index, child)
@@ -51,7 +52,8 @@ def y_note_play(possible_timelines, structure, note, recurse):
         existing_structure = structure.children[note.index]
         existing_historiography = structure.historiographies[note.index].historiography
 
-        child, child_historiography_at, child_per_step_info = recurse(existing_structure, existing_historiography, note.nout_hash)
+        child, child_historiography_at, child_per_step_info = recurse(
+            existing_structure, existing_historiography, note.nout_hash)
 
         children = structure.children[:]
         historiographies = structure.historiographies[:]
@@ -83,7 +85,7 @@ def construct_y(possible_timelines, existing_structure, existing_historiography,
     for new_hash in new_hashes:
         new_nout = possible_timelines.get(new_hash)
 
-        existing_structure, rhi = y_note_play(possible_timelines, existing_structure, new_nout.note, recurse)
+        existing_structure, rhi = y_note_play(new_nout.note, existing_structure, recurse, possible_timelines)
         per_step_info.append((new_hash, rhi))
 
     return existing_structure, historiography_at, per_step_info
