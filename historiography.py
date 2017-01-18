@@ -12,7 +12,8 @@ class Historiography(object):
     Another way of saying this is: it's a mutable (grow only) structure that allows you to keep track of the present,
     assigning a unique consecutive number to each version of the present.
 
-    The need for this concept flows directly from a Clef with an operation Replace(index, any_nout_hash)
+    The need for this concept flows directly from a Clef with an operation Replace(index, any_nout_hash), as opposed to
+    only being able to replace with consecutive hashes.
 
     The idea is: the nout-hashes are often related, and you want to be able to express how that's so.
 
@@ -31,31 +32,40 @@ class Historiography(object):
     >>> hash_a = possible_timelines.add(NoutBlock(TextBecome("a"), hash_begin))
     >>> hash_b = possible_timelines.add(NoutBlock(TextBecome("b"), hash_begin))
     >>> hash_ac = possible_timelines.add(NoutBlock(TextBecome("ac"), hash_a))
+    >>> hash_acd = possible_timelines.add(NoutBlock(TextBecome("acd"), hash_ac))
     >>>
     >>> historiography = Historiography(possible_timelines)
     >>> a = historiography.append(hash_a)
     >>> b = historiography.append(hash_b)
     >>> ac = historiography.append(hash_ac)
+    >>> acd = historiography.append(hash_acd)
     >>>
     >>> list(historiography.whats_new(a)) == [hash_a]
+    True
+    >>> historiography.point_of_divergence(a) is None
     True
     >>> list(historiography.whats_made_alive(a)) == [hash_a]
     True
     >>> list(historiography.whats_made_dead(a)) == []
     True
-    >>>
     >>> list(historiography.whats_new(b)) == [hash_b]
+    True
+    >>> historiography.point_of_divergence(b) is None
     True
     >>> list(historiography.whats_made_alive(b)) == [hash_b]
     True
     >>> list(historiography.whats_made_dead(b)) == [hash_a]
     True
-    >>>
     >>> list(historiography.whats_new(ac)) == [hash_ac]
+    True
+    >>> # N.B.: pod with _last state_, for which we must go back all the way to the beginning
+    >>> historiography.point_of_divergence(ac) is None
     True
     >>> list(historiography.whats_made_alive(ac)) == [hash_ac, hash_a]
     True
     >>> list(historiography.whats_made_dead(ac)) == [hash_b]
+    True
+    >>> historiography.point_of_divergence(acd) == hash_ac
     True
     """
 
@@ -98,15 +108,21 @@ class Historiography(object):
             lambda v: v != self.prev_seen_in_all_nouts[index],
             all_preceding_nout_hashes(self.possible_timelines, self.set_values[index]))
 
+    def point_of_divergence(self, index):
+        """Going back in time, what's the first nout_hash you already saw before?"""
+        if index == 0:
+            return None
+
+        return find_point_of_divergence(
+            all_preceding_nout_hashes(self.possible_timelines, self.set_values[index]),
+            all_preceding_nout_hashes(self.possible_timelines, self.set_values[index - 1]))
+
     def whats_made_alive(self, index):
         """in anti-chronological order"""
         if index == 0:
             return self.whats_new(index)
 
-        pod = find_point_of_divergence(
-            all_preceding_nout_hashes(self.possible_timelines, self.set_values[index]),
-            all_preceding_nout_hashes(self.possible_timelines, self.set_values[index - 1]))
-
+        pod = self.point_of_divergence(index)
         return takewhile(
             lambda v: v != pod,
             all_preceding_nout_hashes(self.possible_timelines, self.set_values[index]))
@@ -115,10 +131,7 @@ class Historiography(object):
         if index == 0:
             return iter([])
 
-        pod = find_point_of_divergence(
-            all_preceding_nout_hashes(self.possible_timelines, self.set_values[index]),
-            all_preceding_nout_hashes(self.possible_timelines, self.set_values[index - 1]))
-
+        pod = self.point_of_divergence(index)
         return takewhile(
             lambda v: v != pod,
             all_preceding_nout_hashes(self.possible_timelines, self.set_values[index - 1]))
