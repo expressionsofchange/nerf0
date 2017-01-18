@@ -2,6 +2,7 @@ from clef import BecomeNode, Insert, Delete, Replace, TextBecome
 from trees import TreeNode, TreeText, YourOwnHash
 from spacetime import st_become, st_insert, st_replace, st_delete
 from legato import all_nhtups_for_nout_hash
+from list_operations import l_become, l_insert, l_delete, l_replace
 
 
 def x_note_play(note, structure, recurse, metadata):
@@ -18,7 +19,7 @@ def x_note_play(note, structure, recurse, metadata):
             return structure, True  # "You can only BecomeNode out of nothingness"
 
         t2s, s2t = st_become()
-        return TreeNode([], t2s, s2t, metadata), False
+        return TreeNode(l_become(), t2s, s2t, metadata), False
 
     if isinstance(note, TextBecome):
         # if structure is not None... return error -- in the present version, TextBecome _can_ actually be called on
@@ -34,29 +35,26 @@ def x_note_play(note, structure, recurse, metadata):
         # implemented) to give us some tree always (its result is never None) so this is always possible.
         child, error = recurse(note.nout_hash)
 
-        l = structure.children[:]
-        l.insert(note.index, child)
+        children = l_insert(structure.children[:], note.index, child)
 
         t2s, s2t = st_insert(structure.t2s, structure.s2t, note.index)
-        return TreeNode(l, t2s, s2t, metadata), error
+        return TreeNode(children, t2s, s2t, metadata), error
 
     if not (0 <= note.index <= len(structure.children) - 1):  # For Delete/Replace the check is "inside bounds"
         return structure, True  # "Out of bounds: %s" % note.index
 
     if isinstance(note, Delete):
-        l = structure.children[:]
-        del l[note.index]
+        children = l_delete(structure.children, note.index)
         t2s, s2t = st_delete(structure.t2s, structure.s2t, note.index)
-        return TreeNode(l, t2s, s2t, metadata), False
+        return TreeNode(children, t2s, s2t, metadata), False
 
     if isinstance(note, Replace):
         # See notes on error-handling in Insert
         child, error = recurse(note.nout_hash)
+        children = l_replace(structure.children, note.index, child)
 
-        l = structure.children[:]
-        l[note.index] = child
         t2s, s2t = st_replace(structure.t2s, structure.s2t, note.index)
-        return TreeNode(l, t2s, s2t, metadata), error
+        return TreeNode(children, t2s, s2t, metadata), error
 
     raise Exception("Unknown Note")
 
