@@ -4,7 +4,7 @@ from itertools import takewhile
 from utils import i_flat_zip_longest, pmts
 
 
-class Historiograhpy(object):
+class Historiography(object):
     """
     This module contains several equivalent approaches at dealing with a "Historiography" (for lack of a better word):
     An append-only list of nout-for-note hashes, that may or may not be somehow related.
@@ -20,7 +20,7 @@ class Historiograhpy(object):
     >>> from clef import TextBecome
     >>> from hashstore import HashStore
     >>>
-    >>> from historiography import Historiograhpy
+    >>> from historiography import Historiography
     >>>
     >>> possible_timelines = HashStore(parse_nout)
     >>>
@@ -32,7 +32,7 @@ class Historiograhpy(object):
     >>> hash_b = possible_timelines.add(NoutBlock(TextBecome("b"), hash_begin))
     >>> hash_ac = possible_timelines.add(NoutBlock(TextBecome("ac"), hash_a))
     >>>
-    >>> historiography = Historiograhpy(possible_timelines)
+    >>> historiography = Historiography(possible_timelines)
     >>> a = historiography.append(hash_a)
     >>> b = historiography.append(hash_b)
     >>> ac = historiography.append(hash_ac)
@@ -62,7 +62,7 @@ class Historiograhpy(object):
     def __init__(self, possible_timelines):
         self.possible_timelines = possible_timelines
 
-        # `set_values` model the consecutive "states" of the Historiograhpy.
+        # `set_values` model the consecutive "states" of the Historiography.
         self.set_values = []
 
         # self.all_nouts & self.prev_seen_in_all_nouts are the internal bookkeeping structures.
@@ -73,7 +73,7 @@ class Historiograhpy(object):
 
     def x_append(self, nout_hash):
         index = self.append(nout_hash)
-        return HistoriograhpyAt(self, index)
+        return HistoriographyAt(self, index)
 
     def append(self, nout_hash):
         self.set_values.append(nout_hash)
@@ -124,8 +124,8 @@ class Historiograhpy(object):
             all_preceding_nout_hashes(self.possible_timelines, self.set_values[index - 1]))
 
 
-class HistoriograhpyAt(object):
-    """Represents a particular point in time in the Historiograhpy's life"""
+class HistoriographyAt(object):
+    """Represents a particular point in time in the Historiography's life"""
 
     def __init__(self, historiography, index):
         pmts(index, int)
@@ -156,7 +156,7 @@ def find_point_of_divergence(history_a, history_b):
     return None
 
 
-class YetAnotherTreeNode(object):
+class HistoriographyTreeNode(object):
 
     def __init__(self, children, historiographies, t2s, s2t):
         st_sanity(t2s, s2t)

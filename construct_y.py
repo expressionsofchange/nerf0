@@ -1,5 +1,5 @@
 from trees import TreeText
-from historiography import Historiograhpy, YetAnotherTreeNode
+from historiography import Historiography, HistoriographyTreeNode
 
 from clef import BecomeNode, TextBecome, Insert, Replace, Delete
 from spacetime import st_become, st_insert, st_replace, st_delete
@@ -16,11 +16,11 @@ RecursiveHistoryInfo = namedtuple('RecursiveHistory', (
 def y_note_play(note, structure, recurse, possible_timelines):
     if isinstance(note, BecomeNode):
         t2s, s2t = st_become()
-        return YetAnotherTreeNode(l_become(), l_become(), t2s, s2t), None
+        return HistoriographyTreeNode(l_become(), l_become(), t2s, s2t), None
 
     if isinstance(note, Insert):
         empty_structure = None
-        empty_historiography = Historiograhpy(possible_timelines)
+        empty_historiography = Historiography(possible_timelines)
 
         child, child_historiography_at, child_per_step_info = recurse(
             empty_structure, empty_historiography, note.nout_hash)
@@ -33,7 +33,7 @@ def y_note_play(note, structure, recurse, possible_timelines):
 
         rhi = RecursiveHistoryInfo(new_t, child_per_step_info)
 
-        return YetAnotherTreeNode(children, historiographies, t2s, s2t), rhi
+        return HistoriographyTreeNode(children, historiographies, t2s, s2t), rhi
 
     if isinstance(note, Delete):
         children = l_delete(structure.children, note.index)
@@ -41,7 +41,7 @@ def y_note_play(note, structure, recurse, possible_timelines):
 
         t2s, s2t = st_delete(structure.t2s, structure.s2t, note.index)
 
-        return YetAnotherTreeNode(children, historiographies, t2s, s2t), None
+        return HistoriographyTreeNode(children, historiographies, t2s, s2t), None
 
     if isinstance(note, Replace):
         existing_structure = structure.children[note.index]
@@ -57,10 +57,10 @@ def y_note_play(note, structure, recurse, possible_timelines):
 
         rhi = RecursiveHistoryInfo(s2t[note.index], child_per_step_info)
 
-        return YetAnotherTreeNode(children, historiographies, t2s, s2t), rhi
+        return HistoriographyTreeNode(children, historiographies, t2s, s2t), rhi
 
     if isinstance(note, TextBecome):
-        # We're "misreusing" TextBecome here (it serves as the leaf of both TreeNode and YetAnotherTreeNode).
+        # We're "misreusing" TextBecome here (it serves as the leaf of both TreeNode and HistoriographyTreeNode).
         return TreeText(note.unicode_, 'no metadata available'), None
 
     raise Exception("Unknown Note")
@@ -85,4 +85,4 @@ def construct_y(possible_timelines, existing_structure, existing_historiography,
 
 
 def xxx_construct_y(possible_timelines, edge_nout_hash):
-    return construct_y(possible_timelines, None, Historiograhpy(possible_timelines), edge_nout_hash)
+    return construct_y(possible_timelines, None, Historiography(possible_timelines), edge_nout_hash)
