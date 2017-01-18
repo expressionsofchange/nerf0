@@ -20,6 +20,7 @@ def load_tests(loader, tests, ignore):
 
     # Some tests in the doctests style are too large to nicely fit into a docstring; better to keep them separate:
     tests.addTests(doctest.DocFileSuite("doctests/construct_x.txt"))
+    tests.addTests(doctest.DocFileSuite("doctests/construct_y.txt"))
 
     return tests
 

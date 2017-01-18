@@ -206,7 +206,7 @@ class TreeWidget(Widget, FocusBehavior):
         self.possible_timelines = kwargs.pop('possible_timelines')
 
         super(TreeWidget, self).__init__(**kwargs)
-        self.all_trees = {}
+        self.all_trees = {}  # TODO pull this to a single higher location for better performance
 
         self.ds = EditStructure(None, [], [], None)
         self.notify_children = []

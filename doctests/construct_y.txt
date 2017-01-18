@@ -1,0 +1,26 @@
+>>> from hashstore import HashStore
+>>> from legato import parse_nout, NoutBlock, NoutBegin
+>>> from clef import BecomeNode, TextBecome, Insert, Replace
+>>> from construct_y import construct_y_from_scratch
+>>> 
+>>> possible_timelines = HashStore(parse_nout)
+>>> 
+>>> begin = NoutBegin()
+>>> hash_begin = possible_timelines.add(begin)
+>>> 
+>>> hash_node = possible_timelines.add(NoutBlock(BecomeNode(), hash_begin))
+>>> 
+>>> hash_a = possible_timelines.add(NoutBlock(TextBecome("a"), hash_begin))
+>>> hash_insert_0a = possible_timelines.add(NoutBlock(Insert(0, hash_a), hash_node))
+>>> hash_insert_00a = possible_timelines.add(NoutBlock(Insert(0, hash_insert_0a), hash_node))
+>>> 
+>>> hash_b = possible_timelines.add(NoutBlock(TextBecome("b"), hash_begin))
+>>> hash_insert_0b = possible_timelines.add(NoutBlock(Insert(0, hash_b), hash_node))
+>>> hash_replace_00b = possible_timelines.add(NoutBlock(Replace(0, hash_insert_0b), hash_insert_00a))
+>>> 
+>>> tree, historiography_at, per_step_info = construct_y_from_scratch(possible_timelines, hash_replace_00b)
+>>> 
+>>> # this is just a regression-test (it was 2, due to inproper reuse of 'structure');
+>>> # we'll work towards a meaningful suite of tests
+>>> len(tree.children[0].children)
+1

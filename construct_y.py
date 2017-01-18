@@ -19,10 +19,10 @@ def y_note_play(note, structure, recurse, possible_timelines):
         return HistoriographyTreeNode(l_become(), l_become(), t2s, s2t), None
 
     if isinstance(note, Insert):
-        empty_structure, empty_historiography = y_origin(possible_timelines)
+        empty_historiography = y_origin(possible_timelines)
 
         child, child_historiography_at, child_per_step_info = recurse(
-            empty_structure, empty_historiography, note.nout_hash)
+            empty_historiography, note.nout_hash)
 
         children = l_insert(structure.children, note.index, child)
         historiographies = l_insert(structure.historiographies, note.index, child_historiography_at)
@@ -43,11 +43,10 @@ def y_note_play(note, structure, recurse, possible_timelines):
         return HistoriographyTreeNode(children, historiographies, t2s, s2t), None
 
     if isinstance(note, Replace):
-        existing_structure = structure.children[note.index]
         existing_historiography = structure.historiographies[note.index].historiography
 
         child, child_historiography_at, child_per_step_info = recurse(
-            existing_structure, existing_historiography, note.nout_hash)
+            existing_historiography, note.nout_hash)
 
         children = l_replace(structure.children, note.index, child)
         historiographies = l_replace(structure.historiographies, note.index, child_historiography_at)
@@ -65,34 +64,58 @@ def y_note_play(note, structure, recurse, possible_timelines):
     raise Exception("Unknown Note")
 
 
-def construct_y(possible_timelines, structure, historiography, edge_nout_hash):
+def construct_y(tree_lookup, possible_timelines, historiography, edge_nout_hash):
     """
     construct_y constructs a structure that can be used to understand history (e.g. display it in a GUI to humans)
 
     In particular, it takes:
-    * A HistoriographyTreeNode
     * The historiography [mutable! insert notes about "use once"] TODO
     * An edge_nout_hash to advance to
 
     And it returns:
-    * The HistoriographyTreeNode, advanced to the edge_nout_hash.
-    * The HistoriographyAt after advancing to the edge_nout_hash.
     * "Per step info": for each step that's required to advance: its hash and recursive information if it exists.
         (this can be used to draw recursive structures without knowledge of which notes have history-information)
 
+    * The HistoriographyTreeNode, advanced to the edge_nout_hash.
+    * The HistoriographyAt after advancing to the edge_nout_hash.
+
     The idea is that `construct_y` can be used in a special way while playing "Replace": by passing in the existing
-    structure and historiography of the to-be-replaced node, we can "connect the historiographic dots". (For Insert,
-    and the construction of the root node, we simply pass in an empty structure and historiography)
+    historiography of the to-be-replaced node, we can "connect the historiographic dots". (For Insert, and the
+    construction of the root node, we simply pass in an empty historiography)
 
     For any given nout_hash, construct_y recursively constructs a single HistoriographyTreeNode with HistoriographyAt
     information for all descendants. Such a structure is useful if we want to provide insight about which notes from the
     past are sung in alternative histories.
+
+    `construct_y` acts on both the linear historic level, and the historiographic level, but not at the same time. It is
+    very important to keep seeing the distinction: [is it desirable to split these 2 levels into 2 functions?]
+
+    1. the constructed Historiography is "historiographically aware" (how could it not be?)
+    2. the constructed HistoriographyTreeNode, however, is not. By that we mean that it's constructed for a single
+        linear history. Collary: the parameter `historiography` is not used to construct the treenode (the treenode is
+        deduced fully from the last nout_hash, ignoring alternate (dead) histories.
+
+        Of course, we _do_ create (potentially non-linear) historiographies for our children: that's the whole point of
+        this excercise.
+
+        As a consequence of this: historiographic information about "dead branches of history" is not available
+        anywhere; (while drawing this is not actually problematic, because you'll see the dead parent, which signals
+        that no further querying of deadness is required)
     """
 
-    def recurse(s, h, enh):
-        return construct_y(possible_timelines, s, h, enh)
+    def recurse(h, enh):
+        return construct_y(tree_lookup, possible_timelines, h, enh)
 
     historiography_at = historiography.x_append(edge_nout_hash)
+
+    whats_new_pod = historiography_at.whats_new_pod()
+    if whats_new_pod is None:
+        # if there's _nothing_ you've seen before, start with an empty structure
+        structure = None
+    else:
+        # The below is by definition: the POD with "what's new", so you must have seen (and built and stored) it before
+        assert whats_new_pod in tree_lookup
+        structure = tree_lookup[whats_new_pod]
 
     new_hashes = reversed(list(historiography_at.whats_new()))
     per_step_info = []
@@ -101,16 +124,19 @@ def construct_y(possible_timelines, structure, historiography, edge_nout_hash):
         new_nout = possible_timelines.get(new_hash)
 
         structure, rhi = y_note_play(new_nout.note, structure, recurse, possible_timelines)
+        tree_lookup[new_hash] = structure
+
         per_step_info.append((new_hash, rhi))
 
     return structure, historiography_at, per_step_info
 
 
 def y_origin(possible_timelines):
-    """We start `y` actions with no structure, and an empty historiography."""
-    return None, Historiography(possible_timelines)
+    return Historiography(possible_timelines)
 
 
 def construct_y_from_scratch(possible_timelines, edge_nout_hash):
-    structure, historiography = y_origin(possible_timelines)
-    return construct_y(possible_timelines, structure, historiography, edge_nout_hash)
+    tree_lookup = {}  # TODO pull the 'tree_lookup' to the calling location for caching between calls
+
+    historiography = y_origin(possible_timelines)
+    return construct_y(tree_lookup, possible_timelines, historiography, edge_nout_hash)

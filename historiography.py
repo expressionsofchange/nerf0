@@ -102,6 +102,13 @@ class Historiography(object):
         self.length += 1
         return self.length - 1
 
+    def whats_new_pod(self, index):
+        """what's the point of divergence with whats_new, i.e. what's the last thing you already saw?"""
+        if index == 0:
+            return None  # special value, indicating "nothing was seen before"
+
+        return self.prev_seen_in_all_nouts[index]  # either a nout_hash, or None
+
     def whats_new(self, index):
         """in anti-chronological order"""
         return takewhile(
@@ -148,8 +155,14 @@ class HistoriographyAt(object):
     def nout_hash(self):
         return self.historiography.set_values[self.index]
 
+    def whats_new_pod(self):
+        return self.historiography.whats_new_pod(self.index)
+
     def whats_new(self):
         return self.historiography.whats_new(self.index)
+
+    def point_of_divergence(self):
+        return self.historiography.point_of_divergence(self.index)
 
     def whats_made_alive(self):
         return self.historiography.made_alive(self.index)
