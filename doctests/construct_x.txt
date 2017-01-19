@@ -20,40 +20,44 @@ mock "don't call", "successful call" and "dissonant".
 ...     raise Exception("Do _not_ recurse")  # i.e. this is unexpected for this note
 ... 
 >>> def recurse_success(nout_hash):
-...     return TreeNode([], [], [], metadata), False
+...     return TreeNode([], [], [], metadata)
 ... 
 >>> def recurse_dissonant(nout_hash):
-...     return TreeNode([], [], [], metadata), True
+...     return recurse_success(nout_hash).broken_equivalent(metadata)
+
+>>> def show(*args):
+...     result = x_note_play(*args)
+...     return result, result.broken
 
 Normal usages:
 
->>> x_note_play(BecomeNode(), None, do_no_recurse, metadata)
+>>> show(BecomeNode(), None, do_no_recurse, metadata)
 ((), False)
->>> x_note_play(TextBecome("foo"), None, do_no_recurse, metadata)
+>>> show(TextBecome("foo"), None, do_no_recurse, metadata)
 (foo, False)
->>> x_note_play(Delete(0), test_tree, do_no_recurse, metadata)
+>>> show(Delete(0), test_tree, do_no_recurse, metadata)
 ((), False)
->>> x_note_play(Insert(0, hash), test_tree, recurse_success, metadata)
+>>> show(Insert(0, hash), test_tree, recurse_success, metadata)
 ((() (original)), False)
->>> x_note_play(Insert(1, hash), test_tree, recurse_success, metadata)
+>>> show(Insert(1, hash), test_tree, recurse_success, metadata)
 (((original) ()), False)
->>> x_note_play(Replace(0, hash), test_tree, recurse_success, metadata)
+>>> show(Replace(0, hash), test_tree, recurse_success, metadata)
 ((()), False)
 
 # Out of range failures:
 
->>> x_note_play(Delete(1), test_tree, do_no_recurse, metadata)
+>>> show(Delete(1), test_tree, do_no_recurse, metadata)
 (((original)), True)
->>> x_note_play(Insert(2, hash), test_tree, recurse_success, metadata)
+>>> show(Insert(2, hash), test_tree, recurse_success, metadata)
 (((original)), True)
->>> x_note_play(Replace(1, hash), test_tree, recurse_success, metadata)
+>>> show(Replace(1, hash), test_tree, recurse_success, metadata)
 (((original)), True)
 >>> 
 
 Recursive failures:
-just because there was a failure _somewhere_ in the chain, doesn't mean we shouldn't use the usable bit.
+just because there was a failure _somewhere_ in the chain doesn't mean the top-level is broken
 
->>> x_note_play(Insert(0, hash), test_tree, recurse_dissonant, metadata)
-((() (original)), True)
->>> x_note_play(Replace(0, hash), test_tree, recurse_dissonant, metadata)
-((()), True)
+>>> show(Insert(0, hash), test_tree, recurse_dissonant, metadata)
+((() (original)), False)
+>>> show(Replace(0, hash), test_tree, recurse_dissonant, metadata)
+((()), False)

@@ -17,6 +17,7 @@ class TreeNode(object):
         self.children = children
         self.t2s = t2s
         self.s2t = s2t
+        self.broken = False
 
         self.metadata = metadata
 
@@ -27,6 +28,11 @@ class TreeNode(object):
         # as of yet unused
         return bytes([TREE_NODE]) + to_vlq(len(self.children)) + b''.join([c.as_bytes() for c in self.children])
 
+    def broken_equivalent(self, metadata):
+        result = TreeNode(self.children, self.t2s, self.s2t, metadata)
+        result.broken = True
+        return result
+
 
 class TreeText(object):
 
@@ -34,6 +40,7 @@ class TreeText(object):
         pmts(unicode_, str)
         self.unicode_ = unicode_
         self.metadata = metadata
+        self.broken = False  # as it stands: TreeText cannot be broken
 
     def __repr__(self):
         return pp_flat(self)

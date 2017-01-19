@@ -8,53 +8,52 @@ from list_operations import l_become, l_insert, l_delete, l_replace
 def x_note_play(note, structure, recurse, metadata):
     """
     Plays a single note.
-    :: .... => tree, error
+    :: .... => tree
 
     Note an assymmetry between the *Become* notes and the others; the former requiring nothingness to precede them,
     the latter requiring an existing structure to further manipulate.
     """
+    if structure is not None and structure.broken:
+        # alternatively: don't pass broken structures in here; deal with it in construct_x
+        return structure.broken_equivalent(metadata)
 
     if isinstance(note, BecomeNode):
         if structure is not None:
-            return structure, True  # "You can only BecomeNode out of nothingness"
+            return structure.broken_equivalent(metadata)  # "You can only BecomeNode out of nothingness"
 
         t2s, s2t = st_become()
-        return TreeNode(l_become(), t2s, s2t, metadata), False
+        return TreeNode(l_become(), t2s, s2t, metadata)
 
     if isinstance(note, TextBecome):
         # if structure is not None... return error -- in the present version, TextBecome _can_ actually be called on
         # an existing TreeText; This interpretation is tentative.
-        return TreeText(note.unicode_, metadata), False
+        return TreeText(note.unicode_, metadata)
 
     if isinstance(note, Insert):
         if not (0 <= note.index <= len(structure.children)):  # Note: insert _at_ len(..) is ok (a.k.a. append)
-            return structure, True  # "Out of bounds: %s" % note.index
+            return structure.broken_equivalent(metadata)  # "Out of bounds: %s" % note.index
 
-        # rather than not play on a recursive error, we play (in this case: insert), but propagate the error. This
-        # ensures we keep constructing up onto the point of failure. recurse is guaranteed (though this is not yet
-        # implemented) to give us some tree always (its result is never None) so this is always possible.
-        child, error = recurse(note.nout_hash)
+        child = recurse(note.nout_hash)
 
         children = l_insert(structure.children[:], note.index, child)
 
         t2s, s2t = st_insert(structure.t2s, structure.s2t, note.index)
-        return TreeNode(children, t2s, s2t, metadata), error
+        return TreeNode(children, t2s, s2t, metadata)
 
     if not (0 <= note.index <= len(structure.children) - 1):  # For Delete/Replace the check is "inside bounds"
-        return structure, True  # "Out of bounds: %s" % note.index
+        return structure.broken_equivalent(metadata)  # "Out of bounds: %s" % note.index
 
     if isinstance(note, Delete):
         children = l_delete(structure.children, note.index)
         t2s, s2t = st_delete(structure.t2s, structure.s2t, note.index)
-        return TreeNode(children, t2s, s2t, metadata), False
+        return TreeNode(children, t2s, s2t, metadata)
 
     if isinstance(note, Replace):
-        # See notes on error-handling in Insert
-        child, error = recurse(note.nout_hash)
+        child = recurse(note.nout_hash)
         children = l_replace(structure.children, note.index, child)
 
         t2s, s2t = st_replace(structure.t2s, structure.s2t, note.index)
-        return TreeNode(children, t2s, s2t, metadata), error
+        return TreeNode(children, t2s, s2t, metadata)
 
     raise Exception("Unknown Note")
 
@@ -107,10 +106,7 @@ def construct_x(results_lookup, possible_timelines, edge_nout_hash):
 
         note = edge_nout.note
 
-        tree, error = x_note_play(note, tree, recurse, YourOwnHash(edge_nout_hash))
-        if error:
-            return tree, True
-
+        tree = x_note_play(note, tree, recurse, YourOwnHash(edge_nout_hash))
         results_lookup[edge_nout_hash] = tree
 
-    return tree, False
+    return tree

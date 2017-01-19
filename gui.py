@@ -224,8 +224,8 @@ class TreeWidget(Widget, FocusBehavior):
         # there is no else branch: Possibility only travels _to_ the channel;
         if isinstance(data, Actuality):
             t_cursor = t_address_for_s_address(self.ds.tree, self.ds.s_cursor)
-            tree, error = construct_x(self.all_trees, self.possible_timelines, data.nout_hash)
-            assert error is False, "Tree-widget blah.. not expected to deal with incorrect histories.."
+            tree = construct_x(self.all_trees, self.possible_timelines, data.nout_hash)
+            assert tree.broken is False, "Tree-widget blah.. not expected to deal with incorrect histories.."
 
             s_cursor = best_s_address_for_t_address(tree, t_cursor)
             pp_annotations = self.ds.pp_annotations[:]
