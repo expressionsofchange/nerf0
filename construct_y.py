@@ -13,12 +13,29 @@ RecursiveHistoryInfo = namedtuple('RecursiveHistory', (
     'children_steps'))
 
 
-def y_note_play(note, structure, recurse, possible_timelines):
+def y_note_play(note, structure, structure_is_dissonant, recurse, possible_timelines):
+    def dissonant():
+        return structure, True, None
+
+    if structure_is_dissonant:
+        # perhaps: don't do this inside y_note_play ? i.e. make y_note_play take non-dissonant structures only.
+        return dissonant()
+
     if isinstance(note, BecomeNode):
+        if structure is not None:
+            return dissonant()  # "You can only BecomeNode out of nothingness"
+
         t2s, s2t = st_become()
-        return HistoriographyTreeNode(l_become(), l_become(), t2s, s2t), None
+        return HistoriographyTreeNode(l_become(), l_become(), t2s, s2t), False, None
+
+    if isinstance(note, TextBecome):
+        # We're "misreusing" TextBecome here (it serves as the leaf of both TreeNode and HistoriographyTreeNode).
+        return TreeText(note.unicode_, 'no metadata available'), False, None
 
     if isinstance(note, Insert):
+        if not (0 <= note.index <= len(structure.children)):  # Note: insert _at_ len(..) is ok (a.k.a. append)
+            return dissonant()  # "Out of bounds: %s" % note.index
+
         empty_historiography = y_origin(possible_timelines)
 
         child, child_historiography_at, child_per_step_info = recurse(
@@ -32,7 +49,10 @@ def y_note_play(note, structure, recurse, possible_timelines):
 
         rhi = RecursiveHistoryInfo(new_t, child_per_step_info)
 
-        return HistoriographyTreeNode(children, historiographies, t2s, s2t), rhi
+        return HistoriographyTreeNode(children, historiographies, t2s, s2t), False, rhi
+
+    if not (0 <= note.index <= len(structure.children) - 1):  # For Delete/Replace the check is "inside bounds"
+        return dissonant()  # "Out of bounds: %s" % note.index
 
     if isinstance(note, Delete):
         children = l_delete(structure.children, note.index)
@@ -40,7 +60,7 @@ def y_note_play(note, structure, recurse, possible_timelines):
 
         t2s, s2t = st_delete(structure.t2s, structure.s2t, note.index)
 
-        return HistoriographyTreeNode(children, historiographies, t2s, s2t), None
+        return HistoriographyTreeNode(children, historiographies, t2s, s2t), False, None
 
     if isinstance(note, Replace):
         existing_historiography = structure.historiographies[note.index].historiography
@@ -55,11 +75,7 @@ def y_note_play(note, structure, recurse, possible_timelines):
 
         rhi = RecursiveHistoryInfo(s2t[note.index], child_per_step_info)
 
-        return HistoriographyTreeNode(children, historiographies, t2s, s2t), rhi
-
-    if isinstance(note, TextBecome):
-        # We're "misreusing" TextBecome here (it serves as the leaf of both TreeNode and HistoriographyTreeNode).
-        return TreeText(note.unicode_, 'no metadata available'), None
+        return HistoriographyTreeNode(children, historiographies, t2s, s2t), False, rhi
 
     raise Exception("Unknown Note")
 
@@ -111,11 +127,11 @@ def construct_y(tree_lookup, possible_timelines, historiography, edge_nout_hash)
     whats_new_pod = historiography_at.whats_new_pod()
     if whats_new_pod is None:
         # if there's _nothing_ you've seen before, start with an empty structure
-        structure = None
+        structure, dissonant = None, False
     else:
         # The below is by definition: the POD with "what's new", so you must have seen (and built and stored) it before
         assert whats_new_pod in tree_lookup
-        structure = tree_lookup[whats_new_pod]
+        structure, dissonant = tree_lookup[whats_new_pod]
 
     new_hashes = reversed(list(historiography_at.whats_new()))
     per_step_info = []
@@ -123,10 +139,10 @@ def construct_y(tree_lookup, possible_timelines, historiography, edge_nout_hash)
     for new_hash in new_hashes:
         new_nout = possible_timelines.get(new_hash)
 
-        structure, rhi = y_note_play(new_nout.note, structure, recurse, possible_timelines)
-        tree_lookup[new_hash] = structure
+        structure, dissonant, rhi = y_note_play(new_nout.note, structure, dissonant, recurse, possible_timelines)
+        tree_lookup[new_hash] = structure, dissonant
 
-        per_step_info.append((new_hash, rhi))
+        per_step_info.append((new_hash, dissonant, rhi))
 
     return structure, historiography_at, per_step_info
 

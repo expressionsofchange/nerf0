@@ -1,6 +1,6 @@
 >>> from hashstore import HashStore
 >>> from legato import parse_nout, NoutBlock, NoutBegin, all_preceding_nout_hashes
->>> from clef import BecomeNode, TextBecome, Insert, Replace
+>>> from clef import BecomeNode, TextBecome, Insert, Replace, Delete
 >>> from construct_y import construct_y_from_scratch
 >>> 
 >>> possible_timelines = HashStore(parse_nout)
@@ -24,7 +24,7 @@ The structure of Nouts & Notes below matches the drawing in green in the blue bo
 >>> tree, historiography_at, per_step_info = construct_y_from_scratch(possible_timelines, hash_replace_00b)
 >>> 
 >>> def steps_recursively(indentation, per_step_info):
-...     for nout_hash, rhi in per_step_info:
+...     for nout_hash, dissonant, rhi in per_step_info:
 ...         print(" " * indentation, nout_hash)
 ...         if rhi is not None:
 ...             t_address, children_steps = rhi
@@ -54,3 +54,58 @@ So, what's actually alive at "level 1"?
 
 Note that there is no historiography that contains the node for the Text "a" (1f2cf5ca7d0d); this is a consequence of
 (and OK because of) the fact that 1e2072cbda0a is not alive.
+
+
+## Breaking stuff
+
+Now we make something similar, but start off our history in a broken state (delete at an unknown address)
+
+>>> hash_node = possible_timelines.add(NoutBlock(BecomeNode(), hash_begin))
+>>> 
+>>> hash_broken = possible_timelines.add(NoutBlock(Delete(44), hash_node))
+>>> 
+>>> hash_b = possible_timelines.add(NoutBlock(TextBecome("b"), hash_begin))
+>>> hash_insert_0b = possible_timelines.add(NoutBlock(Insert(0, hash_b), hash_node))
+>>> hash_replace_00b = possible_timelines.add(NoutBlock(Replace(0, hash_insert_0b), hash_broken))
+>>> 
+>>> tree, historiography_at, per_step_info = construct_y_from_scratch(possible_timelines, hash_replace_00b)
+>>> 
+
+The result: notes that follow a broken action are still converted into steps, but not recursively explored.
+The reasoning is: after breakage, all bets are off (but you still want to display as much info as possible)
+
+In fact, we can do even slightly better: because recursive information
+The only thing we _cannot_ do after breakage is keep updating Historiographies (we wouldn't know which one
+to update). But the recursive information is an history on its own, independent of its parent, so we could
+display it just fine.
+
+But for now, I want to push on the GUI first.
+
+>>> steps_recursively(0, per_step_info)
+ 437ba946fac9
+ a59aeef1b49b
+ 436373b77a49
+
+
+What about breakage in dead branches of history? This does not affect live branches.
+
+A somewhat related remark is: A dissonent _does not_ break its parent: the parent's indexing scheme is still good, and
+all actions in other subtrees are independent.
+
+
+>>> hash_insert_0broken = possible_timelines.add(NoutBlock(Insert(0, hash_broken), hash_node))
+>>> 
+>>> hash_b = possible_timelines.add(NoutBlock(TextBecome("b"), hash_begin))
+>>> hash_insert_0b = possible_timelines.add(NoutBlock(Insert(0, hash_b), hash_node))
+>>> hash_replace_00b = possible_timelines.add(NoutBlock(Replace(0, hash_insert_0b), hash_insert_0broken))
+>>> 
+>>> tree, historiography_at, per_step_info = construct_y_from_scratch(possible_timelines, hash_replace_00b)
+>>> steps_recursively(0, per_step_info)
+ 437ba946fac9
+ bbe8355a0520
+     437ba946fac9
+     a59aeef1b49b
+ fe392466c909
+     25bc3c945eb5
+         81e6591ff251
+

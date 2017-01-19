@@ -761,7 +761,7 @@ class HistoryWidget(Widget):
         per_step_offset_non_terminals = []
         offset_y = 0
 
-        for i, (nout_hash, rhi) in enumerate(per_step_info):
+        for i, (nout_hash, dissonant, rhi) in enumerate(per_step_info):
             this_s_path = s_path + [i]
 
             box_color = Color(*LIGHT_YELLOW)
