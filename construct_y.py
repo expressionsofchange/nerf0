@@ -119,6 +119,12 @@ def construct_y(tree_lookup, possible_timelines, historiography, edge_nout_hash)
         that no further querying of deadness is required)
     """
 
+    # Reservations about Historiography & HistoriographyTreeNode: are those not over-engineered? As it stands, they're
+    # being used only for:
+    # * answering the "what's new?" questions.
+    # * spacetime mappings
+    # Perhapse we can simply use a set of all seen hashes, and a spacetime mapping? TBD...
+
     def recurse(h, enh):
         return construct_y(tree_lookup, possible_timelines, h, enh)
 
