@@ -33,6 +33,7 @@ from edit_structure import EditStructure
 from construct_edits import edit_note_play, bubble_history_up
 
 from pp_annotations import PPNone, PPSingleLine, PPLispy
+from cut_paste import some_more_cut_paste
 
 from annotations import Annotation
 from trees import (
@@ -693,11 +694,12 @@ ColWidths = namedtuple('ColWidths', ('my_hash', 'prev_hash', 'note', 'payload'))
 
 GREY = (0.95, 0.95, 0.95, 1)  # Ad Hoc Grey
 LIGHT_YELLOW = (1, 1, 0.97, 1)  # Ad Hoc Light Yellow
-RED = (1, 0.8, 0.8, 1)  # ad hoc; fine-tune please
+RED = (1, 0.5, 0.5, 1)  # ad hoc; fine-tune please
+PINK = (1, 0.95, 0.95, 1)  # ad hoc; fine-tune please
 DARK_GREY = (0.5, 0.5, 0.5, 1)  # ad hoc; fine-tune please
 
 
-class HistoryWidget(Widget):
+class HistoryWidget(Widget, FocusBehavior):
 
     def __init__(self, **kwargs):
         self.possible_timelines = kwargs.pop('possible_timelines')
@@ -706,6 +708,8 @@ class HistoryWidget(Widget):
         super(HistoryWidget, self).__init__(**kwargs)
 
         self.s_cursor = None
+        self.per_step_info = []
+        self.nout_hash = None
 
         self.bind(pos=self.refresh)
         self.bind(size=self.refresh)
@@ -713,6 +717,44 @@ class HistoryWidget(Widget):
     def update_nout_hash(self, nout_hash):
         self.nout_hash = nout_hash
         self.refresh()
+
+    def keyboard_on_key_down(self, window, keycode, text, modifiers):
+        result = FocusBehavior.keyboard_on_key_down(self, window, keycode, text, modifiers)
+
+        code, textual_code = keycode
+
+        if textual_code in ['x', 'del']:
+            if self.s_cursor is None:
+                return result
+
+            top_index = self.s_cursor[0]
+            to_be_deleted, error, rhi = self.per_step_info[top_index]
+
+            if self.nout_hash == to_be_deleted:
+                # there's no reattaching, just truncation
+                self.update_nout_hash(self.possible_timelines.get(to_be_deleted).previous_hash)
+            else:
+                results = some_more_cut_paste(
+                    self.possible_timelines,
+                    self.nout_hash,
+                    to_be_deleted,
+                    self.possible_timelines.get(to_be_deleted).previous_hash)
+
+                last_hash = self.nout_hash  # for the no-results case... though I wonder if that's even possible?
+
+                for possibility in results:
+                    # this is not the canonical approach! (but i'm doubting whether the canonical approach was the
+                    # correct one anyway)
+                    last_hash = self.possible_timelines.add(possibility.nout)
+
+                # because we cut at the top level only, there's no need to bubble.
+                self.update_nout_hash(last_hash)
+
+            # (maybe something with cursor-stability? though there's not much we can do)
+
+            # NOW ALL WE NEED IS TO SEND THE RESULT BACK
+
+        return result
 
     def refresh(self, *args):
         # As it stands: _PURE_ copy-pasta from TreeWidget;
@@ -731,10 +773,12 @@ class HistoryWidget(Widget):
             return
 
         with apply_offset(self.canvas, self.offset):
-            yatn, h2, per_step_info = construct_y_from_scratch(self.possible_timelines, self.nout_hash)
+            # many options for optimization/simplification here; e.g. constructing self.per_step_info outside of the
+            # drawing loop, and sharing results_lookup more globally.
+            yatn, h2, self.per_step_info = construct_y_from_scratch(self.possible_timelines, self.nout_hash)
             offset_nonterminals = self.some_recursive_thing(
                 yatn,
-                per_step_info,
+                self.per_step_info,
                 [],
                 list(all_preceding_nout_hashes(self.possible_timelines, self.nout_hash)),
                 [],
@@ -766,7 +810,9 @@ class HistoryWidget(Widget):
 
             box_color = Color(*LIGHT_YELLOW)
 
-            if alive_at_my_level is None:
+            if dissonant:
+                box_color = Color(*PINK)  # deleted b/c of parent
+            elif alive_at_my_level is None:
                 box_color = Color(*RED)  # deleted b/c of parent
             else:
                 if nout_hash not in alive_at_my_level:
