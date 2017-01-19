@@ -483,7 +483,7 @@ class TreeWidget(Widget, FocusBehavior):
             Rectangle(pos=self.pos, size=self.size,)
 
         with apply_offset(self.canvas, self.offset):
-            self.box_structure = self._nt_for_node(self.ds.pp_tree, [])
+            self.box_structure = self._nt_for_node(self.ds.pp_tree, [], self.ds.pp_tree.underlying_node.broken)
             self._render_box(self.box_structure)
 
     def on_touch_down(self, touch):
@@ -561,7 +561,7 @@ class TreeWidget(Widget, FocusBehavior):
         ti.focus = True
 
     # ## Section for drawing boxes
-    def _t_for_text(self, text, is_cursor):
+    def _t_for_text(self, text, box_color):
         text_texture = self._texture_for_text(text)
         content_height = text_texture.height
         content_width = text_texture.width
@@ -569,11 +569,6 @@ class TreeWidget(Widget, FocusBehavior):
         top_left = 0, 0
         bottom_left = (top_left[X], top_left[Y] - PADDING - MARGIN - content_height - MARGIN - PADDING)
         bottom_right = (bottom_left[X] + PADDING + MARGIN + content_width + MARGIN + PADDING, bottom_left[Y])
-
-        if is_cursor:
-            box_color = Color(0.95, 0.95, 0.95, 1)  # Ad Hoc Grey
-        else:
-            box_color = Color(1, 1, 0.97, 1)  # Ad Hoc Light Yellow
 
         instructions = [
             box_color,
@@ -591,7 +586,14 @@ class TreeWidget(Widget, FocusBehavior):
 
         return BoxTerminal(instructions, bottom_right)
 
-    def _nt_for_node(self, annotated_node, s_address):
+    def color_for_cursor(self, is_cursor, broken):
+        if is_cursor:
+            return Color(0.95, 0.95, 0.95, 1)  # Ad Hoc Grey
+        if broken:
+            return Color(*PINK)
+        return Color(1, 1, 0.97, 1)  # Ad Hoc Light Yellow
+
+    def _nt_for_node(self, annotated_node, s_address, broken):
         lookup = {
             PPNone: self._nt_for_node_single_line,
             PPSingleLine: self._nt_for_node_single_line,
@@ -599,16 +601,16 @@ class TreeWidget(Widget, FocusBehavior):
         }
         pp_annotation = annotated_node.annotation
         m = lookup[type(pp_annotation)]
-        return m(annotated_node, s_address)
+        return m(annotated_node, s_address, broken or annotated_node.underlying_node.broken)
 
-    def _nt_for_node_single_line(self, annotated_node, s_address):
+    def _nt_for_node_single_line(self, annotated_node, s_address, broken):
         is_cursor = s_address == self.ds.s_cursor
         node = annotated_node.underlying_node
 
         if isinstance(node, TreeText):
-            return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text(node.unicode_, is_cursor))])
+            return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text(node.unicode_, self.color_for_cursor(is_cursor, broken)))])
 
-        t = self._t_for_text("(", is_cursor)
+        t = self._t_for_text("(", self.color_for_cursor(is_cursor, broken))
         offset_terminals = [
             no_offset(t),
         ]
@@ -618,11 +620,11 @@ class TreeWidget(Widget, FocusBehavior):
         offset_down = 0
 
         for i, child in enumerate(annotated_node.children):
-            nt = self._nt_for_node_single_line(child, s_address + [i])
+            nt = self._nt_for_node_single_line(child, s_address + [i], broken or child.underlying_node.broken)
             offset_nonterminals.append(OffsetBox((offset_right, offset_down), nt))
             offset_right += nt.outer_dimensions[X]
 
-        t = self._t_for_text(")", is_cursor)
+        t = self._t_for_text(")", self.color_for_cursor(is_cursor, broken))
         offset_terminals.append(OffsetBox((offset_right, offset_down), t))
 
         return BoxNonTerminal(
@@ -630,21 +632,21 @@ class TreeWidget(Widget, FocusBehavior):
             offset_nonterminals,
             offset_terminals)
 
-    def _nt_for_node_as_todo_list(self, annotated_node, s_address):
+    def _nt_for_node_as_todo_list(self, annotated_node, s_address, broken):
         raise Exception("Not updated for the introduction of PP-annotations")
         is_cursor = s_address == self.ds.s_cursor
 
         node = annotated_node.underlying_node
 
         if isinstance(node, TreeText):
-            return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text(node.unicode_, is_cursor))])
+            return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text(node.unicode_, self.color_for_cursor(is_cursor, broken)))])
 
         if len(annotated_node.children) == 0:
-            return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text("(...)", is_cursor))])
+            return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text("(...)", self.color_for_cursor(is_cursor, broken)))])
 
         # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that we
         # are robust for (we render it as flat text); but it's not the expected use-case.
-        nt = self._nt_for_node_single_line(annotated_node.children[0], s_address + [0])
+        nt = self._nt_for_node_single_line(annotated_node.children[0], s_address + [0], broken or annotated_node.children[0].underlying_node.broken)
         offset_nonterminals = [
             no_offset(nt)
         ]
@@ -652,7 +654,7 @@ class TreeWidget(Widget, FocusBehavior):
         offset_right = 50  # Magic number for indentation
 
         for i, child in enumerate(annotated_node.children[1:]):
-            nt = self._nt_for_node_as_todo_list(child, s_address + [i + 1])
+            nt = self._nt_for_node_as_todo_list(child, s_address + [i + 1], broken or child.underlying_node.broken)
             offset_nonterminals.append(OffsetBox((offset_right, offset_down), nt))
             offset_down += nt.outer_dimensions[Y]
 
@@ -661,7 +663,7 @@ class TreeWidget(Widget, FocusBehavior):
             offset_nonterminals,
             [])
 
-    def _nt_for_node_as_lispy_layout(self, annotated_node, s_address):
+    def _nt_for_node_as_lispy_layout(self, annotated_node, s_address, broken):
         # "Lisp Style indentation, i.e. xxx yyy
         #                                   zzz
         is_cursor = s_address == self.ds.s_cursor
@@ -669,9 +671,9 @@ class TreeWidget(Widget, FocusBehavior):
         node = annotated_node.underlying_node
 
         if isinstance(node, TreeText):
-            return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text(node.unicode_, is_cursor))])
+            return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text(node.unicode_, self.color_for_cursor(is_cursor, broken)))])
 
-        t = self._t_for_text("(", is_cursor)
+        t = self._t_for_text("(", self.color_for_cursor(is_cursor, broken))
         offset_right = t.outer_dimensions[X]
         offset_down = 0
 
@@ -683,7 +685,7 @@ class TreeWidget(Widget, FocusBehavior):
         if len(annotated_node.children) > 0:
             # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that
             # we are robust for (we render it as flat text); but it's not the expected use-case.
-            nt = self._nt_for_node(annotated_node.children[0], s_address + [0])  # CHECK! (and potentially remove the warning?)
+            nt = self._nt_for_node(annotated_node.children[0], s_address + [0], broken or annotated_node.children[0].underlying_node.broken)  # CHECK! (and potentially remove the warning?)
             offset_nonterminals.append(
                 OffsetBox((offset_right, offset_down), nt)
             )
@@ -691,7 +693,7 @@ class TreeWidget(Widget, FocusBehavior):
 
             if len(annotated_node.children) > 1:
                 for i, child_x in enumerate(annotated_node.children[1:]):
-                    nt = self._nt_for_node(child_x, s_address + [i + 1])
+                    nt = self._nt_for_node(child_x, s_address + [i + 1], broken or child_x.underlying_node.broken)
                     offset_nonterminals.append(OffsetBox((offset_right, offset_down), nt))
                     offset_down += nt.outer_dimensions[Y]
 
@@ -705,7 +707,7 @@ class TreeWidget(Widget, FocusBehavior):
         else:
             offset_right = t.outer_dimensions[X]
 
-        t = self._t_for_text(")", is_cursor)
+        t = self._t_for_text(")", self.color_for_cursor(is_cursor, broken))
         offset_terminals.append(OffsetBox((offset_right, offset_down), t))
 
         return BoxNonTerminal(
