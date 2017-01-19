@@ -261,8 +261,8 @@ class TreeWidget(Widget, FocusBehavior):
         if last_actuality is None:
             new_tree = self.ds.tree
         else:
-            new_tree, error = construct_x(self.all_trees, self.possible_timelines, last_actuality.nout_hash)
-            assert error is False, "Tree-widget blah.. not expected to deal with incorrect histories.."
+            new_tree = construct_x(self.all_trees, self.possible_timelines, last_actuality.nout_hash)
+            assert new_tree.broken is False, "Tree-widget blah.. not expected to deal with incorrect histories.."
 
         self.ds = EditStructure(
             new_tree,
@@ -351,10 +351,9 @@ class TreeWidget(Widget, FocusBehavior):
 
         self.refresh()
 
-    def _create_child_window(self):
+    def _child_channel_for_s_address(self, s_address):
         child_channel = ClosableChannel()
-        child_lives_at_t_address = t_address_for_s_address(self.ds.tree, self.ds.s_cursor)
-        cursor_node = node_for_s_address(self.ds.tree, self.ds.s_cursor)
+        child_lives_at_t_address = t_address_for_s_address(self.ds.tree, s_address)
 
         def receive_from_child(data):
             # data :: Possibility | Actuality
@@ -414,6 +413,11 @@ class TreeWidget(Widget, FocusBehavior):
             send_to_child(Actuality(node.metadata.nout_hash))  # this kind of always-send behavior can be optimized
 
         self.notify_children.append(notify_child)
+        return child_channel
+
+    def _create_child_window(self):
+        child_channel = self._child_channel_for_s_address(self.ds.s_cursor)
+        cursor_node = node_for_s_address(self.ds.tree, self.ds.s_cursor)
 
         new_widget = self.report_new_tree_to_app(child_channel)
         new_widget.receive_from_channel(Actuality(cursor_node.metadata.nout_hash))
