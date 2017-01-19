@@ -32,6 +32,7 @@ from s_address import node_for_s_address
 from edit_structure import EditStructure
 from construct_edits import edit_note_play, bubble_history_up
 
+from hashstore import Hash
 from pp_annotations import PPNone, PPSingleLine, PPLispy
 from cut_paste import some_more_cut_paste
 
@@ -101,6 +102,17 @@ LabelBase.register(name="DejaVu",
 
 
 OffsetBox = namedtuple('OffsetBox', ('offset', 'item'))
+
+BlaDieBla = namedtuple('BlaDieBla', ('do_create', 'do_kickoff'))
+
+
+def calc_possibility(nout):
+    # Note: the're some duplication here of logic that's also elsewhere, e.g. the calculation of the hash was
+    # copy/pasted from the HashStore implementation; but we need it here again.
+
+    bytes_ = nout.as_bytes()
+    hash_ = Hash.for_bytes(bytes_)
+    return Possibility(nout), hash_
 
 
 @contextmanager
@@ -226,14 +238,16 @@ class TreeWidget(Widget, FocusBehavior):
         if isinstance(data, Actuality):
             t_cursor = t_address_for_s_address(self.ds.tree, self.ds.s_cursor)
             tree = construct_x(self.all_trees, self.possible_timelines, data.nout_hash)
-            assert tree.broken is False, "Tree-widget blah.. not expected to deal with incorrect histories.."
 
             s_cursor = best_s_address_for_t_address(tree, t_cursor)
             pp_annotations = self.ds.pp_annotations[:]
 
             self.ds = EditStructure(tree, s_cursor, pp_annotations, construct_pp_tree(tree, pp_annotations))
 
-            self.cursor_channel.broadcast(node_for_s_address(self.ds.tree, self.ds.s_cursor).metadata.nout_hash)
+            # TODO we only really need to broadcast the new t_cursor if it has changed (e.g. because the previously
+            # selected t_cursor is no longer valid)
+            self.bladiebla(t_address_for_s_address(self.ds.tree, self.ds.s_cursor))
+
             self.refresh()
 
             for notify_child in self.notify_children:
@@ -243,9 +257,29 @@ class TreeWidget(Widget, FocusBehavior):
         self.closed = True
         self.refresh()
 
+    def bladiebla(self, t_address):
+        def do_create():
+            channel, send_to_child, close_child = self._child_channel_for_t_address(t_address)
+            self.send_hw_data = send_to_child  # or... bring do_kickoff() in closure here.
+            return channel
+
+        def do_kickoff():
+            # TODO this is actually rather soon.... otherwise what good is the channel :-D
+            # once we are going to listen on the channel ourselves, we must ensure to use the .send here to avoid
+            # hearing ourselves.
+            s_address = get_s_address_for_t_address(self.ds.tree, t_address)
+
+            # the s_address is expected to exist: do_kickoff is assumed to be very quick after the cursor move... and
+            # you cannot move the cursor to a non-existent place.
+            assert s_address is not None
+
+            cursor_node = node_for_s_address(self.ds.tree, s_address)
+            self.send_hw_data(Actuality(cursor_node.metadata.nout_hash))
+
+        self.cursor_channel.broadcast(BlaDieBla(do_create, do_kickoff))
+
     def _handle_edit_note(self, edit_note):
         new_s_cursor, posacts, error = edit_note_play(self.ds, edit_note)
-
         self._update_internal_state_for_posacts(posacts, new_s_cursor)
 
     def _update_internal_state_for_posacts(self, posacts, new_s_cursor):
@@ -262,7 +296,6 @@ class TreeWidget(Widget, FocusBehavior):
             new_tree = self.ds.tree
         else:
             new_tree = construct_x(self.all_trees, self.possible_timelines, last_actuality.nout_hash)
-            assert new_tree.broken is False, "Tree-widget blah.. not expected to deal with incorrect histories.."
 
         self.ds = EditStructure(
             new_tree,
@@ -270,7 +303,10 @@ class TreeWidget(Widget, FocusBehavior):
             self.ds.pp_annotations[:],
             construct_pp_tree(new_tree, self.ds.pp_annotations)
         )
-        self.cursor_channel.broadcast(node_for_s_address(self.ds.tree, self.ds.s_cursor).metadata.nout_hash)
+
+        # TODO we only really need to broadcast the new t_cursor if it has changed.
+        self.bladiebla(t_address_for_s_address(self.ds.tree, self.ds.s_cursor))
+
         self.refresh()
 
         if last_actuality is not None:
@@ -351,9 +387,8 @@ class TreeWidget(Widget, FocusBehavior):
 
         self.refresh()
 
-    def _child_channel_for_s_address(self, s_address):
+    def _child_channel_for_t_address(self, t_address):
         child_channel = ClosableChannel()
-        child_lives_at_t_address = t_address_for_s_address(self.ds.tree, s_address)
 
         def receive_from_child(data):
             # data :: Possibility | Actuality
@@ -361,7 +396,7 @@ class TreeWidget(Widget, FocusBehavior):
                 self.send_to_channel(data)
 
             else:  # i.e. isinstance(data, Actuality):
-                s_address = get_s_address_for_t_address(self.ds.tree, child_lives_at_t_address)
+                s_address = get_s_address_for_t_address(self.ds.tree, t_address)
                 if s_address is None:
                     # the child represents dead history; its updates are silently ignored.
                     # in practice this "shouldn't happen" in the current version, because closed children no longer
@@ -400,7 +435,7 @@ class TreeWidget(Widget, FocusBehavior):
             # particular t_address (further changes cannot affect the address); [caveats may apply for deletions
             # that become dead because they are on a dead branch]
 
-            s_address = get_s_address_for_t_address(self.ds.tree, child_lives_at_t_address)
+            s_address = get_s_address_for_t_address(self.ds.tree, t_address)
             if s_address is None:
                 # as it stands, it's possible to call close_child() multiple times (which we do). This is ugly but
                 # it works (the calls are idempotent)
@@ -413,10 +448,11 @@ class TreeWidget(Widget, FocusBehavior):
             send_to_child(Actuality(node.metadata.nout_hash))  # this kind of always-send behavior can be optimized
 
         self.notify_children.append(notify_child)
-        return child_channel
+        return child_channel, send_to_child, close_child
 
     def _create_child_window(self):
-        child_channel = self._child_channel_for_s_address(self.ds.s_cursor)
+        child_lives_at_t_address = t_address_for_s_address(self.ds.tree, self.ds.s_cursor)
+        child_channel, _, _ = self._child_channel_for_t_address(child_lives_at_t_address)
         cursor_node = node_for_s_address(self.ds.tree, self.ds.s_cursor)
 
         new_widget = self.report_new_tree_to_app(child_channel)
@@ -709,6 +745,10 @@ class HistoryWidget(Widget, FocusBehavior):
         self.possible_timelines = kwargs.pop('possible_timelines')
         self.all_trees = kwargs.pop('all_trees')
 
+        # Not the best name ever, but at least it clearly indicates we're talking about the channel which contains
+        # information on "data" changes (as opposed to "cursor" changes)
+        self.data_channel = None
+
         super(HistoryWidget, self).__init__(**kwargs)
 
         self.s_cursor = None
@@ -717,6 +757,24 @@ class HistoryWidget(Widget, FocusBehavior):
 
         self.bind(pos=self.refresh)
         self.bind(size=self.refresh)
+
+    def parent_cursor_update(self, data):
+        do_create, do_kickoff = data.do_create, data.do_kickoff
+        # TODO explain those parameters (but only once we're sure they're stable)
+
+        if self.data_channel is not None:
+            pass  # TODO close it!
+
+        self.data_channel = do_create()
+        self.send_to_channel, close_must_be_used = self.data_channel.connect(self.receive_from_parent)
+
+        do_kickoff()
+
+    def receive_from_parent(self, data):
+        # data :: Possibility | Actuality
+        # there is no else branch: Possibility only travels _to_ the channel;
+        if isinstance(data, Actuality):
+            self.update_nout_hash(data.nout_hash)
 
     def update_nout_hash(self, nout_hash):
         self.nout_hash = nout_hash
@@ -736,7 +794,8 @@ class HistoryWidget(Widget, FocusBehavior):
 
             if self.nout_hash == to_be_deleted:
                 # there's no reattaching, just truncation
-                self.update_nout_hash(self.possible_timelines.get(to_be_deleted).previous_hash)
+                last_hash = self.possible_timelines.get(to_be_deleted).previous_hash
+
             else:
                 results = some_more_cut_paste(
                     self.possible_timelines,
@@ -749,14 +808,14 @@ class HistoryWidget(Widget, FocusBehavior):
                 for possibility in results:
                     # this is not the canonical approach! (but i'm doubting whether the canonical approach was the
                     # correct one anyway)
-                    last_hash = self.possible_timelines.add(possibility.nout)
+                    self.send_to_channel(possibility)
+                    _, last_hash = calc_possibility(possibility.nout)
 
-                # because we cut at the top level only, there's no need to bubble.
-                self.update_nout_hash(last_hash)
+            # because we cut at the top level only, there's no need to bubble.
+            self.update_nout_hash(last_hash)
 
             # (maybe something with cursor-stability? though there's not much we can do)
-
-            # NOW ALL WE NEED IS TO SEND THE RESULT BACK
+            self.send_to_channel(Actuality(last_hash))
 
         return result
 
@@ -1031,7 +1090,7 @@ class TestApp(App):
 
         self.vertical_layout.add_widget(horizontal_layout)
 
-        tree.cursor_channel.connect(history_widget.update_nout_hash)
+        tree.cursor_channel.connect(history_widget.parent_cursor_update)
         tree.focus = True
         return tree
 
