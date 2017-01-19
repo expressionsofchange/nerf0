@@ -103,8 +103,6 @@ LabelBase.register(name="DejaVu",
 
 OffsetBox = namedtuple('OffsetBox', ('offset', 'item'))
 
-BlaDieBla = namedtuple('BlaDieBla', ('do_create', 'do_kickoff'))
-
 
 def calc_possibility(nout):
     # Note: the're some duplication here of logic that's also elsewhere, e.g. the calculation of the hash was
@@ -246,7 +244,7 @@ class TreeWidget(Widget, FocusBehavior):
 
             # TODO we only really need to broadcast the new t_cursor if it has changed (e.g. because the previously
             # selected t_cursor is no longer valid)
-            self.bladiebla(t_address_for_s_address(self.ds.tree, self.ds.s_cursor))
+            self.broadcast_cursor_update(t_address_for_s_address(self.ds.tree, self.ds.s_cursor))
 
             self.refresh()
 
@@ -257,26 +255,37 @@ class TreeWidget(Widget, FocusBehavior):
         self.closed = True
         self.refresh()
 
-    def bladiebla(self, t_address):
+    def broadcast_cursor_update(self, t_address):
+        """
+        The distinction between "somebody moved the cursor" and "the selected _data_ has changed" is relevant for other
+        windows that show something "under the cursor". This is the more so if such windows do not communicate all their
+        changes back to us directly (autosave=False).
+
+        The offered choices / information to the user on what to do with the not yet saved stuff may differ in those 2
+        cases.
+
+        We don't want to expose our address space (t addresses) to our children, but still want to allow for such a
+        distinction. Solution: we broadcast a mechanism `do_create` which may be used to create a data channel.
+        """
+
         def do_create():
             channel, send_to_child, close_child = self._child_channel_for_t_address(t_address)
-            self.send_hw_data = send_to_child  # or... bring do_kickoff() in closure here.
-            return channel
 
-        def do_kickoff():
-            # TODO this is actually rather soon.... otherwise what good is the channel :-D
-            # once we are going to listen on the channel ourselves, we must ensure to use the .send here to avoid
-            # hearing ourselves.
-            s_address = get_s_address_for_t_address(self.ds.tree, t_address)
+            def do_kickoff():
+                """After the child has connected its listeners to the channel, it wants to know the latest state."""
+                # the s_address is expected to exist (and correct): do_kickoff is assumed to be very quick after the
+                # cursor move... and you cannot move the cursor to a non-existent place.
+                # Regarding using do_kickoff() and do_create() with some time between them: YAGNI.
+                s_address = get_s_address_for_t_address(self.ds.tree, t_address)
 
-            # the s_address is expected to exist: do_kickoff is assumed to be very quick after the cursor move... and
-            # you cannot move the cursor to a non-existent place.
-            assert s_address is not None
+                assert s_address is not None
 
-            cursor_node = node_for_s_address(self.ds.tree, s_address)
-            self.send_hw_data(Actuality(cursor_node.metadata.nout_hash))
+                cursor_node = node_for_s_address(self.ds.tree, s_address)
+                send_to_child(Actuality(cursor_node.metadata.nout_hash))
 
-        self.cursor_channel.broadcast(BlaDieBla(do_create, do_kickoff))
+            return channel, do_kickoff
+
+        self.cursor_channel.broadcast(do_create)
 
     def _handle_edit_note(self, edit_note):
         new_s_cursor, posacts, error = edit_note_play(self.ds, edit_note)
@@ -305,7 +314,7 @@ class TreeWidget(Widget, FocusBehavior):
         )
 
         # TODO we only really need to broadcast the new t_cursor if it has changed.
-        self.bladiebla(t_address_for_s_address(self.ds.tree, self.ds.s_cursor))
+        self.broadcast_cursor_update(t_address_for_s_address(self.ds.tree, self.ds.s_cursor))
 
         self.refresh()
 
@@ -759,13 +768,12 @@ class HistoryWidget(Widget, FocusBehavior):
         self.bind(size=self.refresh)
 
     def parent_cursor_update(self, data):
-        do_create, do_kickoff = data.do_create, data.do_kickoff
-        # TODO explain those parameters (but only once we're sure they're stable)
+        do_create = data
 
         if self.data_channel is not None:
             pass  # TODO close it!
 
-        self.data_channel = do_create()
+        self.data_channel, do_kickoff = do_create()
         self.send_to_channel, close_must_be_used = self.data_channel.connect(self.receive_from_parent)
 
         do_kickoff()
