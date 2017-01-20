@@ -608,7 +608,8 @@ class TreeWidget(Widget, FocusBehavior):
         node = annotated_node.underlying_node
 
         if isinstance(node, TreeText):
-            return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text(node.unicode_, self.color_for_cursor(is_cursor, broken)))])
+            return BoxNonTerminal(s_address, [], [no_offset(
+                self._t_for_text(node.unicode_, self.color_for_cursor(is_cursor, broken)))])
 
         t = self._t_for_text("(", self.color_for_cursor(is_cursor, broken))
         offset_terminals = [
@@ -639,14 +640,18 @@ class TreeWidget(Widget, FocusBehavior):
         node = annotated_node.underlying_node
 
         if isinstance(node, TreeText):
-            return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text(node.unicode_, self.color_for_cursor(is_cursor, broken)))])
+            return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text(
+                node.unicode_, self.color_for_cursor(is_cursor, broken)))])
 
         if len(annotated_node.children) == 0:
-            return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text("(...)", self.color_for_cursor(is_cursor, broken)))])
+            return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text(
+                "(...)", self.color_for_cursor(is_cursor, broken)))])
 
         # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that we
         # are robust for (we render it as flat text); but it's not the expected use-case.
-        nt = self._nt_for_node_single_line(annotated_node.children[0], s_address + [0], broken or annotated_node.children[0].underlying_node.broken)
+        nt = self._nt_for_node_single_line(
+            annotated_node.children[0], s_address + [0], broken or annotated_node.children[0].underlying_node.broken)
+
         offset_nonterminals = [
             no_offset(nt)
         ]
@@ -671,7 +676,8 @@ class TreeWidget(Widget, FocusBehavior):
         node = annotated_node.underlying_node
 
         if isinstance(node, TreeText):
-            return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text(node.unicode_, self.color_for_cursor(is_cursor, broken)))])
+            return BoxNonTerminal(s_address, [], [no_offset(self._t_for_text(
+                node.unicode_, self.color_for_cursor(is_cursor, broken)))])
 
         t = self._t_for_text("(", self.color_for_cursor(is_cursor, broken))
         offset_right = t.outer_dimensions[X]
@@ -685,7 +691,11 @@ class TreeWidget(Widget, FocusBehavior):
         if len(annotated_node.children) > 0:
             # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that
             # we are robust for (we render it as flat text); but it's not the expected use-case.
-            nt = self._nt_for_node(annotated_node.children[0], s_address + [0], broken or annotated_node.children[0].underlying_node.broken)  # CHECK! (and potentially remove the warning?)
+            # CHECK! (and potentially remove the warning?)
+            nt = self._nt_for_node(
+                annotated_node.children[0], s_address + [0],
+                broken or annotated_node.children[0].underlying_node.broken)
+
             offset_nonterminals.append(
                 OffsetBox((offset_right, offset_down), nt)
             )
@@ -942,8 +952,8 @@ class HistoryWidget(Widget, FocusBehavior):
                         alive_at_child_level = None
                     else:
                         child_historiography_in_present = this_yatn.historiographies[child_s_address]
-                        alive_at_child_level = list(
-                            all_preceding_nout_hashes(self.possible_timelines, child_historiography_in_present.nout_hash()))
+                        alive_at_child_level = list(all_preceding_nout_hashes(
+                            self.possible_timelines, child_historiography_in_present.nout_hash()))
 
                 else:
                     alive_at_child_level = None
