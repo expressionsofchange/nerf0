@@ -849,6 +849,7 @@ class HistoryWidget(Widget, FocusBehavior):
             # many options for optimization/simplification here; e.g. constructing self.per_step_info outside of the
             # drawing loop, and sharing results_lookup more globally.
             yatn, h2, self.per_step_info = construct_y_from_scratch(self.possible_timelines, self.nout_hash)
+
             offset_nonterminals = self.some_recursive_thing(
                 yatn,
                 self.per_step_info,
@@ -885,12 +886,12 @@ class HistoryWidget(Widget, FocusBehavior):
 
             alive = False
 
-            if dissonant:
-                box_color = Color(*PINK)
-            elif alive_at_my_level is None:
+            if alive_at_my_level is None:
                 box_color = Color(*RED)  # deleted b/c of parent
             elif nout_hash not in alive_at_my_level:
                 box_color = Color(*DARK_GREY)  # dead branch
+            elif dissonant:
+                box_color = Color(*PINK)
             else:
                 alive = True
 
