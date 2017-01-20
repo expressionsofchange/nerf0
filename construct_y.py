@@ -15,7 +15,7 @@ RecursiveHistoryInfo = namedtuple('RecursiveHistory', (
 
 def y_note_play(note, structure, structure_is_dissonant, recurse, possible_timelines):
     def dissonant():
-        return structure, True, None
+        return structure, True, RecursiveHistoryInfo(None, [])
 
     if structure_is_dissonant:
         # perhaps: don't do this inside y_note_play ? i.e. make y_note_play take non-dissonant structures only.
@@ -26,11 +26,11 @@ def y_note_play(note, structure, structure_is_dissonant, recurse, possible_timel
             return dissonant()  # "You can only BecomeNode out of nothingness"
 
         t2s, s2t = st_become()
-        return HistoriographyTreeNode(l_become(), l_become(), t2s, s2t), False, None
+        return HistoriographyTreeNode(l_become(), l_become(), t2s, s2t), False, RecursiveHistoryInfo(None, [])
 
     if isinstance(note, TextBecome):
         # We're "misreusing" TextBecome here (it serves as the leaf of both TreeNode and HistoriographyTreeNode).
-        return TreeText(note.unicode_, 'no metadata available'), False, None
+        return TreeText(note.unicode_, 'no metadata available'), False, RecursiveHistoryInfo(None, [])
 
     if isinstance(note, Insert):
         if not (0 <= note.index <= len(structure.children)):  # Note: insert _at_ len(..) is ok (a.k.a. append)
@@ -59,8 +59,9 @@ def y_note_play(note, structure, structure_is_dissonant, recurse, possible_timel
         historiographies = l_delete(structure.historiographies, note.index)
 
         t2s, s2t = st_delete(structure.t2s, structure.s2t, note.index)
+        t = structure.s2t[note.index]
 
-        return HistoriographyTreeNode(children, historiographies, t2s, s2t), False, None
+        return HistoriographyTreeNode(children, historiographies, t2s, s2t), False, RecursiveHistoryInfo(t, [])
 
     if isinstance(note, Replace):
         existing_historiography = structure.historiographies[note.index].historiography

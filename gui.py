@@ -879,7 +879,7 @@ class HistoryWidget(Widget, FocusBehavior):
         per_step_offset_non_terminals = []
         offset_y = 0
 
-        for i, (nout_hash, dissonant, rhi) in enumerate(per_step_info):
+        for i, (nout_hash, dissonant, (t, children_steps)) in enumerate(per_step_info):
             this_s_path = s_path + [i]
 
             box_color = Color(*LIGHT_YELLOW)
@@ -919,12 +919,10 @@ class HistoryWidget(Widget, FocusBehavior):
                     terminals.append(OffsetBox((offset_x, 0), self._t_for_text(col_text, box_color, col_width)))
                     offset_x += col_width
 
-            if rhi is not None:
-                t_address, children_steps = rhi
-
+            if t is not None:
                 if alive:
                     this_yatn = t_lookup(present_root_yatn, t_path)
-                    child_s_address = this_yatn.t2s[t_address]
+                    child_s_address = this_yatn.t2s[t]
 
                     child_historiography_in_present = this_yatn.historiographies[child_s_address]
                     alive_at_child_level = list(
@@ -935,7 +933,7 @@ class HistoryWidget(Widget, FocusBehavior):
                 recursive_result = self.some_recursive_thing(
                     present_root_yatn,
                     children_steps,
-                    t_path + [t_address],
+                    t_path + [t],
                     alive_at_child_level,
                     this_s_path,
                     col_widths,
