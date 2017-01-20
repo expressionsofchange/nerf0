@@ -755,6 +755,7 @@ class HistoryWidget(Widget, FocusBehavior):
     def __init__(self, **kwargs):
         self.possible_timelines = kwargs.pop('possible_timelines')
         self.all_trees = kwargs.pop('all_trees')
+        self.display_mode = 's'
 
         # Not the best name ever, but at least it clearly indicates we're talking about the channel which contains
         # information on "data" changes (as opposed to "cursor" changes)
@@ -795,7 +796,15 @@ class HistoryWidget(Widget, FocusBehavior):
 
         code, textual_code = keycode
 
-        if textual_code in ['x', 'del']:
+        if textual_code == 't':
+            self.display_mode = 't'
+            self.refresh()
+
+        elif textual_code == 's':
+            self.display_mode = 's'
+            self.refresh()
+
+        elif textual_code in ['x', 'del']:
             if self.s_cursor is None:
                 return result
 
@@ -911,8 +920,13 @@ class HistoryWidget(Widget, FocusBehavior):
 
             if hasattr(nout.note, 'unicode_'):
                 cols.append((nout.note.unicode_, col_widths.payload))
-            elif hasattr(nout.note, 'index'):
-                cols.append((repr(nout.note.index), col_widths.payload))
+            else:
+                if self.display_mode == 't':
+                    if t is not None:
+                        cols.append(("T: " + repr(t), col_widths.payload))
+                if self.display_mode == 's':
+                    if hasattr(nout.note, 'index'):
+                        cols.append(("S: " + repr(nout.note.index), col_widths.payload))
 
             for col_text, col_width in cols:
                 if col_width > 0:
