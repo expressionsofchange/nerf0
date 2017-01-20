@@ -924,9 +924,13 @@ class HistoryWidget(Widget, FocusBehavior):
                     this_yatn = t_lookup(present_root_yatn, t_path)
                     child_s_address = this_yatn.t2s[t]
 
-                    child_historiography_in_present = this_yatn.historiographies[child_s_address]
-                    alive_at_child_level = list(
-                        all_preceding_nout_hashes(self.possible_timelines, child_historiography_in_present.nout_hash()))
+                    if child_s_address is None:
+                        alive_at_child_level = None
+                    else:
+                        child_historiography_in_present = this_yatn.historiographies[child_s_address]
+                        alive_at_child_level = list(
+                            all_preceding_nout_hashes(self.possible_timelines, child_historiography_in_present.nout_hash()))
+
                 else:
                     alive_at_child_level = None
 
