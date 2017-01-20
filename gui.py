@@ -883,13 +883,16 @@ class HistoryWidget(Widget, FocusBehavior):
 
             box_color = Color(*LIGHT_YELLOW)
 
+            alive = False
+
             if dissonant:
-                box_color = Color(*PINK)  # deleted b/c of parent
+                box_color = Color(*PINK)
             elif alive_at_my_level is None:
                 box_color = Color(*RED)  # deleted b/c of parent
+            elif nout_hash not in alive_at_my_level:
+                box_color = Color(*DARK_GREY)  # dead branch
             else:
-                if nout_hash not in alive_at_my_level:
-                    box_color = Color(*DARK_GREY)  # dead branch
+                alive = True
 
             if this_s_path == self.s_cursor:
                 box_color = Color(*GREY)
@@ -918,9 +921,10 @@ class HistoryWidget(Widget, FocusBehavior):
             if rhi is not None:
                 t_address, children_steps = rhi
 
-                this_yatn = t_lookup(present_root_yatn, t_path)
-                child_s_address = None if this_yatn is None else this_yatn.t2s[t_address]
-                if child_s_address is not None:
+                if alive:
+                    this_yatn = t_lookup(present_root_yatn, t_path)
+                    child_s_address = this_yatn.t2s[t_address]
+
                     child_historiography_in_present = this_yatn.historiographies[child_s_address]
                     alive_at_child_level = list(
                         all_preceding_nout_hashes(self.possible_timelines, child_historiography_in_present.nout_hash()))
