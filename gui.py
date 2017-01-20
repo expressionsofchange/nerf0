@@ -30,11 +30,11 @@ from construct_x import construct_x
 from construct_pp import construct_pp_tree
 from s_address import node_for_s_address
 from edit_structure import EditStructure
+from eh_structure import EHStructure
 from construct_edits import edit_note_play, bubble_history_up
+from construct_eh import eh_note_play
 
-from hashstore import Hash
 from pp_annotations import PPNone, PPSingleLine, PPLispy
-from cut_paste import some_more_cut_paste
 
 from annotations import Annotation
 from trees import (
@@ -67,6 +67,14 @@ from edit_clef import (
     InsertNodeSibbling,
     TextInsert,
     TextReplace,
+)
+
+from edit_history_clef import (
+    EHDelete,
+    EHCursorSet,
+    EHCursorChild,
+    EHCursorDFS,
+    EHCursorParent,
 )
 
 MARGIN = 5
@@ -102,15 +110,6 @@ LabelBase.register(name="DejaVu",
 
 
 OffsetBox = namedtuple('OffsetBox', ('offset', 'item'))
-
-
-def calc_possibility(nout):
-    # Note: the're some duplication here of logic that's also elsewhere, e.g. the calculation of the hash was
-    # copy/pasted from the HashStore implementation; but we need it here again.
-
-    bytes_ = nout.as_bytes()
-    hash_ = Hash.for_bytes(bytes_)
-    return Possibility(nout), hash_
 
 
 @contextmanager
@@ -773,9 +772,15 @@ class HistoryWidget(Widget, FocusBehavior):
 
         super(HistoryWidget, self).__init__(**kwargs)
 
-        self.s_cursor = None
-        self.per_step_info = []
-        self.nout_hash = None
+        # In __init__ we don't have any information available yet on our state. Which means we cannot draw ourselves.
+        # This gets fixed the moment we get some data from e.g. our parent. In practice this happens before we get to
+        # refresh from e.g. the size/pos bindings, but I'd like to make that flow a bit more explicit.
+        #
+        # AFAIU:
+        # 1. We could basically set any value below.
+        # 2. The exact same remarks apply for TreeWidget
+
+        self.ds = EHStructure([], "eh_tn", [0])
 
         self.bind(pos=self.refresh)
         self.bind(size=self.refresh)
@@ -798,7 +803,48 @@ class HistoryWidget(Widget, FocusBehavior):
             self.update_nout_hash(data.nout_hash)
 
     def update_nout_hash(self, nout_hash):
-        self.nout_hash = nout_hash
+        new_eh_tn, h2, new_per_step_info = construct_y_from_scratch(self.possible_timelines, nout_hash)
+
+        # TODO here we can implement cursor_safe-guarding behaviors.
+
+        self.ds = EHStructure(
+            new_per_step_info,
+            new_eh_tn,
+            self.ds.s_cursor,
+        )
+
+        self.refresh()
+
+    def _handle_eh_note(self, eh_note):
+        new_s_cursor, posacts, error = eh_note_play(self.possible_timelines, self.ds, eh_note)
+        self._update_internal_state_for_posacts(posacts, new_s_cursor)
+
+    def _update_internal_state_for_posacts(self, posacts, new_s_cursor):
+        # Strongly inspired by the equivalent method on TreeWidget
+        # Once we start doing this more often, patterns will emerge and we can push for a refactoring
+        last_actuality = None
+
+        for posact in posacts:
+            # Note: if we don't want to autosave, we should make Actuality-sending conditional here.
+            self.send_to_channel(posact)
+
+            if isinstance(posact, Actuality):
+                last_actuality = posact
+
+        if last_actuality is None:
+            new_per_step_info = self.ds.per_step_info
+            new_eh_tn = self.ds.eh_tn
+        else:
+            # many options for optimization/simplification here, such as sharing results_lookup more globally.
+            new_eh_tn, h2, new_per_step_info = construct_y_from_scratch(
+                self.possible_timelines, last_actuality.nout_hash)
+
+        self.ds = EHStructure(
+            new_per_step_info,
+            new_eh_tn,
+            new_s_cursor,
+        )
+
         self.refresh()
 
     def keyboard_on_key_down(self, window, keycode, text, modifiers):
@@ -806,45 +852,25 @@ class HistoryWidget(Widget, FocusBehavior):
 
         code, textual_code = keycode
 
-        if textual_code == 't':
-            self.display_mode = 't'
-            self.refresh()
+        if textual_code in ['left', 'h']:
+            self._handle_eh_note(EHCursorParent())
 
-        elif textual_code == 's':
-            self.display_mode = 's'
+        elif textual_code in ['right', 'l']:
+            self._handle_eh_note(EHCursorChild())
+
+        elif textual_code in ['up', 'k']:
+            self._handle_eh_note(EHCursorDFS(-1))
+
+        elif textual_code in ['down', 'j']:
+            self._handle_eh_note(EHCursorDFS(1))
+
+        elif textual_code in ['t', 's']:
+            # For now I've decided not to put these actions into the EH clef, because they are display-only.
+            self.display_mode = textual_code
             self.refresh()
 
         elif textual_code in ['x', 'del']:
-            if self.s_cursor is None:
-                return result
-
-            top_index = self.s_cursor[0]
-            to_be_deleted, error, rhi = self.per_step_info[top_index]
-
-            if self.nout_hash == to_be_deleted:
-                # there's no reattaching, just truncation
-                last_hash = self.possible_timelines.get(to_be_deleted).previous_hash
-
-            else:
-                results = some_more_cut_paste(
-                    self.possible_timelines,
-                    self.nout_hash,
-                    to_be_deleted,
-                    self.possible_timelines.get(to_be_deleted).previous_hash)
-
-                last_hash = self.nout_hash  # for the no-results case... though I wonder if that's even possible?
-
-                for possibility in results:
-                    # this is not the canonical approach! (but i'm doubting whether the canonical approach was the
-                    # correct one anyway)
-                    self.send_to_channel(possibility)
-                    _, last_hash = calc_possibility(possibility.nout)
-
-            # because we cut at the top level only, there's no need to bubble.
-            self.update_nout_hash(last_hash)
-
-            # (maybe something with cursor-stability? though there's not much we can do)
-            self.send_to_channel(Actuality(last_hash))
+            self._handle_eh_note(EHDelete())
 
         return result
 
@@ -859,21 +885,17 @@ class HistoryWidget(Widget, FocusBehavior):
             Color(1, 1, 1, 1)
             Rectangle(pos=self.pos, size=self.size,)
 
-        if not hasattr(self, 'nout_hash'):
-            # This can happen if we call refresh() before being properly initialized... making sure that cannot happen
-            # is something for a later date.
-            return
-
         with apply_offset(self.canvas, self.offset):
-            # many options for optimization/simplification here; e.g. constructing self.per_step_info outside of the
-            # drawing loop, and sharing results_lookup more globally.
-            yatn, h2, self.per_step_info = construct_y_from_scratch(self.possible_timelines, self.nout_hash)
+            edge_nout_hash, _, _ = self.ds.per_step_info[-1]
 
             offset_nonterminals = self.some_recursive_thing(
-                yatn,
-                self.per_step_info,
+                self.ds.eh_tn,
+                self.ds.per_step_info,
                 [],
-                list(all_preceding_nout_hashes(self.possible_timelines, self.nout_hash)),
+
+                # Alternatively, we use the knowledge that at the top_level "everything is live"
+                list(all_preceding_nout_hashes(self.possible_timelines, edge_nout_hash)),
+
                 [],
                 ColWidths(150, 150, 30, 100),
                 )
@@ -889,7 +911,7 @@ class HistoryWidget(Widget, FocusBehavior):
         Delete: 'D',
     }
 
-    def some_recursive_thing(self, present_root_yatn, per_step_info, t_path, alive_at_my_level, s_path, col_widths):
+    def some_recursive_thing(self, present_root_eh_tn, per_step_info, t_path, alive_at_my_level, s_path, col_widths):
         """
         s_path is an s_path at the level of the _history_
         t_path is a t_path on the underlying structure (tree)
@@ -914,7 +936,7 @@ class HistoryWidget(Widget, FocusBehavior):
             else:
                 alive = True
 
-            if this_s_path == self.s_cursor:
+            if this_s_path == self.ds.s_cursor:
                 box_color = Color(*GREY)
 
             nout = self.possible_timelines.get(nout_hash)
@@ -945,13 +967,13 @@ class HistoryWidget(Widget, FocusBehavior):
 
             if t is not None:
                 if alive:
-                    this_yatn = t_lookup(present_root_yatn, t_path)
-                    child_s_address = this_yatn.t2s[t]
+                    this_eh_tn = t_lookup(present_root_eh_tn, t_path)
+                    child_s_address = this_eh_tn.t2s[t]
 
                     if child_s_address is None:
                         alive_at_child_level = None
                     else:
-                        child_historiography_in_present = this_yatn.historiographies[child_s_address]
+                        child_historiography_in_present = this_eh_tn.historiographies[child_s_address]
                         alive_at_child_level = list(all_preceding_nout_hashes(
                             self.possible_timelines, child_historiography_in_present.nout_hash()))
 
@@ -959,7 +981,7 @@ class HistoryWidget(Widget, FocusBehavior):
                     alive_at_child_level = None
 
                 recursive_result = self.some_recursive_thing(
-                    present_root_yatn,
+                    present_root_eh_tn,
                     children_steps,
                     t_path + [t],
                     alive_at_child_level,
@@ -1074,7 +1096,7 @@ class HistoryWidget(Widget, FocusBehavior):
 
         if clicked_item is not None:
             # THIS IS THE ONLY DIFFERENCE WHILE COPY/PASTING
-            self.s_cursor = clicked_item.semantics
+            self._handle_eh_note(EHCursorSet(clicked_item.semantics))
             self.refresh()
 
         return ret
