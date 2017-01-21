@@ -1,6 +1,6 @@
 # coding=utf-8
 
-from legato import NoutBegin
+from legato import NoutCapo
 
 
 def print_nouts(possible_timelines, present_nout_hash):
@@ -8,7 +8,7 @@ def print_nouts(possible_timelines, present_nout_hash):
     present_nout = possible_timelines.get(present_nout_hash)
     prev_nout = possible_timelines.get(present_nout.previous_hash)
 
-    if prev_nout == NoutBegin():
+    if prev_nout == NoutCapo():
         result = ""
     else:
         result = print_nouts(possible_timelines, present_nout.previous_hash) + "\n"
@@ -20,7 +20,7 @@ def print_nouts_2(possible_timelines, present_nout_hash, indentation, seen):
     def short_repr_nout(nout):
         if hasattr(nout, 'note'):
             return repr(nout.note)
-        return "BEGIN"
+        return "CAPO"
 
     # Shows how the Nouts ref recursively
     if present_nout_hash.as_bytes() in seen:
@@ -29,7 +29,7 @@ def print_nouts_2(possible_timelines, present_nout_hash, indentation, seen):
     seen.add(present_nout_hash.as_bytes())
     present_nout = possible_timelines.get(present_nout_hash)
 
-    if present_nout == NoutBegin():
+    if present_nout == NoutCapo():
         result = ""
     else:
         result = print_nouts_2(possible_timelines, present_nout.previous_hash, indentation, seen) + "\n\n"

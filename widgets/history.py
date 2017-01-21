@@ -6,14 +6,6 @@ from kivy.graphics import Color, Rectangle
 from kivy.metrics import pt
 from kivy.uix.behaviors.focus import FocusBehavior
 
-from clef import (
-    BecomeNode,
-    Delete,
-    Insert,
-    Replace,
-    TextBecome,
-)
-
 
 from dsn.history.clef import (
     EHDelete,
@@ -25,7 +17,14 @@ from dsn.history.clef import (
 from dsn.history.construct import eh_note_play
 from dsn.history.structure import EHStructure
 
-from construct_y import construct_y_from_scratch
+from dsn.s_expr.clef import (
+    BecomeNode,
+    Delete,
+    Insert,
+    Replace,
+    TextBecome,
+)
+from dsn.s_expr.construct_y import construct_y_from_scratch
 
 from historiography import t_lookup
 from legato import all_preceding_nout_hashes

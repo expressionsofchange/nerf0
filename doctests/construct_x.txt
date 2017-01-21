@@ -1,7 +1,7 @@
 >>> from hashstore import Hash
->>> from clef import BecomeNode, TextBecome, Insert, Replace, Delete
->>> from trees import TreeNode, TreeText
->>> from construct_x import x_note_play
+>>> from dsn.s_expr.clef import BecomeNode, TextBecome, Insert, Replace, Delete
+>>> from dsn.s_expr.structure import TreeNode, TreeText
+>>> from dsn.s_expr.construct_x import x_note_play
 >>> 
 >>> metadata = 'ignored for these tests'
 >>> hash = Hash.for_bytes(b'')

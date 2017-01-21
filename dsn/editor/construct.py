@@ -1,6 +1,7 @@
 from s_address import node_for_s_address, s_dfs
 
-from legato import NoutBlock
+from dsn.s_expr.legato import NoutSlur
+
 from manipulations import (
     bubble_history_up,
     calc_possibility,
@@ -9,9 +10,9 @@ from manipulations import (
     replace_text_at,
 )
 
-from clef import Delete
+from dsn.s_expr.clef import Delete
 
-from trees import TreeNode
+from dsn.s_expr.structure import TreeNode
 
 from dsn.editor.clef import (
     CursorChild,
@@ -74,7 +75,7 @@ def edit_note_play(structure, edit_note):
         delete_at_index = structure.s_cursor[-1]
         delete_from_hash = node_for_s_address(structure.tree, delete_from).metadata.nout_hash
 
-        p, h = calc_possibility(NoutBlock(Delete(delete_at_index), delete_from_hash))
+        p, h = calc_possibility(NoutSlur(Delete(delete_at_index), delete_from_hash))
 
         if delete_at_index == len(node_for_s_address(structure.tree, delete_from).children) - 1:
             # deletion makes cursor pos invalid: up to parent (alternative: sibbling-up first, until no more sibblings)

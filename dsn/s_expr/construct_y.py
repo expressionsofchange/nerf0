@@ -1,7 +1,7 @@
-from trees import TreeText
+from dsn.s_expr.structure import TreeText
 from historiography import Historiography, HistoriographyTreeNode
 
-from clef import BecomeNode, TextBecome, Insert, Replace, Delete
+from dsn.s_expr.clef import BecomeNode, TextBecome, Insert, Replace, Delete
 from spacetime import st_become, st_insert, st_replace, st_delete
 from collections import namedtuple
 from list_operations import l_become, l_insert, l_delete, l_replace

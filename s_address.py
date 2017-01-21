@@ -1,7 +1,7 @@
 """
 `node_for_s_address`:
 
->>> from trees import TreeNode
+>>> from dsn.s_expr.structure import TreeNode
 >>>
 >>> node = TreeNode(children=[
 ...     TreeNode(children=[

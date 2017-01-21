@@ -12,7 +12,6 @@ from kivy.uix.behaviors.focus import FocusBehavior
 
 from annotations import Annotation
 from channel import Channel, ClosableChannel
-from construct_x import construct_x
 
 from dsn.editor.clef import (
     CursorChild,
@@ -37,7 +36,9 @@ from dsn.pp.construct import construct_pp_tree
 
 from s_address import node_for_s_address
 from spacetime import t_address_for_s_address, best_s_address_for_t_address, get_s_address_for_t_address
-from trees import TreeNode, TreeText
+
+from dsn.s_expr.structure import TreeNode, TreeText
+from dsn.s_expr.construct_x import construct_x
 
 from widgets.utils import (
     apply_offset,

@@ -1,8 +1,9 @@
-from clef import BecomeNode, Insert, Delete, Replace, TextBecome
-from trees import TreeNode, TreeText, YourOwnHash
 from spacetime import st_become, st_insert, st_replace, st_delete
 from legato import all_nhtups_for_nout_hash
 from list_operations import l_become, l_insert, l_delete, l_replace
+
+from dsn.s_expr.clef import BecomeNode, Insert, Delete, Replace, TextBecome
+from dsn.s_expr.structure import TreeNode, TreeText, YourOwnHash
 
 
 def x_note_play(note, structure, recurse, metadata):

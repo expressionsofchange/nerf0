@@ -1,4 +1,4 @@
-from clef import (
+from dsn.s_expr.clef import (
     BecomeNode,
     Insert,
     Replace,
@@ -6,7 +6,9 @@ from clef import (
 )
 
 from hashstore import Hash
-from legato import NoutBegin, NoutBlock
+from legato import NoutCapo
+from dsn.s_expr.legato import NoutSlur
+
 from posacts import Possibility, Actuality
 from s_address import node_for_s_address
 
@@ -42,7 +44,7 @@ def bubble_history_up(hash_to_bubble, tree, s_address):
         replace_in = node_for_s_address(tree, s_address[:i])
 
         p, hash_to_bubble = calc_possibility(
-            NoutBlock(Replace(s_address[i], hash_to_bubble), replace_in.metadata.nout_hash))
+            NoutSlur(Replace(s_address[i], hash_to_bubble), replace_in.metadata.nout_hash))
 
         posacts.append(p)
 
@@ -55,11 +57,11 @@ def bubble_history_up(hash_to_bubble, tree, s_address):
 def insert_text_at(tree, parent_s_address, index, text):
     parent_node = node_for_s_address(tree, parent_s_address)
 
-    pa0, begin = calc_possibility(NoutBegin())
-    pa1, to_be_inserted = calc_possibility(NoutBlock(TextBecome(text), begin))
+    pa0, begin = calc_possibility(NoutCapo())
+    pa1, to_be_inserted = calc_possibility(NoutSlur(TextBecome(text), begin))
 
     pa2, insertion = calc_possibility(
-        NoutBlock(Insert(index, to_be_inserted), parent_node.metadata.nout_hash))
+        NoutSlur(Insert(index, to_be_inserted), parent_node.metadata.nout_hash))
 
     posacts = bubble_history_up(insertion, tree, parent_s_address)
     return [pa0, pa1, pa2] + posacts
@@ -68,11 +70,11 @@ def insert_text_at(tree, parent_s_address, index, text):
 def insert_node_at(tree, parent_s_address, index):
     parent_node = node_for_s_address(tree, parent_s_address)
 
-    pa0, begin = calc_possibility(NoutBegin())
-    pa1, to_be_inserted = calc_possibility(NoutBlock(BecomeNode(), begin))
+    pa0, begin = calc_possibility(NoutCapo())
+    pa1, to_be_inserted = calc_possibility(NoutSlur(BecomeNode(), begin))
 
     pa2, insertion = calc_possibility(
-        NoutBlock(Insert(index, to_be_inserted), parent_node.metadata.nout_hash))
+        NoutSlur(Insert(index, to_be_inserted), parent_node.metadata.nout_hash))
 
     posacts = bubble_history_up(insertion, tree, parent_s_address)
     return [pa0, pa1, pa2] + posacts
@@ -81,13 +83,13 @@ def insert_node_at(tree, parent_s_address, index):
 def replace_text_at(tree, s_address, text):
     parent_node = node_for_s_address(tree, s_address[:-1])
 
-    pa0, begin = calc_possibility(NoutBegin())
-    pa1, to_be_inserted = calc_possibility(NoutBlock(TextBecome(text), begin))
+    pa0, begin = calc_possibility(NoutCapo())
+    pa1, to_be_inserted = calc_possibility(NoutSlur(TextBecome(text), begin))
 
     index = s_address[-1]
 
     pa2, insertion = calc_possibility(
-        NoutBlock(Replace(index, to_be_inserted), parent_node.metadata.nout_hash))
+        NoutSlur(Replace(index, to_be_inserted), parent_node.metadata.nout_hash))
 
     posacts = bubble_history_up(insertion, tree, s_address[:-1])
     return [pa0, pa1, pa2] + posacts

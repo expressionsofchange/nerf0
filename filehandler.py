@@ -1,5 +1,7 @@
-from legato import NoutBegin, NoutBlock
-from clef import BecomeNode
+from legato import NoutCapo
+from dsn.s_expr.legato import NoutSlur
+
+from dsn.s_expr.clef import BecomeNode
 from posacts import parse_pos_acts, Possibility, Actuality
 from hashstore import Hash
 
@@ -35,10 +37,10 @@ def initialize_history(channel):
         return Hash.for_bytes(bytes_)
 
     def as_iter():
-        begin = NoutBegin()
-        yield Possibility(begin)
+        capo = NoutCapo()
+        yield Possibility(capo)
 
-        root_node_nout = NoutBlock(BecomeNode(), hash_for(begin))
+        root_node_nout = NoutSlur(BecomeNode(), hash_for(capo))
         yield Possibility(root_node_nout)
         yield Actuality(hash_for(root_node_nout))
 

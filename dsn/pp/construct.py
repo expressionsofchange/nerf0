@@ -1,4 +1,4 @@
-from trees import TreeText
+from dsn.s_expr.structure import TreeText
 from annotated_tree import AnnotatedNode
 from spacetime import get_s_address_for_t_address
 from s_address import node_for_s_address

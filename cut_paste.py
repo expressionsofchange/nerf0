@@ -1,6 +1,8 @@
 from hashstore import Hash
 from posacts import Possibility
-from legato import all_nhtups_for_nout_hash, NoutBlock
+from legato import all_nhtups_for_nout_hash
+
+from dsn.s_expr.legato import NoutSlur
 
 
 def calc_possibility(nout):
@@ -25,7 +27,7 @@ def some_cut_paste(possible_timelines, edge_nout_hash, cut_nout_hash, paste_poin
 
     prev = paste_point_hash
     for nh in reversed(todo):
-        nout = NoutBlock(nh.nout.note, prev)
+        nout = NoutSlur(nh.nout.note, prev)
         possibility, prev = calc_possibility(nout)
         yield possibility  # or: possibility.nout
 
@@ -48,6 +50,6 @@ def some_more_cut_paste(possible_timelines, edge_nout_hash, cut_nout_hash, paste
 
     prev = paste_point_hash
     for nh in reversed(todo):
-        nout = NoutBlock(nh.nout.note, prev)
+        nout = NoutSlur(nh.nout.note, prev)
         possibility, prev = calc_possibility(nout)
         yield possibility  # or: possibility.nout

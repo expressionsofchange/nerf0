@@ -1,5 +1,8 @@
 from utils import pmts
-from legato import Nout, parse_nout
+
+from legato import Nout
+from dsn.s_expr.legato import parse_nout
+
 from hashstore import Hash, HashStore
 
 POSSIBILITY = 0

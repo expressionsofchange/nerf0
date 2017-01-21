@@ -1,6 +1,5 @@
 from utils import pmts
 from hashstore import Hash
-from clef import Note, parse_note
 from collections import namedtuple
 
 
@@ -9,66 +8,67 @@ NoutAndHash = namedtuple('NoutAndHash', (
     'nout_hash'))
 
 
-NOUT_BEGIN = 0
-NOUT_BLOCK = 1
+NOUT_CAPO = 0
+NOUT_SLUR = 1
 
 
 class Nout(object):
     pass
 
 
-# ## Binary encoding of nouts
-class NoutBegin(Nout):
+class NoutCapo(Nout):
+    # NoutCapo does not actually depend on the NoteClass/parse_note, which is why it's kept outside of the factory
+    # symmetry
+
     def __repr__(self):
-        return "(BEGIN)"
+        return "(CAPO)"
 
     def as_bytes(self):
-        return bytes([NOUT_BEGIN])
+        return bytes([NOUT_CAPO])
 
     @staticmethod
     def from_stream(byte_stream):
-        return NoutBegin()
+        return NoutCapo()
 
     def __eq__(self, other):
-        return isinstance(other, NoutBegin)
+        return isinstance(other, NoutCapo)
 
 
-class NoutBlock(Nout):
-    # Thoughts for the future:
-    # * I don't like the name "block"; it's borrowed from the bitcoin world; I'd rather have a musical metaphor
-    # * The tie-in to (a particular) Note can be abstracted away from by pushing the class into a method that takes
-    #       a type of note and parser as parameters.
+def nout_factory(NoteClass, parse_note):
 
-    def __init__(self, note, previous_hash):
-        pmts(note, Note)
-        pmts(previous_hash, Hash)
+    class NoutSlur(Nout):
 
-        self.note = note
-        self.previous_hash = previous_hash
+        def __init__(self, note, previous_hash):
+            pmts(note, NoteClass)
+            pmts(previous_hash, Hash)
 
-    def __repr__(self):
-        return "(BLOCK " + repr(self.note) + " -> " + repr(self.previous_hash) + ")"
+            self.note = note
+            self.previous_hash = previous_hash
 
-    def as_bytes(self):
-        return bytes([NOUT_BLOCK]) + self.note.as_bytes() + self.previous_hash.as_bytes()
+        def __repr__(self):
+            return "(SLUR " + repr(self.note) + " -> " + repr(self.previous_hash) + ")"
 
-    @staticmethod
-    def from_stream(byte_stream):
-        return NoutBlock(parse_note(byte_stream), Hash.from_stream(byte_stream))
+        def as_bytes(self):
+            return bytes([NOUT_SLUR]) + self.note.as_bytes() + self.previous_hash.as_bytes()
 
+        @staticmethod
+        def from_stream(byte_stream):
+            return NoutSlur(parse_note(byte_stream), Hash.from_stream(byte_stream))
 
-def parse_nout(byte_stream):
-    byte0 = next(byte_stream)
-    return {
-        NOUT_BEGIN: NoutBegin,
-        NOUT_BLOCK: NoutBlock,
-    }[byte0].from_stream(byte_stream)
+    def parse_nout(byte_stream):
+        byte0 = next(byte_stream)
+        return {
+            NOUT_CAPO: NoutCapo,
+            NOUT_SLUR: NoutSlur,
+        }[byte0].from_stream(byte_stream)
+
+    return NoutSlur, parse_nout
 
 
 def all_nhtups_for_nout_hash(possible_timelines, nout_hash):
     while True:
         nout = possible_timelines.get(nout_hash)
-        if nout == NoutBegin():
+        if nout == NoutCapo():
             raise StopIteration()
 
         yield NoutAndHash(nout, nout_hash)

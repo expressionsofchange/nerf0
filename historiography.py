@@ -17,22 +17,23 @@ class Historiography(object):
 
     The idea is: the nout-hashes are often related, and you want to be able to express how that's so.
 
-    >>> from legato import NoutBlock, NoutBegin, parse_nout
-    >>> from clef import TextBecome
+    >>> from legato import NoutCapo
+    >>> from dsn.s_expr.legato import NoutSlur, parse_nout
+    >>> from dsn.s_expr.clef import TextBecome
     >>> from hashstore import HashStore
     >>>
     >>> from historiography import Historiography
     >>>
     >>> possible_timelines = HashStore(parse_nout)
     >>>
-    >>> begin = NoutBegin()
+    >>> capo = NoutCapo()
     >>>
-    >>> hash_begin = possible_timelines.add(begin)
+    >>> hash_capo = possible_timelines.add(capo)
     >>>
-    >>> hash_a = possible_timelines.add(NoutBlock(TextBecome("a"), hash_begin))
-    >>> hash_b = possible_timelines.add(NoutBlock(TextBecome("b"), hash_begin))
-    >>> hash_ac = possible_timelines.add(NoutBlock(TextBecome("ac"), hash_a))
-    >>> hash_acd = possible_timelines.add(NoutBlock(TextBecome("acd"), hash_ac))
+    >>> hash_a = possible_timelines.add(NoutSlur(TextBecome("a"), hash_capo))
+    >>> hash_b = possible_timelines.add(NoutSlur(TextBecome("b"), hash_capo))
+    >>> hash_ac = possible_timelines.add(NoutSlur(TextBecome("ac"), hash_a))
+    >>> hash_acd = possible_timelines.add(NoutSlur(TextBecome("acd"), hash_ac))
     >>>
     >>> historiography = Historiography(possible_timelines)
     >>> a = historiography.append(hash_a)
