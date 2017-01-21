@@ -10,11 +10,10 @@ from kivy.uix.behaviors.focus import FocusBehavior
 
 from annotations import Annotation
 from channel import Channel, ClosableChannel, ignore
-from construct_edits import edit_note_play, bubble_history_up
 from construct_pp import construct_pp_tree
 from construct_x import construct_x
 
-from edit_clef import (
+from dsn.editor.clef import (
     CursorChild,
     CursorDFS,
     CursorParent,
@@ -26,7 +25,9 @@ from edit_clef import (
     TextReplace,
 )
 
-from edit_structure import EditStructure
+from dsn.editor.construct import edit_note_play, bubble_history_up
+from dsn.editor.structure import EditStructure
+
 from posacts import Possibility, Actuality
 from pp_annotations import PPNone, PPSingleLine, PPLispy
 from pp_clef import PPUnset, PPSetSingleLine, PPSetLispy

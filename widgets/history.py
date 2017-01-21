@@ -15,18 +15,18 @@ from clef import (
 )
 
 
-from construct_eh import eh_note_play
-from construct_y import construct_y_from_scratch
-
-from edit_history_clef import (
+from dsn.history.clef import (
     EHDelete,
     EHCursorSet,
     EHCursorChild,
     EHCursorDFS,
     EHCursorParent,
 )
+from dsn.history.construct import eh_note_play
+from dsn.history.structure import EHStructure
 
-from eh_structure import EHStructure
+from construct_y import construct_y_from_scratch
+
 from historiography import t_lookup
 from legato import all_preceding_nout_hashes
 from posacts import Actuality

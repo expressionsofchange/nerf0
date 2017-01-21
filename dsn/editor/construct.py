@@ -4,7 +4,15 @@ from posacts import Possibility, Actuality
 from legato import NoutBegin, NoutBlock
 from clef import Replace
 
-from edit_clef import (
+from clef import (
+    BecomeNode,
+    Delete,
+    Insert,
+    TextBecome,
+)
+from trees import TreeNode
+
+from dsn.editor.clef import (
     CursorChild,
     CursorDFS,
     CursorParent,
@@ -15,14 +23,6 @@ from edit_clef import (
     TextInsert,
     TextReplace,
 )
-
-from clef import (
-    BecomeNode,
-    Delete,
-    Insert,
-    TextBecome,
-)
-from trees import TreeNode
 
 
 def calc_possibility(nout):

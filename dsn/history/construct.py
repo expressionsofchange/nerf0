@@ -2,7 +2,7 @@ from hashstore import Hash
 from posacts import Possibility, Actuality
 from cut_paste import some_more_cut_paste
 
-from edit_history_clef import (
+from dsn.history.clef import (
     EHCursorChild,
     EHCursorDFS,
     EHCursorParent,
