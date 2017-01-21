@@ -1,3 +1,4 @@
+from sys import argv
 from os.path import isfile
 
 from kivy.app import App
@@ -28,8 +29,10 @@ LabelBase.register(name="DejaVuSans",
 
 class EditorGUI(App):
 
-    def __init__(self, *args, **kwargs):
-        super(EditorGUI, self).__init__(*args, **kwargs)
+    def __init__(self, filename):
+        super(EditorGUI, self).__init__()
+
+        self.filename = filename
 
         self.setup_channels()
         self.do_initial_file_read()
@@ -41,14 +44,13 @@ class EditorGUI(App):
         self.lnh = LatestActualityListener(self.history_channel)
 
     def do_initial_file_read(self):
-        filename = 'test3'
-        if isfile(filename):
+        if isfile(self.filename):
             # ReadFromFile before connecting to the Writer to ensure that reading from the file does not write to it
-            read_from_file(filename, self.history_channel)
-            FileWriter(self.history_channel, filename)
+            read_from_file(self.filename, self.history_channel)
+            FileWriter(self.history_channel, self.filename)
         else:
             # FileWriter first to ensure that the initialization becomes part of the file.
-            FileWriter(self.history_channel, filename)
+            FileWriter(self.history_channel, self.filename)
             initialize_history(self.history_channel)
 
     def add_tree_and_stuff(self, history_channel):
@@ -85,4 +87,14 @@ class EditorGUI(App):
 
         return self.vertical_layout
 
-EditorGUI().run()
+
+def main():
+    if len(argv) != 2:
+        print("Usage: ", argv[0], "FILENAME")
+        exit()
+
+    EditorGUI(argv[1]).run()
+
+
+if __name__ == "__main__":
+    main()
