@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from kivy.core.text import Label
 from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle
@@ -9,7 +11,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.behaviors.focus import FocusBehavior
 
 from annotations import Annotation
-from channel import Channel, ClosableChannel, ignore
+from channel import Channel, ClosableChannel
 from construct_x import construct_x
 
 from dsn.editor.clef import (
@@ -79,7 +81,7 @@ class TreeWidget(Widget, FocusBehavior):
         self.all_trees = {}  # TODO pull this to a single higher location for better performance
 
         self.ds = EditStructure(None, [], [], None)
-        self.notify_children = []
+        self.notify_children = {}
 
         self.cursor_channel = Channel()
 
@@ -107,7 +109,7 @@ class TreeWidget(Widget, FocusBehavior):
 
             self.refresh()
 
-            for notify_child in self.notify_children:
+            for notify_child in self.notify_children.values():
                 notify_child()  # (data.nout_hash)
 
     def channel_closed(self):
@@ -178,7 +180,7 @@ class TreeWidget(Widget, FocusBehavior):
         self.refresh()
 
         if last_actuality is not None:
-            for notify_child in self.notify_children:
+            for notify_child in self.notify_children.values():
                 notify_child()  # (last_actuality.nout_hash)
 
     def keyboard_on_key_down(self, window, keycode, text, modifiers):
@@ -258,6 +260,10 @@ class TreeWidget(Widget, FocusBehavior):
     def _child_channel_for_t_address(self, t_address):
         child_channel = ClosableChannel()
 
+        # more "nerfy" would be: create a chain of creation events; take the latest nout hash (you only need to store
+        # the latest)
+        channel_id = uuid4().bytes
+
         def receive_from_child(data):
             # data :: Possibility | Actuality
             if isinstance(data, Possibility):
@@ -279,8 +285,10 @@ class TreeWidget(Widget, FocusBehavior):
                 # tree-creation)
                 self._update_internal_state_for_posacts(posacts, self.ds.s_cursor)
 
-        # children don't close themselves (yet) so we don't have to listen for it
-        send_to_child, close_child = child_channel.connect(receive_from_child, ignore)
+        def receive_close_from_child():
+            del self.notify_children[channel_id]
+
+        send_to_child, close_child = child_channel.connect(receive_from_child, receive_close_from_child)
 
         def notify_child():
             # Optimization (and: mental optimization) notes: The present version of notify_child takes no arguments.
@@ -315,7 +323,7 @@ class TreeWidget(Widget, FocusBehavior):
             node = node_for_s_address(self.ds.tree, s_address)
             send_to_child(Actuality(node.metadata.nout_hash))  # this kind of always-send behavior can be optimized
 
-        self.notify_children.append(notify_child)
+        self.notify_children[channel_id] = notify_child
         return child_channel, send_to_child, close_child
 
     def _create_child_window(self):

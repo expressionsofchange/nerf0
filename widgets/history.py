@@ -84,10 +84,10 @@ class HistoryWidget(Widget, FocusBehavior):
         do_create = data
 
         if self.data_channel is not None:
-            pass  # TODO close it!
+            self.close_channel()
 
         self.data_channel, do_kickoff = do_create()
-        self.send_to_channel, close_must_be_used = self.data_channel.connect(self.receive_from_parent)
+        self.send_to_channel, self.close_channel = self.data_channel.connect(self.receive_from_parent)
 
         do_kickoff()
 
