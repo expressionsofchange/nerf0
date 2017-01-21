@@ -10,7 +10,6 @@ from kivy.uix.behaviors.focus import FocusBehavior
 
 from annotations import Annotation
 from channel import Channel, ClosableChannel, ignore
-from construct_pp import construct_pp_tree
 from construct_x import construct_x
 
 from dsn.editor.clef import (
@@ -29,8 +28,11 @@ from dsn.editor.construct import edit_note_play, bubble_history_up
 from dsn.editor.structure import EditStructure
 
 from posacts import Possibility, Actuality
-from pp_annotations import PPNone, PPSingleLine, PPLispy
-from pp_clef import PPUnset, PPSetSingleLine, PPSetLispy
+
+from dsn.pp.structure import PPNone, PPSingleLine, PPLispy
+from dsn.pp.clef import PPUnset, PPSetSingleLine, PPSetLispy
+from dsn.pp.construct import construct_pp_tree
+
 from s_address import node_for_s_address
 from spacetime import t_address_for_s_address, best_s_address_for_t_address, get_s_address_for_t_address
 from trees import TreeNode, TreeText

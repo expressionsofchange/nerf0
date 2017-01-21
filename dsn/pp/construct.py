@@ -1,9 +1,10 @@
 from trees import TreeText
 from annotated_tree import AnnotatedNode
-from pp_annotations import PPNone, PPSingleLine, PPLispy
 from spacetime import get_s_address_for_t_address
 from s_address import node_for_s_address
-from pp_clef import PPUnset, PPSetSingleLine, PPSetLispy
+
+from dsn.pp.structure import PPNone, PPSingleLine, PPLispy
+from dsn.pp.clef import PPUnset, PPSetSingleLine, PPSetLispy
 
 
 def build_annotated_tree(node, default_annotation):
