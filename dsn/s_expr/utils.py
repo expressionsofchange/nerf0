@@ -1,7 +1,20 @@
+"""
+Various utilities to manipulate Notes & Nouts
+
+>>> from dsn.s_expr.utils import nouts_for_notes_da_capo
+>>> from dsn.s_expr.clef import TextBecome
+
+nouts_for_notes:
+
+>>> list(nouts_for_notes_da_capo([TextBecome("a"), TextBecome("b")]))
+[(SLUR (TEXT a) -> 6e340b9cffb3), (SLUR (TEXT b) -> 1f2cf5ca7d0d)]
+"""
+
 from hashstore import Hash
 from legato import all_nhtups_for_nout_hash, NoutCapo
 from posacts import Possibility, Actuality
 from s_address import node_for_s_address
+
 
 from dsn.s_expr.legato import NoutSlur
 from dsn.s_expr.clef import (
@@ -25,11 +38,30 @@ def calc_actuality(nout_hash):
     return Actuality(nout_hash)
 
 
+# TODO In the below (nouts_for_notes_*, some_cut_paste*), we're not consistent in whether we're returning Possibilities,
+# Nouts, NoutHash tuples etc. I'm confident that consistency will emerge once we know what good defaults are.
+
+def nouts_for_notes_da_capo(notes):
+    """Given notes without prior history, connect them as Nouts"""
+    possibility, previous_hash = calc_possibility(NoutCapo())
+    return nouts_for_notes(notes, previous_hash)
+
+
+def nouts_for_notes(notes, previous_hash):
+    """Given a list of notes and a previous_hash denoting a prior history, connect them as nouts"""
+
+    for note in notes:
+        nout = NoutSlur(note, previous_hash)
+        possibility, previous_hash = calc_possibility(nout)
+        yield possibility.nout
+
+
 def some_cut_paste(possible_timelines, edge_nout_hash, cut_nout_hash, paste_point_hash):
     """Detaches the cut_nout from its parent, pasting the stuff from edge_nout_hash back to cut_nout onto the
     past_point. Returns chronological Notes."""
 
     todo = []
+
     for nh in all_nhtups_for_nout_hash(possible_timelines, edge_nout_hash):
         # potentially deal with edge cases (e.g. cut_nout_hash not in history) here.
         todo.append(nh)
@@ -37,7 +69,7 @@ def some_cut_paste(possible_timelines, edge_nout_hash, cut_nout_hash, paste_poin
             break
 
     prev = paste_point_hash
-    for nh in reversed(todo):
+    for nh in reversed(todo):  # Maybe: use `nouts_for_notes` here (currently not possible b/c unmatching types)
         nout = NoutSlur(nh.nout.note, prev)
         possibility, prev = calc_possibility(nout)
         yield possibility  # or: possibility.nout
@@ -60,7 +92,7 @@ def some_more_cut_paste(possible_timelines, edge_nout_hash, cut_nout_hash, paste
         todo.append(nh)
 
     prev = paste_point_hash
-    for nh in reversed(todo):
+    for nh in reversed(todo):  # Maybe: use `nouts_for_notes` here (currently not possible b/c unmatching types)
         nout = NoutSlur(nh.nout.note, prev)
         possibility, prev = calc_possibility(nout)
         yield possibility  # or: possibility.nout
