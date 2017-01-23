@@ -353,6 +353,10 @@ class TreeWidget(Widget, FocusBehavior):
             self._render_box(self.box_structure)
 
     def on_touch_down(self, touch):
+        # I'm having trouble reducing the grabbing of focus to a simple case. Discussion on the Kivy Forum and SO:
+        # https://groups.google.com/forum/?fromgroups#!topic/kivy-users/MrKU4-F0wpU
+        # https://stackoverflow.com/questions/41571531/kivy-how-to-reliably-set-keyboard-focus-on-mouse-down
+
         # see https://kivy.org/docs/guide/inputs.html#touch-event-basics
         # Basically:
         # 1. Kivy (intentionally) does not limit its passing of touch events to widgets that it applies to, you
