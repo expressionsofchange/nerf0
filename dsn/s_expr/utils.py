@@ -1,16 +1,15 @@
+from hashstore import Hash
+from legato import all_nhtups_for_nout_hash, NoutCapo
+from posacts import Possibility, Actuality
+from s_address import node_for_s_address
+
+from dsn.s_expr.legato import NoutSlur
 from dsn.s_expr.clef import (
     BecomeNode,
     Insert,
     Replace,
     TextBecome,
 )
-
-from hashstore import Hash
-from legato import NoutCapo
-from dsn.s_expr.legato import NoutSlur
-
-from posacts import Possibility, Actuality
-from s_address import node_for_s_address
 
 
 def calc_possibility(nout):
@@ -24,6 +23,47 @@ def calc_possibility(nout):
 
 def calc_actuality(nout_hash):
     return Actuality(nout_hash)
+
+
+def some_cut_paste(possible_timelines, edge_nout_hash, cut_nout_hash, paste_point_hash):
+    """Detaches the cut_nout from its parent, pasting the stuff from edge_nout_hash back to cut_nout onto the
+    past_point. Returns chronological Notes."""
+
+    todo = []
+    for nh in all_nhtups_for_nout_hash(possible_timelines, edge_nout_hash):
+        # potentially deal with edge cases (e.g. cut_nout_hash not in history) here.
+        todo.append(nh)
+        if nh.nout_hash == cut_nout_hash:
+            break
+
+    prev = paste_point_hash
+    for nh in reversed(todo):
+        nout = NoutSlur(nh.nout.note, prev)
+        possibility, prev = calc_possibility(nout)
+        yield possibility  # or: possibility.nout
+
+
+def some_more_cut_paste(possible_timelines, edge_nout_hash, cut_nout_hash, paste_point_hash):
+    """
+    interpretation of cut_nout_hash is purely driven by how this is used in practice... do I like it? Not sure yet.
+
+    the interpretation is:
+    cut_nout_hash is the first thing that's _not_ included.
+    """
+
+    todo = []
+    for nh in all_nhtups_for_nout_hash(possible_timelines, edge_nout_hash):
+        # potentially deal with edge cases (e.g. cut_nout_hash not in history) here.
+        if nh.nout_hash == cut_nout_hash:
+            break
+
+        todo.append(nh)
+
+    prev = paste_point_hash
+    for nh in reversed(todo):
+        nout = NoutSlur(nh.nout.note, prev)
+        possibility, prev = calc_possibility(nout)
+        yield possibility  # or: possibility.nout
 
 
 def bubble_history_up(hash_to_bubble, tree, s_address):

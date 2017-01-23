@@ -1,6 +1,6 @@
 from hashstore import Hash
 from posacts import Possibility, Actuality
-from cut_paste import some_more_cut_paste
+from dsn.s_expr.utils import some_more_cut_paste
 
 from dsn.history.clef import (
     EHCursorChild,

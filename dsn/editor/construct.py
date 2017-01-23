@@ -2,7 +2,7 @@ from s_address import node_for_s_address, s_dfs
 
 from dsn.s_expr.legato import NoutSlur
 
-from manipulations import (
+from dsn.s_expr.utils import (
     bubble_history_up,
     calc_possibility,
     insert_text_at,
