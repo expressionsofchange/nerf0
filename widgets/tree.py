@@ -1,5 +1,3 @@
-from uuid import uuid4
-
 from kivy.core.text import Label
 from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle
@@ -83,6 +81,7 @@ class TreeWidget(Widget, FocusBehavior):
 
         self.ds = EditStructure(None, [], [], None)
         self.notify_children = {}
+        self.next_channel_id = 0
 
         self.cursor_channel = Channel()
 
@@ -261,9 +260,8 @@ class TreeWidget(Widget, FocusBehavior):
     def _child_channel_for_t_address(self, t_address):
         child_channel = ClosableChannel()
 
-        # more "nerfy" would be: create a chain of creation events; take the latest nout hash (you only need to store
-        # the latest)
-        channel_id = uuid4().bytes
+        channel_id = self.next_channel_id
+        self.next_channel_id += 1
 
         def receive_from_child(data):
             # data :: Possibility | Actuality
