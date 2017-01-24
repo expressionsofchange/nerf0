@@ -97,7 +97,7 @@ class HistoryWidget(FocusBehavior, Widget):
             self.update_nout_hash(data.nout_hash)
 
     def update_nout_hash(self, nout_hash):
-        new_htn, h2, new_annotated_hashes = construct_y_from_scratch(self.possible_timelines, nout_hash)
+        new_htn, new_annotated_hashes = self._trees(nout_hash)
 
         # TODO here we can implement cursor_safe-guarding behaviors.
 
@@ -130,8 +130,7 @@ class HistoryWidget(FocusBehavior, Widget):
             new_htn = self.ds.htn
         else:
             # many options for optimization/simplification here, such as sharing results_lookup more globally.
-            new_htn, h2, new_annotated_hashes = construct_y_from_scratch(
-                self.possible_timelines, last_actuality.nout_hash)
+            new_htn, new_annotated_hashes = self._trees(last_actuality.nout_hash)
 
         self.ds = EHStructure(
             new_annotated_hashes,
@@ -140,6 +139,21 @@ class HistoryWidget(FocusBehavior, Widget):
         )
 
         self.refresh()
+
+    def _trees(self, nout_hash):
+        new_htn, h2, new_annotated_hashes = construct_y_from_scratch(self.possible_timelines, nout_hash)
+
+        edge_nout_hash, _, _ = new_annotated_hashes[-1]
+        liveness_annotated_hashes = view_past_from_present(
+            possible_timelines=self.possible_timelines,
+            present_root_htn=new_htn,
+            annotated_hashes=new_annotated_hashes,
+
+            # Alternatively, we use the knowledge that at the top_level "everything is live"
+            alive_at_my_level=list(all_preceding_nout_hashes(self.possible_timelines, edge_nout_hash)),
+            )
+
+        return new_htn, liveness_annotated_hashes
 
     def keyboard_on_key_down(self, window, keycode, text, modifiers):
         result = FocusBehavior.keyboard_on_key_down(self, window, keycode, text, modifiers)
@@ -180,18 +194,8 @@ class HistoryWidget(FocusBehavior, Widget):
             Rectangle(pos=self.pos, size=self.size,)
 
         with apply_offset(self.canvas, self.offset):
-            edge_nout_hash, _, _ = self.ds.annotated_hashes[-1]
-
-            children_steps = view_past_from_present(
-                possible_timelines=self.possible_timelines,
-                present_root_htn=self.ds.htn,
-                annotated_hashes=self.ds.annotated_hashes,
-
-                # Alternatively, we use the knowledge that at the top_level "everything is live"
-                alive_at_my_level=list(all_preceding_nout_hashes(self.possible_timelines, edge_nout_hash)),
-                )
-
-            offset_nonterminals = self.draw_past_from_present(children_steps, [], ColWidths(150, 150, 30, 100))
+            offset_nonterminals = self.draw_past_from_present(
+                    self.ds.annotated_hashes, [], ColWidths(150, 150, 30, 100))
 
             self.box_structure = BoxNonTerminal([], offset_nonterminals, [])
             self._render_box(self.box_structure)
