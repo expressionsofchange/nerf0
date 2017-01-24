@@ -1,5 +1,5 @@
 >>> from hashstore import HashStore
->>> from legato import NoutCapo, all_preceding_nout_hashes
+>>> from legato import Nout, NoutCapo, all_preceding_nout_hashes
 >>>
 >>> from dsn.s_expr.clef import BecomeNode, TextBecome, Delete
 >>> from dsn.s_expr.construct_y import construct_y_from_scratch
@@ -16,7 +16,7 @@
 ...         print_aliveness(children, indentation + 4)
 ...
 >>>
->>> p = HashStore(parse_nout)
+>>> p = HashStore(Nout, parse_nout)
 >>>
 >>> capo = NoutCapo()
 >>> hash_capo = p.add(capo)

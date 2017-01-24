@@ -51,7 +51,7 @@ def parse_pos_acts(byte_stream):
 
 class HashStoreChannelListener(object):
     def __init__(self, channel):
-        self.possible_timelines = HashStore(parse_nout)
+        self.possible_timelines = HashStore(Nout, parse_nout)
 
         # receive-only connection: HashStoreChannelListener's outwards communication goes via others reading
         # self.possible_timelines

@@ -47,8 +47,9 @@ class Hash(object):
 
 class HashStore(object):
 
-    def __init__(self, parser):
+    def __init__(self, type_, parser):
         self.d = {}
+        self.type_ = type_
         self.parser = parser
 
     def __repr__(self):
@@ -58,6 +59,8 @@ class HashStore(object):
             )
 
     def add(self, serializable):
+        pmts(serializable, self.type_)
+
         bytes_ = serializable.as_bytes()
         hash_ = Hash.for_bytes(bytes_)
         self.d[hash_.as_bytes()] = bytes_
