@@ -1,28 +1,34 @@
 >>> from hashstore import HashStore
 >>> from legato import NoutCapo, all_preceding_nout_hashes
->>> from dsn.s_expr.legato import parse_nout, NoutSlur
->>> from dsn.s_expr.clef import BecomeNode, TextBecome, Insert, Replace, Delete
->>> from dsn.s_expr.construct_y import construct_y_from_scratch
 >>> 
->>> possible_timelines = HashStore(parse_nout)
+>>> from dsn.s_expr.clef import BecomeNode, TextBecome, Delete
+>>> from dsn.s_expr.construct_y import construct_y_from_scratch
+>>> from dsn.s_expr.legato import parse_nout
+>>> from dsn.s_expr.test_utils import iinsert, rreplace
+>>> from dsn.s_expr.utils import nouts_for_notes_da_capo
+>>> 
+>>> p = HashStore(parse_nout)
 >>> 
 
 The structure of Nouts & Notes below matches the drawing in green in the blue booklet of my private notes.
 
+>>> p = HashStore(parse_nout)
+>>> 
 >>> capo = NoutCapo()
->>> hash_capo = possible_timelines.add(capo)
+>>> hash_capo = p.add(capo)
 >>> 
->>> hash_node = possible_timelines.add(NoutSlur(BecomeNode(), hash_capo))
->>> 
->>> hash_a = possible_timelines.add(NoutSlur(TextBecome("a"), hash_capo))
->>> hash_insert_0a = possible_timelines.add(NoutSlur(Insert(0, hash_a), hash_node))
->>> hash_insert_00a = possible_timelines.add(NoutSlur(Insert(0, hash_insert_0a), hash_node))
->>> 
->>> hash_b = possible_timelines.add(NoutSlur(TextBecome("b"), hash_capo))
->>> hash_insert_0b = possible_timelines.add(NoutSlur(Insert(0, hash_b), hash_node))
->>> hash_replace_00b = possible_timelines.add(NoutSlur(Replace(0, hash_insert_0b), hash_insert_00a))
->>> 
->>> tree, historiography_at, per_step_info = construct_y_from_scratch(possible_timelines, hash_replace_00b)
+>>> for nh in nouts_for_notes_da_capo([
+...     BecomeNode(),
+...     iinsert(p, 0, [BecomeNode(),
+...                    iinsert(p, 0, [TextBecome("a")])
+...                    ]),
+...     rreplace(p, 0, [BecomeNode(),
+...                     iinsert(p, 0, [TextBecome("b")])
+...                     ]),
+...         ]):
+...     h = p.add(nh.nout)
+
+>>> tree, historiography_at, per_step_info = construct_y_from_scratch(p, nh.nout_hash) 
 >>> 
 >>> def steps_recursively(indentation, per_step_info):
 ...     for nout_hash, dissonant, rhi in per_step_info:
@@ -50,7 +56,7 @@ repeated (25bc3c945eb5 is not preceded by 437ba946fac9). This is because it's no
 
 So, what's actually alive at "level 1"?
 
->>> list(all_preceding_nout_hashes(possible_timelines, tree.historiographies[0].nout_hash()))
+>>> list(all_preceding_nout_hashes(p, tree.historiographies[0].nout_hash()))
 [25bc3c945eb5, 437ba946fac9]
 
 Note that there is no historiography that contains the node for the Text "a" (1f2cf5ca7d0d); this is a consequence of
@@ -61,26 +67,31 @@ Note that there is no historiography that contains the node for the Text "a" (1f
 
 Now we make something similar, but start off our history in a broken state (delete at an unknown address)
 
->>> hash_node = possible_timelines.add(NoutSlur(BecomeNode(), hash_capo))
+
+>>> for nh in nouts_for_notes_da_capo([
+...     BecomeNode(),
+...     Delete(44),
+...     rreplace(p, 0, [BecomeNode(),
+...                     iinsert(p, 0, [TextBecome("b")])
+...                     ]),
+...         ]):
+...     h = p.add(nh.nout)
 >>> 
->>> hash_broken = possible_timelines.add(NoutSlur(Delete(44), hash_node))
->>> 
->>> hash_b = possible_timelines.add(NoutSlur(TextBecome("b"), hash_capo))
->>> hash_insert_0b = possible_timelines.add(NoutSlur(Insert(0, hash_b), hash_node))
->>> hash_replace_00b = possible_timelines.add(NoutSlur(Replace(0, hash_insert_0b), hash_broken))
->>> 
->>> tree, historiography_at, per_step_info = construct_y_from_scratch(possible_timelines, hash_replace_00b)
+>>> tree, historiography_at, per_step_info = construct_y_from_scratch(p, nh.nout_hash)
 >>> 
 
 The result: notes that follow a broken action are still converted into steps, but not recursively explored.
 The reasoning is: after breakage, all bets are off (but you still want to display as much info as possible)
 
-In fact, we can do even slightly better: because recursive information
-The only thing we _cannot_ do after breakage is keep updating Historiographies (we wouldn't know which one
-to update). But the recursive information is an history on its own, independent of its parent, so we could
-display it just fine.
+In fact, at least theoretically, we can do even slightly better. The only thing we _cannot_ do after breakage is keep
+updating Historiographies (we wouldn't know which one to update). But the recursive information is an history on its
+own, independent of its parent, so we could display it just fine.
 
-But for now, I want to push on the GUI first.
+However, once you don't update Historiographies, the information on the recursive level becomes extremely verbose:
+because you refuse to make statements about how it's connected to the past, you must show the whole history again and
+again for each node. This defeats the purpose of construct_y; therefore, we will stick with "once you're in a broken
+state, don't show any recursive information".
+
 
 >>> steps_recursively(0, per_step_info)
  437ba946fac9
@@ -94,13 +105,17 @@ A somewhat related remark is: A dissonent _does not_ break its parent: the paren
 all actions in other subtrees are independent.
 
 
->>> hash_insert_0broken = possible_timelines.add(NoutSlur(Insert(0, hash_broken), hash_node))
->>> 
->>> hash_b = possible_timelines.add(NoutSlur(TextBecome("b"), hash_capo))
->>> hash_insert_0b = possible_timelines.add(NoutSlur(Insert(0, hash_b), hash_node))
->>> hash_replace_00b = possible_timelines.add(NoutSlur(Replace(0, hash_insert_0b), hash_insert_0broken))
->>> 
->>> tree, historiography_at, per_step_info = construct_y_from_scratch(possible_timelines, hash_replace_00b)
+>>> for nh in nouts_for_notes_da_capo([
+...     BecomeNode(),
+...     iinsert(p, 0, [BecomeNode(),
+...                    Delete(44)]),
+...     rreplace(p, 0, [BecomeNode(),
+...                     iinsert(p, 0, [TextBecome("b")]),
+...                     ]),
+...         ]):
+...     h = p.add(nh.nout)
+
+>>> tree, historiography_at, per_step_info = construct_y_from_scratch(p, nh.nout_hash)
 >>> steps_recursively(0, per_step_info)
  437ba946fac9
  bbe8355a0520

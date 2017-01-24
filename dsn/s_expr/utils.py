@@ -6,12 +6,12 @@ Various utilities to manipulate Notes & Nouts
 
 nouts_for_notes:
 
->>> list(nouts_for_notes_da_capo([TextBecome("a"), TextBecome("b")]))
+>>> list(nh.nout for nh in nouts_for_notes_da_capo([TextBecome("a"), TextBecome("b")]))
 [(SLUR (TEXT a) -> 6e340b9cffb3), (SLUR (TEXT b) -> 1f2cf5ca7d0d)]
 """
 
 from hashstore import Hash
-from legato import all_nhtups_for_nout_hash, NoutCapo
+from legato import all_nhtups_for_nout_hash, NoutCapo, NoutAndHash
 from posacts import Possibility, Actuality
 from s_address import node_for_s_address
 
@@ -39,7 +39,7 @@ def calc_actuality(nout_hash):
 
 
 # TODO In the below (nouts_for_notes_*, some_cut_paste*), we're not consistent in whether we're returning Possibilities,
-# Nouts, NoutHash tuples etc. I'm confident that consistency will emerge once we know what good defaults are.
+# Nouts, NoutAndHash tuples etc. I'm confident that consistency will emerge once we know what good defaults are.
 
 def nouts_for_notes_da_capo(notes):
     """Given notes without prior history, connect them as Nouts"""
@@ -53,7 +53,8 @@ def nouts_for_notes(notes, previous_hash):
     for note in notes:
         nout = NoutSlur(note, previous_hash)
         possibility, previous_hash = calc_possibility(nout)
-        yield possibility.nout
+        # note: it's next iteration's previous_hash, and this iteration's current hash, so the below is odd but correct
+        yield NoutAndHash(possibility.nout, previous_hash)
 
 
 def some_cut_paste(possible_timelines, edge_nout_hash, cut_nout_hash, paste_point_hash):
