@@ -26,10 +26,10 @@ The structure of Nouts & Notes below matches the drawing in green in the blue bo
 ...         ]):
 ...     h = p.add(nh.nout)
 
->>> tree, historiography_at, per_step_info = construct_y_from_scratch(p, nh.nout_hash) 
+>>> tree, historiography_at, annotated_hashes = construct_y_from_scratch(p, nh.nout_hash) 
 >>> 
->>> def steps_recursively(indentation, per_step_info):
-...     for nout_hash, dissonant, rhi in per_step_info:
+>>> def steps_recursively(indentation, annotated_hashes):
+...     for nout_hash, dissonant, rhi in annotated_hashes:
 ...         print(" " * indentation, nout_hash)
 ...         if rhi is not None:
 ...             t_address, children_steps = rhi
@@ -39,7 +39,7 @@ The structure of Nouts & Notes below matches the drawing in green in the blue bo
 Though a bit obfuscated w/ all the hashes, the below shows us at least: that the second usage of "BecomeNode" is not 
 repeated (25bc3c945eb5 is not preceded by 437ba946fac9). This is because it's not new.
 
->>> steps_recursively(0, per_step_info)
+>>> steps_recursively(0, annotated_hashes)
  437ba946fac9
  3f888761eecb
      437ba946fac9
@@ -75,7 +75,7 @@ Now we make something similar, but start off our history in a broken state (dele
 ...         ]):
 ...     h = p.add(nh.nout)
 >>> 
->>> tree, historiography_at, per_step_info = construct_y_from_scratch(p, nh.nout_hash)
+>>> tree, historiography_at, annotated_hashes = construct_y_from_scratch(p, nh.nout_hash)
 >>> 
 
 The result: notes that follow a broken action are still converted into steps, but not recursively explored.
@@ -91,7 +91,7 @@ again for each node. This defeats the purpose of construct_y; therefore, we will
 state, don't show any recursive information".
 
 
->>> steps_recursively(0, per_step_info)
+>>> steps_recursively(0, annotated_hashes)
  437ba946fac9
  a59aeef1b49b
  436373b77a49
@@ -113,8 +113,8 @@ all actions in other subtrees are independent.
 ...         ]):
 ...     h = p.add(nh.nout)
 
->>> tree, historiography_at, per_step_info = construct_y_from_scratch(p, nh.nout_hash)
->>> steps_recursively(0, per_step_info)
+>>> tree, historiography_at, annotated_hashes = construct_y_from_scratch(p, nh.nout_hash)
+>>> steps_recursively(0, annotated_hashes)
  437ba946fac9
  bbe8355a0520
      437ba946fac9

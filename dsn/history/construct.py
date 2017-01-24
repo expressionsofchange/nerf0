@@ -11,28 +11,28 @@ from dsn.history.clef import (
 )
 
 
-def ad_hoc_s_dfs(per_step_info, s_address):
+def ad_hoc_s_dfs(annotated_hashes, s_address):
     """Ad hoc rewrite of s_address for the Steps interface. The other option here is: make Steps confirm to the s_dfs
     interface (i.e. have nodes and children, rather than tuples of tuples)."""
 
     if s_address == []:
-        result = []  # the rootlessness of per_step_info requires this special case.
+        result = []  # the rootlessness of annotated_hashes requires this special case.
     else:
         result = [s_address]
 
-    for i, (nout_hash, dissonant, (t, children_steps)) in enumerate(per_step_info):
+    for i, (nout_hash, dissonant, (t, children_steps)) in enumerate(annotated_hashes):
         result.extend(ad_hoc_s_dfs(children_steps, s_address + [i]))
 
     return result
 
 
-def per_step_info_for_s_address(per_step_info, s_address):
+def annotated_hashes_for_s_address(annotated_hashes, s_address):
     if s_address == []:
-        return per_step_info
+        return annotated_hashes
 
-    for i, (nout_hash, dissonant, (t, children_steps)) in enumerate(per_step_info):
+    for i, (nout_hash, dissonant, (t, children_steps)) in enumerate(annotated_hashes):
         if i == s_address[0]:
-            return per_step_info_for_s_address(children_steps, s_address[1:])
+            return annotated_hashes_for_s_address(children_steps, s_address[1:])
 
     raise IndexError("s_address out of bounds")
 
@@ -52,7 +52,7 @@ def eh_note_play(possible_timelines, structure, edit_note):
         return structure.s_cursor, [], True
 
     if isinstance(edit_note, EHDelete):
-        if len(structure.per_step_info) <= 1:
+        if len(structure.annotated_hashes) <= 1:
             # We don't allow the deletion of the final bit of history. This seems (though I'm not 100% sure) the
             # reasonable way forward, especially given the idea that "construct_x should always be able to construct
             # somethign valid". The reason I'm not sure: even the guarantee for non-empty histories alone is not enough
@@ -62,15 +62,15 @@ def eh_note_play(possible_timelines, structure, edit_note):
         posacts = []
 
         top_index = structure.s_cursor[0]
-        to_be_deleted, error, rhi = structure.per_step_info[top_index]
+        to_be_deleted, error, rhi = structure.annotated_hashes[top_index]
 
-        edge_nout_hash, _, _ = structure.per_step_info[-1]
+        edge_nout_hash, _, _ = structure.annotated_hashes[-1]
 
         if edge_nout_hash == to_be_deleted:
             # Alternative (equivalent) implementation
             # last_hash = self.possible_timelines.get(to_be_deleted).previous_hash
 
-            penultimate_step = structure.per_step_info[-2]
+            penultimate_step = structure.annotated_hashes[-2]
             last_hash, dissonant, (t, children_steps) = penultimate_step
 
         else:
@@ -113,7 +113,7 @@ def eh_note_play(possible_timelines, structure, edit_note):
         return new_cursor, [], False
 
     if isinstance(edit_note, EHCursorDFS):
-        dfs = ad_hoc_s_dfs(structure.per_step_info, [])
+        dfs = ad_hoc_s_dfs(structure.annotated_hashes, [])
         dfs_index = dfs.index(structure.s_cursor) + edit_note.direction
         if not (0 <= dfs_index <= len(dfs) - 1):
             return an_error()
@@ -129,8 +129,8 @@ def eh_note_play(possible_timelines, structure, edit_note):
         return move_cursor(structure.s_cursor[:-1])
 
     if isinstance(edit_note, EHCursorChild):
-        per_step_infos = per_step_info_for_s_address(structure.per_step_info, structure.s_cursor)
-        if len(per_step_infos) == 0:
+        annotated_hashes = annotated_hashes_for_s_address(structure.annotated_hashes, structure.s_cursor)
+        if len(annotated_hashes) == 0:
             return an_error()
         return move_cursor(structure.s_cursor + [0])
 

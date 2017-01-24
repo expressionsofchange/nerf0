@@ -13,6 +13,13 @@ RecursiveHistoryInfo = namedtuple('RecursiveHistory', (
     'children_steps'))
 
 
+AnnotatedHash = namedtuple('AnnotatedHash', (
+    'hash',
+    'dissonant',
+    'recursive_information',
+))
+
+
 def y_note_play(note, structure, structure_is_dissonant, recurse, possible_timelines):
     def dissonant():
         return structure, True, RecursiveHistoryInfo(None, [])
@@ -38,7 +45,7 @@ def y_note_play(note, structure, structure_is_dissonant, recurse, possible_timel
 
         empty_historiography = y_origin(possible_timelines)
 
-        child, child_historiography_at, child_per_step_info = recurse(
+        child, child_historiography_at, child_annotated_hashes = recurse(
             empty_historiography, note.nout_hash)
 
         children = l_insert(structure.children, note.index, child)
@@ -47,7 +54,7 @@ def y_note_play(note, structure, structure_is_dissonant, recurse, possible_timel
         t2s, s2t = st_insert(structure.t2s, structure.s2t, note.index)
         new_t = len(t2s) - 1
 
-        rhi = RecursiveHistoryInfo(new_t, child_per_step_info)
+        rhi = RecursiveHistoryInfo(new_t, child_annotated_hashes)
 
         return HistoriographyTreeNode(children, historiographies, t2s, s2t), False, rhi
 
@@ -66,7 +73,7 @@ def y_note_play(note, structure, structure_is_dissonant, recurse, possible_timel
     if isinstance(note, Replace):
         existing_historiography = structure.historiographies[note.index].historiography
 
-        child, child_historiography_at, child_per_step_info = recurse(
+        child, child_historiography_at, child_annotated_hashes = recurse(
             existing_historiography, note.nout_hash)
 
         children = l_replace(structure.children, note.index, child)
@@ -74,7 +81,7 @@ def y_note_play(note, structure, structure_is_dissonant, recurse, possible_timel
 
         t2s, s2t = st_replace(structure.t2s, structure.s2t, note.index)
 
-        rhi = RecursiveHistoryInfo(s2t[note.index], child_per_step_info)
+        rhi = RecursiveHistoryInfo(s2t[note.index], child_annotated_hashes)
 
         return HistoriographyTreeNode(children, historiographies, t2s, s2t), False, rhi
 
@@ -141,7 +148,7 @@ def construct_y(tree_lookup, possible_timelines, historiography, edge_nout_hash)
         structure, dissonant = tree_lookup[whats_new_pod]
 
     new_hashes = reversed(list(historiography_at.whats_new()))
-    per_step_info = []
+    annotated_hashes = []
 
     for new_hash in new_hashes:
         new_nout = possible_timelines.get(new_hash)
@@ -149,9 +156,9 @@ def construct_y(tree_lookup, possible_timelines, historiography, edge_nout_hash)
         structure, dissonant, rhi = y_note_play(new_nout.note, structure, dissonant, recurse, possible_timelines)
         tree_lookup[new_hash] = structure, dissonant
 
-        per_step_info.append((new_hash, dissonant, rhi))
+        annotated_hashes.append(AnnotatedHash(new_hash, dissonant, rhi))
 
-    return structure, historiography_at, per_step_info
+    return structure, historiography_at, annotated_hashes
 
 
 def y_origin(possible_timelines):

@@ -97,12 +97,12 @@ class HistoryWidget(FocusBehavior, Widget):
             self.update_nout_hash(data.nout_hash)
 
     def update_nout_hash(self, nout_hash):
-        new_htn, h2, new_per_step_info = construct_y_from_scratch(self.possible_timelines, nout_hash)
+        new_htn, h2, new_annotated_hashes = construct_y_from_scratch(self.possible_timelines, nout_hash)
 
         # TODO here we can implement cursor_safe-guarding behaviors.
 
         self.ds = EHStructure(
-            new_per_step_info,
+            new_annotated_hashes,
             new_htn,
             self.ds.s_cursor,
         )
@@ -126,15 +126,15 @@ class HistoryWidget(FocusBehavior, Widget):
                 last_actuality = posact
 
         if last_actuality is None:
-            new_per_step_info = self.ds.per_step_info
+            new_annotated_hashes = self.ds.annotated_hashes
             new_htn = self.ds.htn
         else:
             # many options for optimization/simplification here, such as sharing results_lookup more globally.
-            new_htn, h2, new_per_step_info = construct_y_from_scratch(
+            new_htn, h2, new_annotated_hashes = construct_y_from_scratch(
                 self.possible_timelines, last_actuality.nout_hash)
 
         self.ds = EHStructure(
-            new_per_step_info,
+            new_annotated_hashes,
             new_htn,
             new_s_cursor,
         )
@@ -180,12 +180,12 @@ class HistoryWidget(FocusBehavior, Widget):
             Rectangle(pos=self.pos, size=self.size,)
 
         with apply_offset(self.canvas, self.offset):
-            edge_nout_hash, _, _ = self.ds.per_step_info[-1]
+            edge_nout_hash, _, _ = self.ds.annotated_hashes[-1]
 
             children_steps = view_past_from_present(
                 possible_timelines=self.possible_timelines,
                 present_root_htn=self.ds.htn,
-                per_step_info=self.ds.per_step_info,
+                annotated_hashes=self.ds.annotated_hashes,
 
                 # Alternatively, we use the knowledge that at the top_level "everything is live"
                 alive_at_my_level=list(all_preceding_nout_hashes(self.possible_timelines, edge_nout_hash)),

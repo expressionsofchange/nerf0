@@ -1,3 +1,5 @@
+from collections import namedtuple
+
 from historiography import t_lookup
 from legato import all_preceding_nout_hashes
 
@@ -22,17 +24,25 @@ DEAD = 1
 DELETED = 2
 
 
-def view_past_from_present(possible_timelines, present_root_htn, per_step_info, alive_at_my_level):
+AnnotatedWLIHash = namedtuple('AnnotatedHash', (
+    'hash',
+    'dissonant',
+    'aliveness',
+    'recursive_information',
+))
+
+
+def view_past_from_present(possible_timelines, present_root_htn, annotated_hashes, alive_at_my_level):
     return _view_past_from_present(
-        possible_timelines, present_root_htn, ALIVE_AND_WELL, per_step_info, [], alive_at_my_level)
+        possible_timelines, present_root_htn, ALIVE_AND_WELL, annotated_hashes, [], alive_at_my_level)
 
 
 def _view_past_from_present(
-        possible_timelines, present_root_htn, p_aliveness, per_step_info, t_path, alive_at_my_level):
+        possible_timelines, present_root_htn, p_aliveness, annotated_hashes, t_path, alive_at_my_level):
 
     result = []
 
-    for nout_hash, dissonant, (t, children_steps) in per_step_info:
+    for nout_hash, dissonant, (t, children_steps) in annotated_hashes:
         # Note: there is no passing of "dissonant" information to children. In the current version dissonents _never_
         # have children, as is explained in doctests/construct_y:
         # [..] notes that follow a broken action are still converted into steps, but not recursively explored. The
@@ -71,6 +81,6 @@ def _view_past_from_present(
         else:
             recursive_result = []
 
-        result.append((nout_hash, dissonant, aliveness, (t, recursive_result)))
+        result.append(AnnotatedWLIHash(nout_hash, dissonant, aliveness, (t, recursive_result)))
 
     return result
