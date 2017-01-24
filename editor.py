@@ -57,13 +57,13 @@ class EditorGUI(App):
         horizontal_layout = BoxLayout(spacing=10, orientation='horizontal')
 
         tree = TreeWidget(
-            size_hint=(.2, 1),
+            size_hint=(.5, 1),
             possible_timelines=self.possible_timelines,
             history_channel=history_channel,
             )
 
         history_widget = HistoryWidget(
-            size_hint=(.8, 1),
+            size_hint=(.5, 1),
             possible_timelines=tree.possible_timelines,
             all_trees=tree.all_trees,
             )
