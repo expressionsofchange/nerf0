@@ -53,7 +53,7 @@ from widgets.layout_constants import (
 ColWidths = namedtuple('ColWidths', ('my_hash', 'prev_hash', 'note', 'payload'))
 
 
-class HistoryWidget(Widget, FocusBehavior):
+class HistoryWidget(FocusBehavior, Widget):
 
     def __init__(self, **kwargs):
         self.possible_timelines = kwargs.pop('possible_timelines')
@@ -360,7 +360,6 @@ class HistoryWidget(Widget, FocusBehavior):
             return ret
 
         self.focus = True
-        touch.grab(self)
 
         clicked_item = self.box_structure.from_point(bring_into_offset(self.offset, (touch.x, touch.y)))
 
@@ -370,10 +369,3 @@ class HistoryWidget(Widget, FocusBehavior):
             self.refresh()
 
         return ret
-
-    def on_touch_up(self, touch):
-        # Taken from the docs: https://kivy.org/docs/guide/inputs.html#grabbing-touch-events
-        if touch.grab_current is self:
-            self.focus = True
-            touch.ungrab(self)
-            return True

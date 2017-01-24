@@ -61,7 +61,7 @@ INSERT_BEFORE = 0
 INSERT_AFTER = 1
 
 
-class TreeWidget(Widget, FocusBehavior):
+class TreeWidget(FocusBehavior, Widget):
 
     def __init__(self, **kwargs):
         # The we keep track of whether we received a "closed" signal from the history_channel; if so we turn grey and
@@ -353,10 +353,6 @@ class TreeWidget(Widget, FocusBehavior):
             self._render_box(self.box_structure)
 
     def on_touch_down(self, touch):
-        # I'm having trouble reducing the grabbing of focus to a simple case. Discussion on the Kivy Forum and SO:
-        # https://groups.google.com/forum/?fromgroups#!topic/kivy-users/MrKU4-F0wpU
-        # https://stackoverflow.com/questions/41571531/kivy-how-to-reliably-set-keyboard-focus-on-mouse-down
-
         # see https://kivy.org/docs/guide/inputs.html#touch-event-basics
         # Basically:
         # 1. Kivy (intentionally) does not limit its passing of touch events to widgets that it applies to, you
@@ -368,7 +364,6 @@ class TreeWidget(Widget, FocusBehavior):
             return ret
 
         self.focus = True
-        touch.grab(self)
 
         clicked_item = self.box_structure.from_point(bring_into_offset(self.offset, (touch.x, touch.y)))
 
@@ -376,13 +371,6 @@ class TreeWidget(Widget, FocusBehavior):
             self._handle_edit_note(CursorSet(clicked_item.semantics))
 
         return ret
-
-    def on_touch_up(self, touch):
-        # Taken from the docs: https://kivy.org/docs/guide/inputs.html#grabbing-touch-events
-        if touch.grab_current is self:
-            self.focus = True
-            touch.ungrab(self)
-            return True
 
     # ## Edit-actions that need further user input (i.e. Text-edits)
     def _add_child_text(self):
