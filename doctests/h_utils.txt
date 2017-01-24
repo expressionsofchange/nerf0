@@ -1,0 +1,98 @@
+>>> from hashstore import HashStore
+>>> from legato import NoutCapo, all_preceding_nout_hashes
+>>>
+>>> from dsn.s_expr.clef import BecomeNode, TextBecome, Delete
+>>> from dsn.s_expr.construct_y import construct_y_from_scratch
+>>> from dsn.s_expr.h_utils import view_past_from_present, ALIVE_AND_WELL, DEAD, DELETED
+>>> from dsn.s_expr.legato import parse_nout
+>>> from dsn.s_expr.test_utils import iinsert, rreplace
+>>> from dsn.s_expr.utils import nouts_for_notes_da_capo
+>>>
+>>>
+>>> def print_aliveness(steps, indentation):
+...     d = {ALIVE_AND_WELL: "ALIVE", DEAD: "DEAD", DELETED: "DELETED"}
+...     for (nout_hash, dissonant, aliveness, (t, children)) in steps:
+...         print(indentation * " ", nout_hash, dissonant, d[aliveness])
+...         print_aliveness(children, indentation + 4)
+...
+>>>
+>>> p = HashStore(parse_nout)
+>>>
+>>> capo = NoutCapo()
+>>> hash_capo = p.add(capo)
+>>>
+>>> for nh in nouts_for_notes_da_capo([
+...     BecomeNode(),
+...     iinsert(p, 0, [TextBecome("a")]),
+...     Delete(0),
+...     iinsert(p, 0, [TextBecome("b")]),
+...     rreplace(p, 0, [TextBecome("c")]),
+...     Delete(44),
+...         ]):
+...     h = p.add(nh.nout)
+...
+>>>
+>>> htn, historiography_at, per_step_info = construct_y_from_scratch(p, nh.nout_hash)
+>>>
+>>> result = view_past_from_present(
+...     possible_timelines=p,
+...     present_root_htn=htn,
+...     per_step_info=per_step_info,
+...     alive_at_my_level=list(all_preceding_nout_hashes(p, nh.nout_hash)),
+...     )
+>>>
+>>> print_aliveness(result, 0)
+ 437ba946fac9 False ALIVE
+ 1e2072cbda0a False ALIVE
+     1f2cf5ca7d0d False DELETED
+ a61033ea6ed5 False ALIVE
+ cee6a1b4f69d False ALIVE
+     81e6591ff251 False DEAD
+ a4221607ce2f False ALIVE
+     eb55a8e79763 False ALIVE
+ b27d46cb09c9 True ALIVE
+>>>
+>>>
+>>> for nh in nouts_for_notes_da_capo([
+...     BecomeNode(),
+...     iinsert(p, 0, [
+...         BecomeNode(),
+...         iinsert(p, 0, [TextBecome("a")]),  # dead branch inside a deletion.
+...         rreplace(p, 0, [TextBecome("b")]),
+...         ]),
+...     Delete(0),
+...     iinsert(p, 0, [
+...         BecomeNode(),
+...         iinsert(p, 0, [TextBecome("c")]),  # deletion inside a dead branch
+...         Delete(0),
+...         ]),
+...     rreplace(p, 0, [TextBecome("d")]),
+...         ]):
+...     h = p.add(nh.nout)
+...
+>>>
+>>> htn, historiography_at, per_step_info = construct_y_from_scratch(p, nh.nout_hash)
+>>>
+>>> result = view_past_from_present(
+...     possible_timelines=p,
+...     present_root_htn=htn,
+...     per_step_info=per_step_info,
+...     alive_at_my_level=list(all_preceding_nout_hashes(p, nh.nout_hash)),
+...     )
+>>>
+>>> print_aliveness(result, 0)
+ 437ba946fac9 False ALIVE
+ 86a9c0524f6a False ALIVE
+     437ba946fac9 False DELETED
+     1e2072cbda0a False DELETED
+         1f2cf5ca7d0d False DELETED
+     adeed147f2ba False DELETED
+         81e6591ff251 False DELETED
+ 99736566599a False ALIVE
+ 498f55e1634e False ALIVE
+     437ba946fac9 False DEAD
+     27fd056c857b False DEAD
+         eb55a8e79763 False DEAD
+     4458034eb170 False DEAD
+ f8f0af43092f False ALIVE
+     ce5616f8605c False ALIVE

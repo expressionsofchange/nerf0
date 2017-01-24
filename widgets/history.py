@@ -25,8 +25,8 @@ from dsn.s_expr.clef import (
     TextBecome,
 )
 from dsn.s_expr.construct_y import construct_y_from_scratch
+from dsn.s_expr.h_utils import view_past_from_present, DEAD, DELETED
 
-from historiography import t_lookup
 from legato import all_preceding_nout_hashes
 from posacts import Actuality
 
@@ -74,7 +74,7 @@ class HistoryWidget(Widget, FocusBehavior):
         # 1. We could basically set any value below.
         # 2. The exact same remarks apply for TreeWidget
 
-        self.ds = EHStructure([], "eh_tn", [0])
+        self.ds = EHStructure([], "htn", [0])
 
         self.bind(pos=self.refresh)
         self.bind(size=self.refresh)
@@ -97,13 +97,13 @@ class HistoryWidget(Widget, FocusBehavior):
             self.update_nout_hash(data.nout_hash)
 
     def update_nout_hash(self, nout_hash):
-        new_eh_tn, h2, new_per_step_info = construct_y_from_scratch(self.possible_timelines, nout_hash)
+        new_htn, h2, new_per_step_info = construct_y_from_scratch(self.possible_timelines, nout_hash)
 
         # TODO here we can implement cursor_safe-guarding behaviors.
 
         self.ds = EHStructure(
             new_per_step_info,
-            new_eh_tn,
+            new_htn,
             self.ds.s_cursor,
         )
 
@@ -127,15 +127,15 @@ class HistoryWidget(Widget, FocusBehavior):
 
         if last_actuality is None:
             new_per_step_info = self.ds.per_step_info
-            new_eh_tn = self.ds.eh_tn
+            new_htn = self.ds.htn
         else:
             # many options for optimization/simplification here, such as sharing results_lookup more globally.
-            new_eh_tn, h2, new_per_step_info = construct_y_from_scratch(
+            new_htn, h2, new_per_step_info = construct_y_from_scratch(
                 self.possible_timelines, last_actuality.nout_hash)
 
         self.ds = EHStructure(
             new_per_step_info,
-            new_eh_tn,
+            new_htn,
             new_s_cursor,
         )
 
@@ -182,17 +182,16 @@ class HistoryWidget(Widget, FocusBehavior):
         with apply_offset(self.canvas, self.offset):
             edge_nout_hash, _, _ = self.ds.per_step_info[-1]
 
-            offset_nonterminals = self.some_recursive_thing(
-                self.ds.eh_tn,
-                self.ds.per_step_info,
-                [],
+            children_steps = view_past_from_present(
+                possible_timelines=self.possible_timelines,
+                present_root_htn=self.ds.htn,
+                per_step_info=self.ds.per_step_info,
 
                 # Alternatively, we use the knowledge that at the top_level "everything is live"
-                list(all_preceding_nout_hashes(self.possible_timelines, edge_nout_hash)),
-
-                [],
-                ColWidths(150, 150, 30, 100),
+                alive_at_my_level=list(all_preceding_nout_hashes(self.possible_timelines, edge_nout_hash)),
                 )
+
+            offset_nonterminals = self.draw_past_from_present(children_steps, [], ColWidths(150, 150, 30, 100))
 
             self.box_structure = BoxNonTerminal([], offset_nonterminals, [])
             self._render_box(self.box_structure)
@@ -205,7 +204,7 @@ class HistoryWidget(Widget, FocusBehavior):
         Delete: 'D',
     }
 
-    def some_recursive_thing(self, present_root_eh_tn, per_step_info, t_path, alive_at_my_level, s_path, col_widths):
+    def draw_past_from_present(self, steps_with_aliveness, s_path, col_widths):
         """
         s_path is an s_path at the level of the _history_
         t_path is a t_path on the underlying structure (tree)
@@ -214,21 +213,20 @@ class HistoryWidget(Widget, FocusBehavior):
         per_step_offset_non_terminals = []
         offset_y = 0
 
-        for i, (nout_hash, dissonant, (t, children_steps)) in enumerate(per_step_info):
+        for i, (nout_hash, dissonant, aliveness, (t, children_steps)) in enumerate(steps_with_aliveness):
             this_s_path = s_path + [i]
 
-            box_color = Color(*LIGHT_YELLOW)
-
-            alive = False
-
-            if alive_at_my_level is None:
-                box_color = Color(*RED)  # deleted b/c of parent
-            elif nout_hash not in alive_at_my_level:
-                box_color = Color(*DARK_GREY)  # dead branch
+            if aliveness == DELETED:
+                box_color = Color(*RED)
+            elif aliveness == DEAD:
+                box_color = Color(*DARK_GREY)
             elif dissonant:
+                # I now understand that aliveness & being in dissonant state are orthogonal concerns. We _could_ express
+                # that by using another UI element than a color (e.g. strike-through). For now, we'l just stick with
+                # pink (with lower priority than RED/GREY)
                 box_color = Color(*PINK)
             else:
-                alive = True
+                box_color = Color(*LIGHT_YELLOW)
 
             if this_s_path == self.ds.s_cursor:
                 box_color = Color(*GREY)
@@ -260,29 +258,7 @@ class HistoryWidget(Widget, FocusBehavior):
                     offset_x += col_width
 
             if t is not None:
-                if alive:
-                    this_eh_tn = t_lookup(present_root_eh_tn, t_path)
-                    child_s_address = this_eh_tn.t2s[t]
-
-                    if child_s_address is None:
-                        alive_at_child_level = None
-                    else:
-                        child_historiography_in_present = this_eh_tn.historiographies[child_s_address]
-                        alive_at_child_level = list(all_preceding_nout_hashes(
-                            self.possible_timelines, child_historiography_in_present.nout_hash()))
-
-                else:
-                    alive_at_child_level = None
-
-                recursive_result = self.some_recursive_thing(
-                    present_root_eh_tn,
-                    children_steps,
-                    t_path + [t],
-                    alive_at_child_level,
-                    this_s_path,
-                    col_widths,
-                    )
-
+                recursive_result = self.draw_past_from_present(children_steps, this_s_path, col_widths)
                 non_terminals = [OffsetBox((offset_x, o[Y]), nt) for (o, nt) in recursive_result]
             else:
                 non_terminals = []

@@ -216,13 +216,13 @@ class HistoriographyTreeNode(object):
         return "YATN"
 
 
-def t_lookup(yatn, t_path):
+def t_lookup(htn, t_path):
     if t_path == []:
-        return yatn
+        return htn
 
-    s_addr = yatn.t2s[t_path[0]]
+    s_addr = htn.t2s[t_path[0]]
     if s_addr is None:
         return None
 
-    result = t_lookup(yatn.children[s_addr], t_path[1:])
+    result = t_lookup(htn.children[s_addr], t_path[1:])
     return result
