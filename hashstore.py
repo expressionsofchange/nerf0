@@ -77,3 +77,14 @@ class HashStore(object):
             if k.startswith(prefix):
                 return self.get(Hash(k))
         raise KeyError()
+
+
+class ReadOnlyHashStore(object):
+    def __init__(self, delegate):
+        self._delegate = delegate
+
+    def get(self, hash_):
+        return self._delegate.get(hash_)
+
+    def guess(self, human_readable_hash):
+        return self._delegate.guess(human_readable_hash)

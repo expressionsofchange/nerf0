@@ -3,7 +3,7 @@ from utils import pmts
 from legato import Nout
 from dsn.s_expr.legato import parse_nout
 
-from hashstore import Hash, HashStore
+from hashstore import Hash, HashStore, ReadOnlyHashStore
 
 POSSIBILITY = 0
 ACTUALITY = 1
@@ -51,7 +51,8 @@ def parse_pos_acts(byte_stream):
 
 class HashStoreChannelListener(object):
     def __init__(self, channel):
-        self.possible_timelines = HashStore(Nout, parse_nout)
+        self._possible_timelines = HashStore(Nout, parse_nout)
+        self.possible_timelines = ReadOnlyHashStore(self._possible_timelines)
 
         # receive-only connection: HashStoreChannelListener's outwards communication goes via others reading
         # self.possible_timelines
@@ -60,7 +61,7 @@ class HashStoreChannelListener(object):
     def receive(self, data):
         # Receives: Possibility | Actuality; the former are stored, the latter ignored.
         if isinstance(data, Possibility):
-            self.possible_timelines.add(data.nout)
+            self._possible_timelines.add(data.nout)
 
 
 class LatestActualityListener(object):
