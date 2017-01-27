@@ -16,13 +16,13 @@ class Historiography(object):
 
     The idea is: the nout-hashes are often related, and you want to be able to express how that's so.
 
-    >>> from dsn.s_expr.legato import NoteNout, NoteCapo, NoteSlur
+    >>> from dsn.s_expr.legato import NoteNout, NoteCapo, NoteSlur, NoteNoutHash
     >>> from dsn.s_expr.clef import TextBecome
     >>> from hashstore import HashStore
     >>>
     >>> from historiography import Historiography
     >>>
-    >>> possible_timelines = HashStore(NoteNout, NoteCapo, NoteSlur)
+    >>> possible_timelines = HashStore(NoteNoutHash, NoteNout, NoteCapo, NoteSlur)
     >>>
     >>> capo = NoteCapo()
     >>>

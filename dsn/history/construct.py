@@ -1,6 +1,7 @@
-from hashstore import Hash
 from posacts import Possibility, Actuality
+
 from dsn.s_expr.utils import some_more_cut_paste
+from dsn.s_expr.legato import NoteNoutHash
 
 from dsn.history.clef import (
     EHCursorChild,
@@ -42,7 +43,7 @@ def calc_possibility(nout):
     # copy/pasted from the HashStore implementation; but we need it here again.
 
     bytes_ = nout.as_bytes()
-    hash_ = Hash.for_bytes(bytes_)
+    hash_ = NoteNoutHash.for_bytes(bytes_)
     return Possibility(nout), hash_
 
 

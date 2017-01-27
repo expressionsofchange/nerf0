@@ -10,12 +10,11 @@ nouts_for_notes:
 [(SLUR (TEXT a) -> 6e340b9cffb3), (SLUR (TEXT b) -> 1f2cf5ca7d0d)]
 """
 
-from hashstore import Hash, NoutAndHash
+from hashstore import NoutAndHash
 from posacts import Possibility, Actuality
 from s_address import node_for_s_address
 
-
-from dsn.s_expr.legato import NoteCapo, NoteSlur
+from dsn.s_expr.legato import NoteCapo, NoteSlur, NoteNoutHash
 from dsn.s_expr.clef import (
     BecomeNode,
     Insert,
@@ -29,7 +28,7 @@ def calc_possibility(nout):
     # copy/pasted from the HashStore implementation; but we need it here again.
 
     bytes_ = nout.as_bytes()
-    hash_ = Hash.for_bytes(bytes_)
+    hash_ = NoteNoutHash.for_bytes(bytes_)
     return Possibility(nout), hash_
 
 

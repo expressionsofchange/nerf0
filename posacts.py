@@ -1,8 +1,8 @@
 from utils import pmts
 
-from dsn.s_expr.legato import NoteNout, NoteCapo, NoteSlur
+from dsn.s_expr.legato import NoteNout, NoteCapo, NoteSlur, NoteNoutHash
 
-from hashstore import Hash, HashStore, ReadOnlyHashStore
+from hashstore import HashStore, ReadOnlyHashStore
 
 POSSIBILITY = 0
 ACTUALITY = 1
@@ -38,7 +38,7 @@ class Possibility(object):
 
 class Actuality(object):
     def __init__(self, nout_hash):
-        pmts(nout_hash, Hash)
+        pmts(nout_hash, NoteNoutHash)
         # better yet would be: a pmts that actually makes sure whether the given hash actually points at a NoteNout...
         self.nout_hash = nout_hash
 
@@ -47,12 +47,12 @@ class Actuality(object):
 
     @staticmethod
     def from_stream(byte_stream):
-        return Actuality(Hash.from_stream(byte_stream))
+        return Actuality(NoteNoutHash.from_stream(byte_stream))
 
 
 class HashStoreChannelListener(object):
     def __init__(self, channel):
-        self._possible_timelines = HashStore(NoteNout, NoteCapo, NoteSlur)
+        self._possible_timelines = HashStore(NoteNoutHash, NoteNout, NoteCapo, NoteSlur)
         self.possible_timelines = ReadOnlyHashStore(self._possible_timelines)
 
         # receive-only connection: HashStoreChannelListener's outwards communication goes via others reading

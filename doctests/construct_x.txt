@@ -1,10 +1,10 @@
->>> from hashstore import Hash
 >>> from dsn.s_expr.clef import BecomeNode, TextBecome, Insert, Replace, Delete
 >>> from dsn.s_expr.structure import TreeNode, TreeText
 >>> from dsn.s_expr.construct_x import x_note_play
+>>> from dsn.s_expr.legato import NoteNoutHash
 >>> 
 >>> metadata = 'ignored for these tests'
->>> hash = Hash.for_bytes(b'')
+>>> hash = NoteNoutHash.for_bytes(b'')
 >>> 
 >>> test_tree = TreeNode([
 ...     TreeNode([

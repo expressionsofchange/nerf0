@@ -2,14 +2,14 @@
 >>> 
 >>> from dsn.s_expr.clef import BecomeNode, TextBecome, Delete
 >>> from dsn.s_expr.construct_y import construct_y_from_scratch
->>> from dsn.s_expr.legato import NoteNout, NoteCapo, NoteSlur
+>>> from dsn.s_expr.legato import NoteNout, NoteCapo, NoteSlur, NoteNoutHash
 >>> from dsn.s_expr.test_utils import iinsert, rreplace
 >>> from dsn.s_expr.utils import nouts_for_notes_da_capo
 >>> 
 
 The structure of Nouts & Notes below matches the drawing in green in the blue booklet of my private notes.
 
->>> p = HashStore(NoteNout, NoteCapo, NoteSlur)
+>>> p = HashStore(NoteNoutHash, NoteNout, NoteCapo, NoteSlur)
 >>> 
 >>> capo = NoteCapo()
 >>> hash_capo = p.add(capo)

@@ -1,5 +1,4 @@
 # coding=utf-8
-from hashstore import Hash
 
 from vlq import to_vlq, from_vlq
 from utils import pmts, rfs
@@ -52,9 +51,15 @@ class Insert(Note):
         """index : index to be inserted at in the list of children
         nout_hash: Hash pointing to a Nout of the history to be inserted"""
 
+        # Avoids circular imports (NoteNout's definition depends on a definition of Note; and we depend on
+        # NoteNoutHash). Strictly speaking we could reorder the definitions as well, as such:
+        # * Note (the base class)
+        # * NoteNout & NoteNoutHash
+        # * Note's implementations (Insert, Replace)
+        from dsn.s_expr.legato import NoteNoutHash
+
         pmts(index, int)
-        pmts(nout_hash, Hash)
-        # better yet would be: a pmts that actually makes sure whether the given hash actually points at a Nout...
+        pmts(nout_hash, NoteNoutHash)
 
         self.index = index
         self.nout_hash = nout_hash
@@ -67,8 +72,10 @@ class Insert(Note):
 
     @staticmethod
     def from_stream(byte_stream):
+        from dsn.s_expr.legato import NoteNoutHash  # Avoids circular imports (see note in Insert.__init__)
+
         # N.B.: The TypeConstructor byte is not repeated here; it happens before we reach this point
-        return Insert(from_vlq(byte_stream), Hash.from_stream(byte_stream))
+        return Insert(from_vlq(byte_stream), NoteNoutHash.from_stream(byte_stream))
 
 
 class Delete(Note):
@@ -91,11 +98,12 @@ class Delete(Note):
 class Replace(Note):
     def __init__(self, index, nout_hash):
         """index : index to be inserted at in the list of children
-        nout_hash: Hash pointing to a Nout of the history to be inserted"""
+        nout_hash: NoteNoutHash pointing to a Nout of the history to be inserted"""
+
+        from dsn.s_expr.legato import NoteNoutHash  # Avoids circular imports (see note in Insert.__init__)
 
         pmts(index, int)
-        pmts(nout_hash, Hash)
-        # better yet would be: a pmts that actually makes sure whether the given hash actually points at a Nout...
+        pmts(nout_hash, NoteNoutHash)
 
         self.index = index
         self.nout_hash = nout_hash
@@ -108,7 +116,8 @@ class Replace(Note):
 
     @staticmethod
     def from_stream(byte_stream):
-        return Replace(from_vlq(byte_stream), Hash.from_stream(byte_stream))
+        from dsn.s_expr.legato import NoteNoutHash  # Avoids circular imports (see note in Insert.__init__)
+        return Replace(from_vlq(byte_stream), NoteNoutHash.from_stream(byte_stream))
 
 
 # Text-related notes: I'm starting with just one

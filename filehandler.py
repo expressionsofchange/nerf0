@@ -1,8 +1,7 @@
-from dsn.s_expr.legato import NoteCapo, NoteSlur
+from dsn.s_expr.legato import NoteCapo, NoteSlur, NoteNoutHash
 
 from dsn.s_expr.clef import BecomeNode
 from posacts import PosAct, Possibility, Actuality
-from hashstore import Hash
 
 
 class FileWriter(object):
@@ -33,7 +32,7 @@ def initialize_history(channel):
     def hash_for(nout):
         # copy/pasta... e.g. from cli.py (at the time of copy/pasting)
         bytes_ = nout.as_bytes()
-        return Hash.for_bytes(bytes_)
+        return NoteNoutHash.for_bytes(bytes_)
 
     def as_iter():
         capo = NoteCapo()
