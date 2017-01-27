@@ -88,7 +88,7 @@ def y_note_play(note, structure, structure_is_dissonant, recurse, possible_timel
     raise Exception("Unknown Note")
 
 
-def construct_y(tree_lookup, possible_timelines, historiography, edge_nout_hash):
+def construct_y(cache, possible_timelines, historiography, edge_nout_hash):
     """
     construct_y constructs a structure that can be used to understand history (e.g. display it in a GUI to humans)
 
@@ -134,7 +134,7 @@ def construct_y(tree_lookup, possible_timelines, historiography, edge_nout_hash)
     # Perhapse we can simply use a set of all seen hashes, and a spacetime mapping? TBD...
 
     def recurse(h, enh):
-        return construct_y(tree_lookup, possible_timelines, h, enh)
+        return construct_y(cache, possible_timelines, h, enh)
 
     historiography_at = historiography.x_append(edge_nout_hash)
 
@@ -144,8 +144,8 @@ def construct_y(tree_lookup, possible_timelines, historiography, edge_nout_hash)
         structure, dissonant = None, False
     else:
         # The below is by definition: the POD with "what's new", so you must have seen (and built and stored) it before
-        assert whats_new_pod in tree_lookup
-        structure, dissonant = tree_lookup[whats_new_pod]
+        assert whats_new_pod in cache
+        structure, dissonant = cache[whats_new_pod]
 
     new_hashes = reversed(list(historiography_at.whats_new()))
     annotated_hashes = []
@@ -154,7 +154,7 @@ def construct_y(tree_lookup, possible_timelines, historiography, edge_nout_hash)
         new_nout = possible_timelines.get(new_hash)
 
         structure, dissonant, rhi = y_note_play(new_nout.note, structure, dissonant, recurse, possible_timelines)
-        tree_lookup[new_hash] = structure, dissonant
+        cache[new_hash] = structure, dissonant
 
         annotated_hashes.append(AnnotatedHash(new_hash, dissonant, rhi))
 
@@ -165,8 +165,6 @@ def y_origin(possible_timelines):
     return Historiography(possible_timelines)
 
 
-def construct_y_from_scratch(possible_timelines, edge_nout_hash):
-    tree_lookup = {}  # TODO pull the 'tree_lookup' to the calling location for caching between calls
-
+def construct_y_from_scratch(cache, possible_timelines, edge_nout_hash):
     historiography = y_origin(possible_timelines)
-    return construct_y(tree_lookup, possible_timelines, historiography, edge_nout_hash)
+    return construct_y(cache, possible_timelines, historiography, edge_nout_hash)

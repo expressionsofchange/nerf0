@@ -32,7 +32,7 @@
 ...     h = p.add(nh.nout)
 ...
 >>>
->>> htn, historiography_at, annotated_hashes = construct_y_from_scratch(p, nh.nout_hash)
+>>> htn, historiography_at, annotated_hashes = construct_y_from_scratch({}, p, nh.nout_hash)
 >>>
 >>> result = view_past_from_present(
 ...     possible_timelines=p,
@@ -71,7 +71,7 @@
 ...     h = p.add(nh.nout)
 ...
 >>>
->>> htn, historiography_at, annotated_hashes = construct_y_from_scratch(p, nh.nout_hash)
+>>> htn, historiography_at, annotated_hashes = construct_y_from_scratch({}, p, nh.nout_hash)
 >>>
 >>> result = view_past_from_present(
 ...     possible_timelines=p,

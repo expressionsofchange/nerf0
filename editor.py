@@ -32,6 +32,9 @@ class EditorGUI(App):
     def __init__(self, filename):
         super(EditorGUI, self).__init__()
 
+        self.construct_y_cache = {}
+        self.construct_x_cache = {}
+
         self.filename = filename
 
         self.setup_channels()
@@ -60,12 +63,13 @@ class EditorGUI(App):
             size_hint=(.5, 1),
             possible_timelines=self.possible_timelines,
             history_channel=history_channel,
+            construct_x_cache=self.construct_x_cache,
             )
 
         history_widget = HistoryWidget(
             size_hint=(.5, 1),
             possible_timelines=tree.possible_timelines,
-            all_trees=tree.all_trees,
+            construct_y_cache=self.construct_y_cache,
             )
         horizontal_layout.add_widget(history_widget)
         horizontal_layout.add_widget(tree)

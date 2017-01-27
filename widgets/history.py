@@ -57,7 +57,8 @@ class HistoryWidget(FocusBehavior, Widget):
 
     def __init__(self, **kwargs):
         self.possible_timelines = kwargs.pop('possible_timelines')
-        self.all_trees = kwargs.pop('all_trees')
+        self.construct_y_cache = kwargs.pop('construct_y_cache')
+
         self.display_mode = 's'
 
         # Not the best name ever, but at least it clearly indicates we're talking about the channel which contains
@@ -129,7 +130,6 @@ class HistoryWidget(FocusBehavior, Widget):
             new_annotated_hashes = self.ds.annotated_hashes
             new_htn = self.ds.htn
         else:
-            # many options for optimization/simplification here, such as sharing results_lookup more globally.
             new_htn, new_annotated_hashes = self._trees(last_actuality.nout_hash)
 
         self.ds = EHStructure(
@@ -141,7 +141,8 @@ class HistoryWidget(FocusBehavior, Widget):
         self.refresh()
 
     def _trees(self, nout_hash):
-        new_htn, h2, new_annotated_hashes = construct_y_from_scratch(self.possible_timelines, nout_hash)
+        new_htn, h2, new_annotated_hashes = construct_y_from_scratch(
+            self.construct_y_cache, self.possible_timelines, nout_hash)
 
         edge_nout_hash, _, _ = new_annotated_hashes[-1]
         liveness_annotated_hashes = view_past_from_present(
