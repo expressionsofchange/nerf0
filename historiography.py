@@ -1,4 +1,3 @@
-from legato import all_preceding_nout_hashes
 from spacetime import st_sanity
 from itertools import takewhile
 from utils import i_flat_zip_longest, pmts
@@ -17,23 +16,22 @@ class Historiography(object):
 
     The idea is: the nout-hashes are often related, and you want to be able to express how that's so.
 
-    >>> from legato import Nout, NoutCapo
-    >>> from dsn.s_expr.legato import NoutSlur, parse_nout
+    >>> from dsn.s_expr.legato import NoteNout, NoteCapo, NoteSlur
     >>> from dsn.s_expr.clef import TextBecome
     >>> from hashstore import HashStore
     >>>
     >>> from historiography import Historiography
     >>>
-    >>> possible_timelines = HashStore(Nout, parse_nout)
+    >>> possible_timelines = HashStore(NoteNout, NoteCapo, NoteSlur)
     >>>
-    >>> capo = NoutCapo()
+    >>> capo = NoteCapo()
     >>>
     >>> hash_capo = possible_timelines.add(capo)
     >>>
-    >>> hash_a = possible_timelines.add(NoutSlur(TextBecome("a"), hash_capo))
-    >>> hash_b = possible_timelines.add(NoutSlur(TextBecome("b"), hash_capo))
-    >>> hash_ac = possible_timelines.add(NoutSlur(TextBecome("ac"), hash_a))
-    >>> hash_acd = possible_timelines.add(NoutSlur(TextBecome("acd"), hash_ac))
+    >>> hash_a = possible_timelines.add(NoteSlur(TextBecome("a"), hash_capo))
+    >>> hash_b = possible_timelines.add(NoteSlur(TextBecome("b"), hash_capo))
+    >>> hash_ac = possible_timelines.add(NoteSlur(TextBecome("ac"), hash_a))
+    >>> hash_acd = possible_timelines.add(NoteSlur(TextBecome("acd"), hash_ac))
     >>>
     >>> historiography = Historiography(possible_timelines)
     >>> a = historiography.append(hash_a)
@@ -111,7 +109,7 @@ class Historiography(object):
 
         prev_seen_in_all_nouts = None
 
-        for nout_hash in all_preceding_nout_hashes(self.possible_timelines, nout_hash):
+        for nout_hash in self.possible_timelines.all_preceding_nout_hashes(nout_hash):
             if nout_hash in self.all_nouts:
                 prev_seen_in_all_nouts = nout_hash
                 break
@@ -134,7 +132,7 @@ class Historiography(object):
         """in anti-chronological order"""
         return takewhile(
             lambda v: v != self.prev_seen_in_all_nouts[index],
-            all_preceding_nout_hashes(self.possible_timelines, self.set_values[index]))
+            self.possible_timelines.all_preceding_nout_hashes(self.set_values[index]))
 
     def point_of_divergence(self, index):
         """Going back in time, what's the first nout_hash you already saw before?"""
@@ -142,8 +140,8 @@ class Historiography(object):
             return None
 
         return find_point_of_divergence(
-            all_preceding_nout_hashes(self.possible_timelines, self.set_values[index]),
-            all_preceding_nout_hashes(self.possible_timelines, self.set_values[index - 1]))
+            self.possible_timelines.all_preceding_nout_hashes(self.set_values[index]),
+            self.possible_timelines.all_preceding_nout_hashes(self.set_values[index - 1]))
 
     def whats_made_alive(self, index):
         """in anti-chronological order"""
@@ -153,7 +151,7 @@ class Historiography(object):
         pod = self.point_of_divergence(index)
         return takewhile(
             lambda v: v != pod,
-            all_preceding_nout_hashes(self.possible_timelines, self.set_values[index]))
+            self.possible_timelines.all_preceding_nout_hashes(self.set_values[index]))
 
     def whats_made_dead(self, index):
         if index == 0:
@@ -162,7 +160,7 @@ class Historiography(object):
         pod = self.point_of_divergence(index)
         return takewhile(
             lambda v: v != pod,
-            all_preceding_nout_hashes(self.possible_timelines, self.set_values[index - 1]))
+            self.possible_timelines.all_preceding_nout_hashes(self.set_values[index - 1]))
 
 
 class HistoriographyAt(object):

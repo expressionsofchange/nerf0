@@ -1,5 +1,4 @@
 from spacetime import st_become, st_insert, st_replace, st_delete
-from legato import all_nhtups_for_nout_hash
 from list_operations import l_become, l_insert, l_delete, l_replace
 
 from dsn.s_expr.clef import BecomeNode, Insert, Delete, Replace, TextBecome
@@ -95,7 +94,7 @@ def construct_x(results_lookup, possible_timelines, edge_nout_hash):
     tree = None  # In the beginning, there is nothing, which we model as `None`
 
     todo = []
-    for tup in all_nhtups_for_nout_hash(possible_timelines, edge_nout_hash):
+    for tup in possible_timelines.all_nhtups_for_nout_hash(edge_nout_hash):
         if tup.nout_hash in results_lookup:
             tree = results_lookup[tup.nout_hash]
             break

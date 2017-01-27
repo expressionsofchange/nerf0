@@ -27,7 +27,6 @@ from dsn.s_expr.clef import (
 from dsn.s_expr.construct_y import construct_y_from_scratch
 from dsn.s_expr.h_utils import view_past_from_present, DEAD, DELETED
 
-from legato import all_preceding_nout_hashes
 from posacts import Actuality
 
 from widgets.utils import (
@@ -151,7 +150,7 @@ class HistoryWidget(FocusBehavior, Widget):
             annotated_hashes=new_annotated_hashes,
 
             # Alternatively, we use the knowledge that at the top_level "everything is live"
-            alive_at_my_level=list(all_preceding_nout_hashes(self.possible_timelines, edge_nout_hash)),
+            alive_at_my_level=list(self.possible_timelines.all_preceding_nout_hashes(edge_nout_hash)),
             )
 
         return new_htn, liveness_annotated_hashes

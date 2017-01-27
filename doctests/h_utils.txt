@@ -1,10 +1,9 @@
 >>> from hashstore import HashStore
->>> from legato import Nout, NoutCapo, all_preceding_nout_hashes
 >>>
 >>> from dsn.s_expr.clef import BecomeNode, TextBecome, Delete
 >>> from dsn.s_expr.construct_y import construct_y_from_scratch
 >>> from dsn.s_expr.h_utils import view_past_from_present, ALIVE_AND_WELL, DEAD, DELETED
->>> from dsn.s_expr.legato import parse_nout
+>>> from dsn.s_expr.legato import NoteNout, NoteCapo, NoteSlur
 >>> from dsn.s_expr.test_utils import iinsert, rreplace
 >>> from dsn.s_expr.utils import nouts_for_notes_da_capo
 >>>
@@ -16,9 +15,9 @@
 ...         print_aliveness(children, indentation + 4)
 ...
 >>>
->>> p = HashStore(Nout, parse_nout)
+>>> p = HashStore(NoteNout, NoteCapo, NoteSlur)
 >>>
->>> capo = NoutCapo()
+>>> capo = NoteCapo()
 >>> hash_capo = p.add(capo)
 >>>
 >>> for nh in nouts_for_notes_da_capo([
@@ -38,7 +37,7 @@
 ...     possible_timelines=p,
 ...     present_root_htn=htn,
 ...     annotated_hashes=annotated_hashes,
-...     alive_at_my_level=list(all_preceding_nout_hashes(p, nh.nout_hash)),
+...     alive_at_my_level=list(p.all_preceding_nout_hashes(nh.nout_hash)),
 ...     )
 >>>
 >>> print_aliveness(result, 0)
@@ -77,7 +76,7 @@
 ...     possible_timelines=p,
 ...     present_root_htn=htn,
 ...     annotated_hashes=annotated_hashes,
-...     alive_at_my_level=list(all_preceding_nout_hashes(p, nh.nout_hash)),
+...     alive_at_my_level=list(p.all_preceding_nout_hashes(nh.nout_hash)),
 ...     )
 >>>
 >>> print_aliveness(result, 0)

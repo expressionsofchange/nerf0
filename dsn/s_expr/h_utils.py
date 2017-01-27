@@ -1,7 +1,6 @@
 from collections import namedtuple
 
 from historiography import t_lookup
-from legato import all_preceding_nout_hashes
 
 
 """
@@ -63,8 +62,8 @@ def _view_past_from_present(
 
                 else:
                     child_historiography_in_present = parent_htn.historiographies[child_s_address]
-                    alive_at_child_level = list(all_preceding_nout_hashes(
-                        possible_timelines, child_historiography_in_present.nout_hash()))
+                    alive_at_child_level = list(possible_timelines.all_preceding_nout_hashes(
+                        child_historiography_in_present.nout_hash()))
 
             if child_aliveness != ALIVE_AND_WELL:
                 alive_at_child_level = "_"

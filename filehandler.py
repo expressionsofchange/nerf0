@@ -1,8 +1,7 @@
-from legato import NoutCapo
-from dsn.s_expr.legato import NoutSlur
+from dsn.s_expr.legato import NoteCapo, NoteSlur
 
 from dsn.s_expr.clef import BecomeNode
-from posacts import parse_pos_acts, Possibility, Actuality
+from posacts import PosAct, Possibility, Actuality
 from hashstore import Hash
 
 
@@ -26,7 +25,7 @@ class FileWriter(object):
 
 def read_from_file(filename, channel):
     byte_stream = iter(open(filename, 'rb').read())
-    for pos_act in parse_pos_acts(byte_stream):
+    for pos_act in PosAct.all_from_stream(byte_stream):
         channel.broadcast(pos_act)
 
 
@@ -37,10 +36,10 @@ def initialize_history(channel):
         return Hash.for_bytes(bytes_)
 
     def as_iter():
-        capo = NoutCapo()
+        capo = NoteCapo()
         yield Possibility(capo)
 
-        root_node_nout = NoutSlur(BecomeNode(), hash_for(capo))
+        root_node_nout = NoteSlur(BecomeNode(), hash_for(capo))
         yield Possibility(root_node_nout)
         yield Actuality(hash_for(root_node_nout))
 

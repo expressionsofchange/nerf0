@@ -22,7 +22,17 @@ NOTE_TEXT_BECOME = 3
 
 
 class Note(object):
-    pass
+
+    @staticmethod
+    def from_stream(byte_stream):
+        byte0 = next(byte_stream)
+        return {
+            NOTE_NODE_BECOME: BecomeNode,
+            NOTE_NODE_INSERT: Insert,
+            NOTE_NODE_DELETE: Delete,
+            NOTE_NODE_REPLACE: Replace,
+            NOTE_TEXT_BECOME: TextBecome,
+        }[byte0].from_stream(byte_stream)
 
 
 class BecomeNode(Note):
@@ -119,14 +129,3 @@ class TextBecome(Note):
         length = from_vlq(byte_stream)
         utf8 = rfs(byte_stream, length)
         return TextBecome(str(utf8, 'utf-8'))
-
-
-def parse_note(byte_stream):
-    byte0 = next(byte_stream)
-    return {
-        NOTE_NODE_BECOME: BecomeNode,
-        NOTE_NODE_INSERT: Insert,
-        NOTE_NODE_DELETE: Delete,
-        NOTE_NODE_REPLACE: Replace,
-        NOTE_TEXT_BECOME: TextBecome,
-    }[byte0].from_stream(byte_stream)

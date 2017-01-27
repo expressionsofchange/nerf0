@@ -1,6 +1,6 @@
 # coding=utf-8
 
-from legato import NoutCapo
+from dsn.s_expr.legato import NoteCapo
 
 
 def print_nouts(possible_timelines, present_nout_hash):
@@ -8,7 +8,7 @@ def print_nouts(possible_timelines, present_nout_hash):
     present_nout = possible_timelines.get(present_nout_hash)
     prev_nout = possible_timelines.get(present_nout.previous_hash)
 
-    if prev_nout == NoutCapo():
+    if prev_nout == NoteCapo():
         result = ""
     else:
         result = print_nouts(possible_timelines, present_nout.previous_hash) + "\n"
@@ -29,7 +29,7 @@ def print_nouts_2(possible_timelines, present_nout_hash, indentation, seen):
     seen.add(present_nout_hash.as_bytes())
     present_nout = possible_timelines.get(present_nout_hash)
 
-    if present_nout == NoutCapo():
+    if present_nout == NoteCapo():
         result = ""
     else:
         result = print_nouts_2(possible_timelines, present_nout.previous_hash, indentation, seen) + "\n\n"

@@ -1,6 +1,6 @@
 from s_address import node_for_s_address, s_dfs
 
-from dsn.s_expr.legato import NoutSlur
+from dsn.s_expr.legato import NoteSlur
 
 from dsn.s_expr.utils import (
     bubble_history_up,
@@ -75,7 +75,7 @@ def edit_note_play(structure, edit_note):
         delete_at_index = structure.s_cursor[-1]
         delete_from_hash = node_for_s_address(structure.tree, delete_from).metadata.nout_hash
 
-        p, h = calc_possibility(NoutSlur(Delete(delete_at_index), delete_from_hash))
+        p, h = calc_possibility(NoteSlur(Delete(delete_at_index), delete_from_hash))
 
         if delete_at_index == len(node_for_s_address(structure.tree, delete_from).children) - 1:
             # deletion makes cursor pos invalid: up to parent (alternative: sibbling-up first, until no more sibblings)

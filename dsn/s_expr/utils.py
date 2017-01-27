@@ -10,13 +10,12 @@ nouts_for_notes:
 [(SLUR (TEXT a) -> 6e340b9cffb3), (SLUR (TEXT b) -> 1f2cf5ca7d0d)]
 """
 
-from hashstore import Hash
-from legato import all_nhtups_for_nout_hash, NoutCapo, NoutAndHash
+from hashstore import Hash, NoutAndHash
 from posacts import Possibility, Actuality
 from s_address import node_for_s_address
 
 
-from dsn.s_expr.legato import NoutSlur
+from dsn.s_expr.legato import NoteCapo, NoteSlur
 from dsn.s_expr.clef import (
     BecomeNode,
     Insert,
@@ -43,7 +42,7 @@ def calc_actuality(nout_hash):
 
 def nouts_for_notes_da_capo(notes):
     """Given notes without prior history, connect them as Nouts"""
-    possibility, previous_hash = calc_possibility(NoutCapo())
+    possibility, previous_hash = calc_possibility(NoteCapo())
     return nouts_for_notes(notes, previous_hash)
 
 
@@ -51,7 +50,7 @@ def nouts_for_notes(notes, previous_hash):
     """Given a list of notes and a previous_hash denoting a prior history, connect them as nouts"""
 
     for note in notes:
-        nout = NoutSlur(note, previous_hash)
+        nout = NoteSlur(note, previous_hash)
         possibility, previous_hash = calc_possibility(nout)
         # note: it's next iteration's previous_hash, and this iteration's current hash, so the below is odd but correct
         yield NoutAndHash(possibility.nout, previous_hash)
@@ -63,7 +62,7 @@ def some_cut_paste(possible_timelines, edge_nout_hash, cut_nout_hash, paste_poin
 
     todo = []
 
-    for nh in all_nhtups_for_nout_hash(possible_timelines, edge_nout_hash):
+    for nh in possible_timelines.all_nhtups_for_nout_hash(edge_nout_hash):
         # potentially deal with edge cases (e.g. cut_nout_hash not in history) here.
         todo.append(nh)
         if nh.nout_hash == cut_nout_hash:
@@ -71,7 +70,7 @@ def some_cut_paste(possible_timelines, edge_nout_hash, cut_nout_hash, paste_poin
 
     prev = paste_point_hash
     for nh in reversed(todo):  # Maybe: use `nouts_for_notes` here (currently not possible b/c unmatching types)
-        nout = NoutSlur(nh.nout.note, prev)
+        nout = NoteSlur(nh.nout.note, prev)
         possibility, prev = calc_possibility(nout)
         yield possibility  # or: possibility.nout
 
@@ -85,7 +84,7 @@ def some_more_cut_paste(possible_timelines, edge_nout_hash, cut_nout_hash, paste
     """
 
     todo = []
-    for nh in all_nhtups_for_nout_hash(possible_timelines, edge_nout_hash):
+    for nh in possible_timelines.all_nhtups_for_nout_hash(edge_nout_hash):
         # potentially deal with edge cases (e.g. cut_nout_hash not in history) here.
         if nh.nout_hash == cut_nout_hash:
             break
@@ -94,7 +93,7 @@ def some_more_cut_paste(possible_timelines, edge_nout_hash, cut_nout_hash, paste
 
     prev = paste_point_hash
     for nh in reversed(todo):  # Maybe: use `nouts_for_notes` here (currently not possible b/c unmatching types)
-        nout = NoutSlur(nh.nout.note, prev)
+        nout = NoteSlur(nh.nout.note, prev)
         possibility, prev = calc_possibility(nout)
         yield possibility  # or: possibility.nout
 
@@ -117,7 +116,7 @@ def bubble_history_up(hash_to_bubble, tree, s_address):
         replace_in = node_for_s_address(tree, s_address[:i])
 
         p, hash_to_bubble = calc_possibility(
-            NoutSlur(Replace(s_address[i], hash_to_bubble), replace_in.metadata.nout_hash))
+            NoteSlur(Replace(s_address[i], hash_to_bubble), replace_in.metadata.nout_hash))
 
         posacts.append(p)
 
@@ -130,11 +129,11 @@ def bubble_history_up(hash_to_bubble, tree, s_address):
 def insert_text_at(tree, parent_s_address, index, text):
     parent_node = node_for_s_address(tree, parent_s_address)
 
-    pa0, begin = calc_possibility(NoutCapo())
-    pa1, to_be_inserted = calc_possibility(NoutSlur(TextBecome(text), begin))
+    pa0, begin = calc_possibility(NoteCapo())
+    pa1, to_be_inserted = calc_possibility(NoteSlur(TextBecome(text), begin))
 
     pa2, insertion = calc_possibility(
-        NoutSlur(Insert(index, to_be_inserted), parent_node.metadata.nout_hash))
+        NoteSlur(Insert(index, to_be_inserted), parent_node.metadata.nout_hash))
 
     posacts = bubble_history_up(insertion, tree, parent_s_address)
     return [pa0, pa1, pa2] + posacts
@@ -143,11 +142,11 @@ def insert_text_at(tree, parent_s_address, index, text):
 def insert_node_at(tree, parent_s_address, index):
     parent_node = node_for_s_address(tree, parent_s_address)
 
-    pa0, begin = calc_possibility(NoutCapo())
-    pa1, to_be_inserted = calc_possibility(NoutSlur(BecomeNode(), begin))
+    pa0, begin = calc_possibility(NoteCapo())
+    pa1, to_be_inserted = calc_possibility(NoteSlur(BecomeNode(), begin))
 
     pa2, insertion = calc_possibility(
-        NoutSlur(Insert(index, to_be_inserted), parent_node.metadata.nout_hash))
+        NoteSlur(Insert(index, to_be_inserted), parent_node.metadata.nout_hash))
 
     posacts = bubble_history_up(insertion, tree, parent_s_address)
     return [pa0, pa1, pa2] + posacts
@@ -156,13 +155,13 @@ def insert_node_at(tree, parent_s_address, index):
 def replace_text_at(tree, s_address, text):
     parent_node = node_for_s_address(tree, s_address[:-1])
 
-    pa0, begin = calc_possibility(NoutCapo())
-    pa1, to_be_inserted = calc_possibility(NoutSlur(TextBecome(text), begin))
+    pa0, begin = calc_possibility(NoteCapo())
+    pa1, to_be_inserted = calc_possibility(NoteSlur(TextBecome(text), begin))
 
     index = s_address[-1]
 
     pa2, insertion = calc_possibility(
-        NoutSlur(Replace(index, to_be_inserted), parent_node.metadata.nout_hash))
+        NoteSlur(Replace(index, to_be_inserted), parent_node.metadata.nout_hash))
 
     posacts = bubble_history_up(insertion, tree, s_address[:-1])
     return [pa0, pa1, pa2] + posacts

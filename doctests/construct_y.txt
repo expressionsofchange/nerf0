@@ -1,18 +1,17 @@
 >>> from hashstore import HashStore
->>> from legato import Nout, NoutCapo, all_preceding_nout_hashes
 >>> 
 >>> from dsn.s_expr.clef import BecomeNode, TextBecome, Delete
 >>> from dsn.s_expr.construct_y import construct_y_from_scratch
->>> from dsn.s_expr.legato import parse_nout
+>>> from dsn.s_expr.legato import NoteNout, NoteCapo, NoteSlur
 >>> from dsn.s_expr.test_utils import iinsert, rreplace
 >>> from dsn.s_expr.utils import nouts_for_notes_da_capo
 >>> 
 
 The structure of Nouts & Notes below matches the drawing in green in the blue booklet of my private notes.
 
->>> p = HashStore(Nout, parse_nout)
+>>> p = HashStore(NoteNout, NoteCapo, NoteSlur)
 >>> 
->>> capo = NoutCapo()
+>>> capo = NoteCapo()
 >>> hash_capo = p.add(capo)
 >>> 
 >>> for nh in nouts_for_notes_da_capo([
@@ -54,7 +53,7 @@ repeated (25bc3c945eb5 is not preceded by 437ba946fac9). This is because it's no
 
 So, what's actually alive at "level 1"?
 
->>> list(all_preceding_nout_hashes(p, tree.historiographies[0].nout_hash()))
+>>> list(p.all_preceding_nout_hashes(tree.historiographies[0].nout_hash()))
 [25bc3c945eb5, 437ba946fac9]
 
 Note that there is no historiography that contains the node for the Text "a" (1f2cf5ca7d0d); this is a consequence of

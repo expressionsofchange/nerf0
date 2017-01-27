@@ -1,4 +1,4 @@
 from legato import nout_factory
-from dsn.s_expr.clef import Note, parse_note
+from dsn.s_expr.clef import Note
 
-NoutSlur, parse_nout = nout_factory(Note, parse_note)
+NoteNout, NoteCapo, NoteSlur = nout_factory(Note, "Note")

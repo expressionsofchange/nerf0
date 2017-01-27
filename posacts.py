@@ -1,7 +1,6 @@
 from utils import pmts
 
-from legato import Nout
-from dsn.s_expr.legato import parse_nout
+from dsn.s_expr.legato import NoteNout, NoteCapo, NoteSlur
 
 from hashstore import Hash, HashStore, ReadOnlyHashStore
 
@@ -9,9 +8,24 @@ POSSIBILITY = 0
 ACTUALITY = 1
 
 
+class PosAct(object):
+    @staticmethod
+    def from_stream(byte_stream):
+        byte0 = next(byte_stream)
+        return {
+            ACTUALITY: Actuality,
+            POSSIBILITY: Possibility,
+        }[byte0].from_stream(byte_stream)
+
+    @staticmethod
+    def all_from_stream(byte_stream):
+        while True:
+            yield PosAct.from_stream(byte_stream)  # Transparently yields the StopIteration at the lower level
+
+
 class Possibility(object):
     def __init__(self, nout):
-        pmts(nout, Nout)
+        pmts(nout, NoteNout)
         self.nout = nout
 
     def as_bytes(self):
@@ -19,13 +33,13 @@ class Possibility(object):
 
     @staticmethod
     def from_stream(byte_stream):
-        return Possibility(parse_nout(byte_stream))
+        return Possibility(NoteNout.from_stream(byte_stream))
 
 
 class Actuality(object):
     def __init__(self, nout_hash):
         pmts(nout_hash, Hash)
-        # better yet would be: a pmts that actually makes sure whether the given hash actually points at a Nout...
+        # better yet would be: a pmts that actually makes sure whether the given hash actually points at a NoteNout...
         self.nout_hash = nout_hash
 
     def as_bytes(self):
@@ -36,22 +50,9 @@ class Actuality(object):
         return Actuality(Hash.from_stream(byte_stream))
 
 
-def parse_pos_act(byte_stream):
-    byte0 = next(byte_stream)
-    return {
-        ACTUALITY: Actuality,
-        POSSIBILITY: Possibility,
-    }[byte0].from_stream(byte_stream)
-
-
-def parse_pos_acts(byte_stream):
-    while True:
-        yield parse_pos_act(byte_stream)  # Transparently yields the StopIteration at the lower level
-
-
 class HashStoreChannelListener(object):
     def __init__(self, channel):
-        self._possible_timelines = HashStore(Nout, parse_nout)
+        self._possible_timelines = HashStore(NoteNout, NoteCapo, NoteSlur)
         self.possible_timelines = ReadOnlyHashStore(self._possible_timelines)
 
         # receive-only connection: HashStoreChannelListener's outwards communication goes via others reading
