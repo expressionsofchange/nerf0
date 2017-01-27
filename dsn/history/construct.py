@@ -20,7 +20,7 @@ def ad_hoc_s_dfs(annotated_hashes, s_address):
     else:
         result = [s_address]
 
-    for i, (nout_hash, dissonant, (t, children_steps)) in enumerate(annotated_hashes):
+    for i, (nout_hash, dissonant, aliveness, (t, children_steps)) in enumerate(annotated_hashes):
         result.extend(ad_hoc_s_dfs(children_steps, s_address + [i]))
 
     return result
@@ -62,16 +62,16 @@ def eh_note_play(possible_timelines, structure, edit_note):
         posacts = []
 
         top_index = structure.s_cursor[0]
-        to_be_deleted, error, rhi = structure.annotated_hashes[top_index]
+        to_be_deleted, error, aliveness, rhi = structure.annotated_hashes[top_index]
 
-        edge_nout_hash, _, _ = structure.annotated_hashes[-1]
+        edge_nout_hash, _, _, _ = structure.annotated_hashes[-1]
 
         if edge_nout_hash == to_be_deleted:
             # Alternative (equivalent) implementation
             # last_hash = self.possible_timelines.get(to_be_deleted).previous_hash
 
             penultimate_step = structure.annotated_hashes[-2]
-            last_hash, dissonant, (t, children_steps) = penultimate_step
+            last_hash, dissonant, _, (t, children_steps) = penultimate_step
 
         else:
             results = some_more_cut_paste(
