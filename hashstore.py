@@ -17,25 +17,23 @@ class HashStore(object):
         self.NoutSlur = NoutSlur
 
     def __repr__(self):
-        return '\n'.join(
-            repr(self.Hash(hash_bytes)) + ": " + repr(self.Nout.from_stream(iter((bytes_))))
-            for hash_bytes, bytes_ in list(self.d.items())
-            )
+        return "<HashStore of %s>" % type(self.Nout).__name__
 
     def add(self, serializable):
         pmts(serializable, self.Nout)
 
         bytes_ = serializable.as_bytes()
         hash_ = self.Hash.for_bytes(bytes_)
-        self.d[hash_.as_bytes()] = bytes_
+        self.d[hash_] = bytes_
         return hash_
 
     def get(self, hash_):
-        if hash_.as_bytes() not in self.d:
+        if hash_ not in self.d:
             raise KeyError(repr(hash_))
-        return self.Nout.from_stream(iter(self.d[hash_.as_bytes()]))
+        return self.Nout.from_stream(iter(self.d[hash_]))
 
     def guess(self, human_readable_hash):
+        """.get() based on a hash formatted as a string. Debugging only! (naive implementation; abysmal performance)"""
         prefix = unhexlify(human_readable_hash)
         for k, v in list(self.d.items()):
             if k.startswith(prefix):
