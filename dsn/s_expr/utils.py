@@ -25,7 +25,7 @@ from dsn.s_expr.clef import (
 
 def calc_possibility(nout):
     # Note: the're some duplication here of logic that's also elsewhere, e.g. the calculation of the hash was
-    # copy/pasted from the HashStore implementation; but we need it here again.
+    # copy/pasted from the Hash implementation; but we need it here again.
 
     bytes_ = nout.as_bytes()
     hash_ = NoteNoutHash.for_bytes(bytes_)

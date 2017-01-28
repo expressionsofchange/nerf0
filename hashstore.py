@@ -9,18 +9,16 @@ NoutAndHash = namedtuple('NoutAndHash', (
 
 class HashStore(object):
 
-    def __init__(self, Hash, Nout, NoutCapo, NoutSlur):
+    def __init__(self, Hash, ObjClass):
         self.d = {}
         self.Hash = Hash
-        self.Nout = Nout
-        self.NoutCapo = NoutCapo
-        self.NoutSlur = NoutSlur
+        self.ObjClass = ObjClass
 
     def __repr__(self):
         return "<HashStore of %s>" % type(self.Nout).__name__
 
     def add(self, serializable):
-        pmts(serializable, self.Nout)
+        pmts(serializable, self.ObjClass)
 
         bytes_ = serializable.as_bytes()
         hash_ = self.Hash.for_bytes(bytes_)
@@ -30,7 +28,7 @@ class HashStore(object):
     def get(self, hash_):
         if hash_ not in self.d:
             raise KeyError(repr(hash_))
-        return self.Nout.from_stream(iter(self.d[hash_]))
+        return self.ObjClass.from_stream(iter(self.d[hash_]))
 
     def guess(self, human_readable_hash):
         """.get() based on a hash formatted as a string. Debugging only! (naive implementation; abysmal performance)"""
@@ -39,6 +37,14 @@ class HashStore(object):
             if k.startswith(prefix):
                 return self.get(self.Hash(k))
         raise KeyError()
+
+
+class NoutHashStore(HashStore):
+    """HashStore to store Nouts."""
+
+    def __init__(self, Hash, Nout, NoutCapo):
+        super(NoutHashStore, self).__init__(Hash, Nout)
+        self.NoutCapo = NoutCapo
 
     def all_nhtups_for_nout_hash(self, nout_hash):
         while True:

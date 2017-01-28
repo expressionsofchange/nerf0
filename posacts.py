@@ -1,8 +1,8 @@
 from utils import pmts
 
-from dsn.s_expr.legato import NoteNout, NoteCapo, NoteSlur, NoteNoutHash
+from dsn.s_expr.legato import NoteNout, NoteCapo, NoteNoutHash
 
-from hashstore import HashStore, ReadOnlyHashStore
+from hashstore import NoutHashStore, ReadOnlyHashStore
 
 POSSIBILITY = 0
 ACTUALITY = 1
@@ -52,7 +52,7 @@ class Actuality(object):
 
 class HashStoreChannelListener(object):
     def __init__(self, channel):
-        self._possible_timelines = HashStore(NoteNoutHash, NoteNout, NoteCapo, NoteSlur)
+        self._possible_timelines = NoutHashStore(NoteNoutHash, NoteNout, NoteCapo)
         self.possible_timelines = ReadOnlyHashStore(self._possible_timelines)
 
         # receive-only connection: HashStoreChannelListener's outwards communication goes via others reading

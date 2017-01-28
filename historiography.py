@@ -18,11 +18,11 @@ class Historiography(object):
 
     >>> from dsn.s_expr.legato import NoteNout, NoteCapo, NoteSlur, NoteNoutHash
     >>> from dsn.s_expr.clef import TextBecome
-    >>> from hashstore import HashStore
+    >>> from hashstore import NoutHashStore
     >>>
     >>> from historiography import Historiography
     >>>
-    >>> possible_timelines = HashStore(NoteNoutHash, NoteNout, NoteCapo, NoteSlur)
+    >>> possible_timelines = NoutHashStore(NoteNoutHash, NoteNout, NoteCapo)
     >>>
     >>> capo = NoteCapo()
     >>>
