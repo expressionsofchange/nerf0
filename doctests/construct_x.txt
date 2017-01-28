@@ -4,7 +4,7 @@
 >>> from dsn.s_expr.legato import NoteNoutHash
 >>> 
 >>> metadata = 'ignored for these tests'
->>> hash = NoteNoutHash.for_bytes(b'')
+>>> hash = NoteNoutHash._for_bytes(b'')
 >>> 
 >>> test_tree = TreeNode([
 ...     TreeNode([

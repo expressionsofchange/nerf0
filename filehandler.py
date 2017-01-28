@@ -29,18 +29,13 @@ def read_from_file(filename, channel):
 
 
 def initialize_history(channel):
-    def hash_for(nout):
-        # copy/pasta... e.g. from cli.py (at the time of copy/pasting)
-        bytes_ = nout.as_bytes()
-        return NoteNoutHash.for_bytes(bytes_)
-
     def as_iter():
         capo = NoteCapo()
         yield Possibility(capo)
 
-        root_node_nout = NoteSlur(BecomeNode(), hash_for(capo))
+        root_node_nout = NoteSlur(BecomeNode(), NoteNoutHash.for_object(capo))
         yield Possibility(root_node_nout)
-        yield Actuality(hash_for(root_node_nout))
+        yield Actuality(NoteNoutHash.for_object(root_node_nout))
 
     for item in as_iter():
         channel.broadcast(item)

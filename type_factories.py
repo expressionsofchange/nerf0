@@ -27,7 +27,13 @@ def hash_factory(clazz, name_prefix):
             return self.hash_bytes
 
         @staticmethod
-        def for_bytes(bytes_):
+        def for_object(serializable):
+            pmts(serializable, clazz)
+            bytes_ = serializable.as_bytes()
+            return Hash._for_bytes(bytes_)
+
+        @staticmethod
+        def _for_bytes(bytes_):
             pmts(bytes_, bytes)
             hash_ = sha256(bytes_).digest()
             return Hash(hash_)
