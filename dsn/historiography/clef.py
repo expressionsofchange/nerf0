@@ -17,3 +17,6 @@ class SetNoteNoutHash(HistoriographyNote):
     @staticmethod
     def from_stream(byte_stream):
         return SetNoteNoutHash(NoteNoutHash.from_stream(byte_stream))
+
+    def as_bytes(self):
+        return self.note_nout_hash.as_bytes()

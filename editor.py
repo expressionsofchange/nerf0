@@ -19,6 +19,9 @@ from posacts import Actuality, HashStoreChannelListener, LatestActualityListener
 from widgets.tree import TreeWidget
 from widgets.history import HistoryWidget
 
+from dsn.historiography.legato import HistoriographyNoteNoutHash, HistoriographyNoteNout, HistoriographyNoteCapo
+from hashstore import NoutHashStore
+
 # How to tell Kivy about font locations; should be generalized
 LabelBase.register(name="DejaVuSans",
                    fn_regular="/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -32,8 +35,16 @@ class EditorGUI(App):
     def __init__(self, filename):
         super(EditorGUI, self).__init__()
 
-        self.construct_y_cache = {}
+        self.very_particular_cache = {}
         self.construct_x_cache = {}
+        self.construct_y_cache = {}
+        self.historiography_cache = {}
+
+        self.historiography_note_nout_store = NoutHashStore(
+            HistoriographyNoteNoutHash, HistoriographyNoteNout, HistoriographyNoteCapo)
+
+        # TODO where to really put this??! Also: how does it compare to "possible timelines?"
+        self.historiography_note_nout_store.add(HistoriographyNoteCapo())
 
         self.filename = filename
 
@@ -69,7 +80,10 @@ class EditorGUI(App):
         history_widget = HistoryWidget(
             size_hint=(.5, 1),
             possible_timelines=tree.possible_timelines,
+            very_particular_cache=self.very_particular_cache,
             construct_y_cache=self.construct_y_cache,
+            historiography_cache=self.historiography_cache,
+            historiography_note_nout_store=self.historiography_note_nout_store,
             )
         horizontal_layout.add_widget(history_widget)
         horizontal_layout.add_widget(tree)

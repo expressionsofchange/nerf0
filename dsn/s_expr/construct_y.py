@@ -1,10 +1,15 @@
 from dsn.s_expr.structure import TreeText
-from historiography import Historiography, HistoriographyTreeNode
 
 from dsn.s_expr.clef import BecomeNode, TextBecome, Insert, Replace, Delete
 from spacetime import st_become, st_insert, st_replace, st_delete
 from collections import namedtuple
 from list_operations import l_become, l_insert, l_delete, l_replace
+
+from historiography import Historiography, HistoriographyTreeNode
+from dsn.historiography.construct import construct_historiography
+
+from dsn.historiography.clef import SetNoteNoutHash
+from dsn.historiography.legato import HistoriographyNoteSlur, HistoriographyNoteNoutHash, HistoriographyNoteCapo
 
 
 # A tuple containing information about histories at a lower level
@@ -43,13 +48,18 @@ def y_note_play(note, structure, structure_is_dissonant, recurse, possible_timel
         if not (0 <= note.index <= len(structure.children)):  # Note: insert _at_ len(..) is ok (a.k.a. append)
             return dissonant()  # "Out of bounds: %s" % note.index
 
-        empty_historiography = y_origin(possible_timelines)
+        historiography_note_nout = HistoriographyNoteSlur(
+            SetNoteNoutHash(note.nout_hash),
+            HistoriographyNoteNoutHash.for_object(HistoriographyNoteCapo())
+        )
 
-        child, child_historiography_at, child_annotated_hashes = recurse(
-            empty_historiography, note.nout_hash)
+        child, garbage, child_annotated_hashes = recurse(historiography_note_nout)
 
         children = l_insert(structure.children, note.index, child)
-        historiographies = l_insert(structure.historiographies, note.index, child_historiography_at)
+        historiographies = l_insert(
+            structure.historiographies,
+            note.index,
+            HistoriographyNoteNoutHash.for_object(historiography_note_nout))
 
         t2s, s2t = st_insert(structure.t2s, structure.s2t, note.index)
         new_t = len(t2s) - 1
@@ -71,13 +81,18 @@ def y_note_play(note, structure, structure_is_dissonant, recurse, possible_timel
         return HistoriographyTreeNode(children, historiographies, t2s, s2t), False, RecursiveHistoryInfo(t, [])
 
     if isinstance(note, Replace):
-        existing_historiography = structure.historiographies[note.index].historiography
+        historiography_note_nout = HistoriographyNoteSlur(
+            SetNoteNoutHash(note.nout_hash),
+            structure.historiographies[note.index]
+        )
 
-        child, child_historiography_at, child_annotated_hashes = recurse(
-            existing_historiography, note.nout_hash)
+        child, garbage, child_annotated_hashes = recurse(historiography_note_nout)
 
         children = l_replace(structure.children, note.index, child)
-        historiographies = l_replace(structure.historiographies, note.index, child_historiography_at)
+        historiographies = l_replace(
+            structure.historiographies,
+            note.index,
+            HistoriographyNoteNoutHash.for_object(historiography_note_nout))
 
         t2s, s2t = st_replace(structure.t2s, structure.s2t, note.index)
 
@@ -88,13 +103,59 @@ def y_note_play(note, structure, structure_is_dissonant, recurse, possible_timel
     raise Exception("Unknown Note")
 
 
-def construct_y(cache, possible_timelines, historiography, edge_nout_hash):
+def improved_construct_y(
+        very_particular_cache,
+        construct_y_cache,
+        historiography_cache,
+        possible_timelines,
+        historiography_note_nout_store,
+        historiography_note_nout,
+        ):
+
+    # As long as we add historiography_note_nout in chronlogical order, we never run into problems. This happens in the
+    # current setup, but I'd still like to somehow make that more explicit.
+    historiography_note_nout_hash = historiography_note_nout_store.add(historiography_note_nout)
+    if historiography_note_nout_hash in construct_y_cache:
+        return construct_y_cache[historiography_note_nout_hash]
+
+    historiography_at = construct_historiography(
+            historiography_cache,
+            possible_timelines,  # A.K.A. note_nout_store
+            historiography_note_nout_store,
+            historiography_note_nout_hash)
+
+    # there is only one type of note in this Clef (SetNoteNoutHash), so no need to distinguish.
+
+    result = old_construct_y(
+        very_particular_cache,
+        construct_y_cache,
+        historiography_cache,
+        possible_timelines,
+        historiography_note_nout_store,
+        historiography_at,
+        )
+
+    construct_y_cache[historiography_note_nout_hash] = result
+    return result
+
+
+def old_construct_y(
+        very_particular_cache,
+        construct_y_cache,  # NEW
+        historiography_cache,  # NEW
+        possible_timelines,
+        historiography_note_nout_store,  # NEW
+        historiography_at,
+        ):
+
     """
+    # TODO better name for "very_particular_cache"... if it's even still useful to preserve it!
+
     construct_y constructs a structure that can be used to understand history (e.g. display it in a GUI to humans)
 
     In particular, it takes:
     * The historiography
-    * An edge_nout_hash to advance to
+    * An edge_nout_hash to advance to   # TODO NO LONGER TRUE
 
     And it returns:
     * "Per step info": for each step that's required to advance: its hash and recursive information if it exists.
@@ -133,10 +194,16 @@ def construct_y(cache, possible_timelines, historiography, edge_nout_hash):
     # * spacetime mappings
     # Perhapse we can simply use a set of all seen hashes, and a spacetime mapping? TBD...
 
-    def recurse(h, enh):
-        return construct_y(cache, possible_timelines, h, enh)
-
-    historiography_at = historiography.x_append(edge_nout_hash)
+    def recurse(historiography_note_nout):
+        # this is pure copy/pasta:
+        return improved_construct_y(
+                very_particular_cache,
+                construct_y_cache,
+                historiography_cache,
+                possible_timelines,
+                historiography_note_nout_store,
+                historiography_note_nout,
+                )
 
     whats_new_pod = historiography_at.whats_new_pod()
     if whats_new_pod is None:
@@ -144,8 +211,8 @@ def construct_y(cache, possible_timelines, historiography, edge_nout_hash):
         structure, dissonant = None, False
     else:
         # The below is by definition: the POD with "what's new", so you must have seen (and built and stored) it before
-        assert whats_new_pod in cache
-        structure, dissonant = cache[whats_new_pod]
+        assert whats_new_pod in very_particular_cache
+        structure, dissonant = very_particular_cache[whats_new_pod]
 
     new_hashes = reversed(list(historiography_at.whats_new()))
     annotated_hashes = []
@@ -154,17 +221,37 @@ def construct_y(cache, possible_timelines, historiography, edge_nout_hash):
         new_nout = possible_timelines.get(new_hash)
 
         structure, dissonant, rhi = y_note_play(new_nout.note, structure, dissonant, recurse, possible_timelines)
-        cache[new_hash] = structure, dissonant
+        very_particular_cache[new_hash] = structure, dissonant
 
         annotated_hashes.append(AnnotatedHash(new_hash, dissonant, rhi))
 
-    return structure, historiography_at, annotated_hashes
+    return structure, "garbage", annotated_hashes
 
 
-def y_origin(possible_timelines):
-    return Historiography(possible_timelines)
+def construct_y_from_scratch(
+        very_particular_cache,
+        possible_timelines,
 
+        construct_y_cache,
+        historiography_cache,
+        historiography_note_nout_store,
 
-def construct_y_from_scratch(cache, possible_timelines, edge_nout_hash):
-    historiography = y_origin(possible_timelines)
-    return construct_y(cache, possible_timelines, historiography, edge_nout_hash)
+        edge_nout_hash,
+        ):
+
+    # what does "construct from scratch" really mean in the cached context? it means we'll get a historiography by
+    # jumping to the edge_nout_hash in one jump. Which is fine, I suppose.
+
+    historiography_note_nout = HistoriographyNoteSlur(
+        SetNoteNoutHash(edge_nout_hash),
+        HistoriographyNoteNoutHash.for_object(HistoriographyNoteCapo())
+    )
+
+    return improved_construct_y(
+                very_particular_cache,
+                construct_y_cache,
+                historiography_cache,
+                possible_timelines,
+                historiography_note_nout_store,
+                historiography_note_nout,
+                )

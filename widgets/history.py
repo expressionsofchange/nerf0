@@ -56,7 +56,10 @@ class HistoryWidget(FocusBehavior, Widget):
 
     def __init__(self, **kwargs):
         self.possible_timelines = kwargs.pop('possible_timelines')
+        self.very_particular_cache = kwargs.pop('very_particular_cache')
         self.construct_y_cache = kwargs.pop('construct_y_cache')
+        self.historiography_cache = kwargs.pop('historiography_cache')
+        self.historiography_note_nout_store = kwargs.pop('historiography_note_nout_store')
 
         self.display_mode = 's'
 
@@ -141,11 +144,19 @@ class HistoryWidget(FocusBehavior, Widget):
 
     def _trees(self, nout_hash):
         new_htn, h2, new_annotated_hashes = construct_y_from_scratch(
-            self.construct_y_cache, self.possible_timelines, nout_hash)
+            self.construct_y_cache,
+            self.possible_timelines,
+
+            self.construct_y_cache,
+            self.historiography_cache,
+            self.historiography_note_nout_store,
+
+            nout_hash)
 
         edge_nout_hash, _, _ = new_annotated_hashes[-1]
         liveness_annotated_hashes = view_past_from_present(
             possible_timelines=self.possible_timelines,
+            historiography_note_nout_store=self.historiography_note_nout_store,
             present_root_htn=new_htn,
             annotated_hashes=new_annotated_hashes,
 
