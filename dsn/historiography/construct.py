@@ -6,20 +6,14 @@ def play_historiography_note(historiography_note, historiography_at):
     return historiography_now_at
 
 
-def construct_historiography(
-            historiography_cache,
-            note_nout_store,
-            historiography_note_nout_store,
-            historiography_note_nout_hash,
-            ):
-
+def construct_historiography(m, stores, historiography_note_nout_hash):
     # In the beginning, there is the empty historiography
-    historiography_at = HistoriographyAt(Historiography(note_nout_store), 0)
+    historiography_at = HistoriographyAt(Historiography(stores.note_nout), 0)
 
     todo = []
-    for tup in historiography_note_nout_store.all_nhtups_for_nout_hash(historiography_note_nout_hash):
-        if tup.nout_hash in historiography_cache:
-            historiography_at = historiography_cache[tup.nout_hash]
+    for tup in stores.historiography_note_nout.all_nhtups_for_nout_hash(historiography_note_nout_hash):
+        if tup.nout_hash in m.construct_historiography:
+            historiography_at = m.construct_historiography[tup.nout_hash]
             break
         todo.append(tup)
 
@@ -30,6 +24,6 @@ def construct_historiography(
         note = edge_nout.note
 
         historiography_at = play_historiography_note(note, historiography_at)
-        historiography_cache[edge_nout_hash] = historiography_at
+        m.construct_historiography[edge_nout_hash] = historiography_at
 
     return historiography_at

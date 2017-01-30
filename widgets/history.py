@@ -55,11 +55,8 @@ ColWidths = namedtuple('ColWidths', ('my_hash', 'prev_hash', 'note', 'payload'))
 class HistoryWidget(FocusBehavior, Widget):
 
     def __init__(self, **kwargs):
-        self.possible_timelines = kwargs.pop('possible_timelines')
-        self.very_particular_cache = kwargs.pop('very_particular_cache')
-        self.construct_y_cache = kwargs.pop('construct_y_cache')
-        self.historiography_cache = kwargs.pop('historiography_cache')
-        self.historiography_note_nout_store = kwargs.pop('historiography_note_nout_store')
+        self.m = kwargs.pop('m')
+        self.stores = kwargs.pop('stores')
 
         self.display_mode = 's'
 
@@ -113,7 +110,7 @@ class HistoryWidget(FocusBehavior, Widget):
         self.refresh()
 
     def _handle_eh_note(self, eh_note):
-        new_s_cursor, posacts, error = eh_note_play(self.possible_timelines, self.ds, eh_note)
+        new_s_cursor, posacts, error = eh_note_play(self.stores.note_nout, self.ds, eh_note)
         self._update_internal_state_for_posacts(posacts, new_s_cursor)
 
     def _update_internal_state_for_posacts(self, posacts, new_s_cursor):
@@ -143,25 +140,17 @@ class HistoryWidget(FocusBehavior, Widget):
         self.refresh()
 
     def _trees(self, nout_hash):
-        new_htn, h2, new_annotated_hashes = construct_y_from_scratch(
-            self.construct_y_cache,
-            self.possible_timelines,
-
-            self.construct_y_cache,
-            self.historiography_cache,
-            self.historiography_note_nout_store,
-
-            nout_hash)
+        new_htn, h2, new_annotated_hashes = construct_y_from_scratch(self.m, self.stores, nout_hash)
 
         edge_nout_hash, _, _ = new_annotated_hashes[-1]
         liveness_annotated_hashes = view_past_from_present(
-            possible_timelines=self.possible_timelines,
-            historiography_note_nout_store=self.historiography_note_nout_store,
+            m=self.m,
+            stores=self.stores,
             present_root_htn=new_htn,
             annotated_hashes=new_annotated_hashes,
 
             # Alternatively, we use the knowledge that at the top_level "everything is live"
-            alive_at_my_level=list(self.possible_timelines.all_preceding_nout_hashes(edge_nout_hash)),
+            alive_at_my_level=list(self.stores.note_nout.all_preceding_nout_hashes(edge_nout_hash)),
             )
 
         return new_htn, liveness_annotated_hashes
@@ -246,7 +235,7 @@ class HistoryWidget(FocusBehavior, Widget):
             if this_s_path == self.ds.s_cursor:
                 box_color = Color(*GREY)
 
-            nout = self.possible_timelines.get(nout_hash)
+            nout = self.stores.note_nout.get(nout_hash)
 
             offset_x = 0
             terminals = []

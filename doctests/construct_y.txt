@@ -1,15 +1,21 @@
 >>> from hashstore import NoutHashStore
+>>> from memoization import Stores, Memoization
 >>> 
 >>> from dsn.s_expr.clef import BecomeNode, TextBecome, Delete
 >>> from dsn.s_expr.construct_y import construct_y_from_scratch
 >>> from dsn.s_expr.legato import NoteNout, NoteCapo, NoteNoutHash
 >>> from dsn.s_expr.test_utils import iinsert, rreplace
 >>> from dsn.s_expr.utils import nouts_for_notes_da_capo
+>>> from dsn.historiography.legato import HistoriographyNoteNoutHash, HistoriographyNoteNout, HistoriographyNoteCapo
 >>> 
 
 The structure of Nouts & Notes below matches the drawing in green in the blue booklet of my private notes.
 
 >>> p = NoutHashStore(NoteNoutHash, NoteNout, NoteCapo)
+>>> historiography_note_nout_store = NoutHashStore(HistoriographyNoteNoutHash, HistoriographyNoteNout, HistoriographyNoteCapo)
+>>> _ = historiography_note_nout_store.add(HistoriographyNoteCapo())
+>>> stores = Stores(p, historiography_note_nout_store)
+>>> m = Memoization()
 >>> 
 >>> capo = NoteCapo()
 >>> hash_capo = p.add(capo)
@@ -25,7 +31,7 @@ The structure of Nouts & Notes below matches the drawing in green in the blue bo
 ...         ]):
 ...     h = p.add(nh.nout)
 
->>> tree, historiography_at, annotated_hashes = construct_y_from_scratch({}, p, nh.nout_hash) 
+>>> tree, garbage, annotated_hashes = construct_y_from_scratch(m, stores, nh.nout_hash) 
 >>> 
 >>> def steps_recursively(indentation, annotated_hashes):
 ...     for nout_hash, dissonant, rhi in annotated_hashes:
@@ -48,12 +54,12 @@ repeated (25bc3c945eb5 is not preceded by 437ba946fac9). This is because it's no
      25bc3c945eb5
          81e6591ff251
 
->>> tree.historiographies[0].nout_hash()
+>>> stores.historiography_note_nout.get(tree.historiographies[0]).note.note_nout_hash
 25bc3c945eb5
 
 So, what's actually alive at "level 1"?
 
->>> list(p.all_preceding_nout_hashes(tree.historiographies[0].nout_hash()))
+>>> list(p.all_preceding_nout_hashes(stores.historiography_note_nout.get(tree.historiographies[0]).note.note_nout_hash))
 [25bc3c945eb5, 437ba946fac9]
 
 Note that there is no historiography that contains the node for the Text "a" (1f2cf5ca7d0d); this is a consequence of
@@ -74,7 +80,7 @@ Now we make something similar, but start off our history in a broken state (dele
 ...         ]):
 ...     h = p.add(nh.nout)
 >>> 
->>> tree, historiography_at, annotated_hashes = construct_y_from_scratch({}, p, nh.nout_hash)
+>>> tree, garbage, annotated_hashes = construct_y_from_scratch(m, stores, nh.nout_hash)
 >>> 
 
 The result: notes that follow a broken action are still converted into steps, but not recursively explored.
@@ -112,7 +118,7 @@ all actions in other subtrees are independent.
 ...         ]):
 ...     h = p.add(nh.nout)
 
->>> tree, historiography_at, annotated_hashes = construct_y_from_scratch({}, p, nh.nout_hash)
+>>> tree, garbage, annotated_hashes = construct_y_from_scratch(m, stores, nh.nout_hash)
 >>> steps_recursively(0, annotated_hashes)
  437ba946fac9
  bbe8355a0520

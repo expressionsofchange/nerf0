@@ -5,7 +5,7 @@ from spacetime import st_become, st_insert, st_replace, st_delete
 from collections import namedtuple
 from list_operations import l_become, l_insert, l_delete, l_replace
 
-from historiography import Historiography, HistoriographyTreeNode
+from historiography import HistoriographyTreeNode
 from dsn.historiography.construct import construct_historiography
 
 from dsn.historiography.clef import SetNoteNoutHash
@@ -25,7 +25,7 @@ AnnotatedHash = namedtuple('AnnotatedHash', (
 ))
 
 
-def y_note_play(note, structure, structure_is_dissonant, recurse, possible_timelines):
+def y_note_play(stores, note, structure, structure_is_dissonant, recurse):
     def dissonant():
         return structure, True, RecursiveHistoryInfo(None, [])
 
@@ -103,51 +103,24 @@ def y_note_play(note, structure, structure_is_dissonant, recurse, possible_timel
     raise Exception("Unknown Note")
 
 
-def improved_construct_y(
-        very_particular_cache,
-        construct_y_cache,
-        historiography_cache,
-        possible_timelines,
-        historiography_note_nout_store,
-        historiography_note_nout,
-        ):
-
+def improved_construct_y(m, stores, historiography_note_nout):
     # As long as we add historiography_note_nout in chronlogical order, we never run into problems. This happens in the
     # current setup, but I'd still like to somehow make that more explicit.
-    historiography_note_nout_hash = historiography_note_nout_store.add(historiography_note_nout)
-    if historiography_note_nout_hash in construct_y_cache:
-        return construct_y_cache[historiography_note_nout_hash]
+    historiography_note_nout_hash = stores.historiography_note_nout.add(historiography_note_nout)
+    if historiography_note_nout_hash in m.construct_y:
+        return m.construct_y[historiography_note_nout_hash]
 
-    historiography_at = construct_historiography(
-            historiography_cache,
-            possible_timelines,  # A.K.A. note_nout_store
-            historiography_note_nout_store,
-            historiography_note_nout_hash)
+    historiography_at = construct_historiography(m, stores, historiography_note_nout_hash)
 
     # there is only one type of note in this Clef (SetNoteNoutHash), so no need to distinguish.
 
-    result = old_construct_y(
-        very_particular_cache,
-        construct_y_cache,
-        historiography_cache,
-        possible_timelines,
-        historiography_note_nout_store,
-        historiography_at,
-        )
+    result = old_construct_y(m, stores, historiography_at)
 
-    construct_y_cache[historiography_note_nout_hash] = result
+    m.construct_y[historiography_note_nout_hash] = result
     return result
 
 
-def old_construct_y(
-        very_particular_cache,
-        construct_y_cache,  # NEW
-        historiography_cache,  # NEW
-        possible_timelines,
-        historiography_note_nout_store,  # NEW
-        historiography_at,
-        ):
-
+def old_construct_y(m, stores, historiography_at):
     """
     # TODO better name for "very_particular_cache"... if it's even still useful to preserve it!
 
@@ -195,15 +168,7 @@ def old_construct_y(
     # Perhapse we can simply use a set of all seen hashes, and a spacetime mapping? TBD...
 
     def recurse(historiography_note_nout):
-        # this is pure copy/pasta:
-        return improved_construct_y(
-                very_particular_cache,
-                construct_y_cache,
-                historiography_cache,
-                possible_timelines,
-                historiography_note_nout_store,
-                historiography_note_nout,
-                )
+        return improved_construct_y(m, stores, historiography_note_nout)
 
     whats_new_pod = historiography_at.whats_new_pod()
     if whats_new_pod is None:
@@ -211,34 +176,24 @@ def old_construct_y(
         structure, dissonant = None, False
     else:
         # The below is by definition: the POD with "what's new", so you must have seen (and built and stored) it before
-        assert whats_new_pod in very_particular_cache
-        structure, dissonant = very_particular_cache[whats_new_pod]
+        assert whats_new_pod in m.very_particular
+        structure, dissonant = m.very_particular[whats_new_pod]
 
     new_hashes = reversed(list(historiography_at.whats_new()))
     annotated_hashes = []
 
     for new_hash in new_hashes:
-        new_nout = possible_timelines.get(new_hash)
+        new_nout = stores.note_nout.get(new_hash)
 
-        structure, dissonant, rhi = y_note_play(new_nout.note, structure, dissonant, recurse, possible_timelines)
-        very_particular_cache[new_hash] = structure, dissonant
+        structure, dissonant, rhi = y_note_play(stores, new_nout.note, structure, dissonant, recurse)
+        m.very_particular[new_hash] = structure, dissonant
 
         annotated_hashes.append(AnnotatedHash(new_hash, dissonant, rhi))
 
     return structure, "garbage", annotated_hashes
 
 
-def construct_y_from_scratch(
-        very_particular_cache,
-        possible_timelines,
-
-        construct_y_cache,
-        historiography_cache,
-        historiography_note_nout_store,
-
-        edge_nout_hash,
-        ):
-
+def construct_y_from_scratch(m, stores, edge_nout_hash):
     # what does "construct from scratch" really mean in the cached context? it means we'll get a historiography by
     # jumping to the edge_nout_hash in one jump. Which is fine, I suppose.
 
@@ -247,11 +202,4 @@ def construct_y_from_scratch(
         HistoriographyNoteNoutHash.for_object(HistoriographyNoteCapo())
     )
 
-    return improved_construct_y(
-                very_particular_cache,
-                construct_y_cache,
-                historiography_cache,
-                possible_timelines,
-                historiography_note_nout_store,
-                historiography_note_nout,
-                )
+    return improved_construct_y(m, stores, historiography_note_nout)

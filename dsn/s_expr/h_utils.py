@@ -31,13 +31,11 @@ AnnotatedWLIHash = namedtuple('AnnotatedHash', (
 ))
 
 
-def view_past_from_present(possible_timelines, historiography_note_nout_store, present_root_htn, annotated_hashes, alive_at_my_level):
-    return _view_past_from_present(
-        possible_timelines, historiography_note_nout_store, present_root_htn, ALIVE_AND_WELL, annotated_hashes, [], alive_at_my_level)
+def view_past_from_present(m, stores, present_root_htn, annotated_hashes, alive_at_my_level):
+    return _view_past_from_present(m, stores, present_root_htn, ALIVE_AND_WELL, annotated_hashes, [], alive_at_my_level)
 
 
-def _view_past_from_present(
-        possible_timelines, historiography_note_nout_store, present_root_htn, p_aliveness, annotated_hashes, t_path, alive_at_my_level):
+def _view_past_from_present(m, stores, present_root_htn, p_aliveness, annotated_hashes, t_path, alive_at_my_level):
 
     result = []
 
@@ -63,19 +61,19 @@ def _view_past_from_present(
                 else:
                     child_historiography_in_present_something = parent_htn.historiographies[child_s_address]
 
-                    historiography_note_nout = historiography_note_nout_store.get(
+                    historiography_note_nout = stores.historiography_note_nout.get(
                         child_historiography_in_present_something
                     )
 
-                    alive_at_child_level = list(possible_timelines.all_preceding_nout_hashes(
+                    alive_at_child_level = list(stores.note_nout.all_preceding_nout_hashes(
                         historiography_note_nout.note.note_nout_hash))
 
             if child_aliveness != ALIVE_AND_WELL:
                 alive_at_child_level = "_"
 
             recursive_result = _view_past_from_present(
-                possible_timelines,
-                historiography_note_nout_store,
+                m,
+                stores,
                 present_root_htn,
                 child_aliveness,
                 children_steps,

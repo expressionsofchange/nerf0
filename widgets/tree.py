@@ -73,9 +73,9 @@ class TreeWidget(FocusBehavior, Widget):
         # closed, and we'll fail to fetch hashes back from the shared HashStoreChannelListener.
         self.closed = False
 
-        self.construct_x_cache = kwargs.pop('construct_x_cache')
+        self.m = kwargs.pop('m')
+        self.stores = kwargs.pop('stores')
         self.history_channel = kwargs.pop('history_channel')
-        self.possible_timelines = kwargs.pop('possible_timelines')
 
         super(TreeWidget, self).__init__(**kwargs)
 
@@ -96,7 +96,7 @@ class TreeWidget(FocusBehavior, Widget):
         # there is no else branch: Possibility only travels _to_ the channel;
         if isinstance(data, Actuality):
             t_cursor = t_address_for_s_address(self.ds.tree, self.ds.s_cursor)
-            tree = construct_x(self.construct_x_cache, self.possible_timelines, data.nout_hash)
+            tree = construct_x(self.m, self.stores, data.nout_hash)
 
             s_cursor = best_s_address_for_t_address(tree, t_cursor)
             pp_annotations = self.ds.pp_annotations[:]
@@ -165,7 +165,7 @@ class TreeWidget(FocusBehavior, Widget):
         if last_actuality is None:
             new_tree = self.ds.tree
         else:
-            new_tree = construct_x(self.construct_x_cache, self.possible_timelines, last_actuality.nout_hash)
+            new_tree = construct_x(self.m, self.stores, last_actuality.nout_hash)
 
         self.ds = EditStructure(
             new_tree,

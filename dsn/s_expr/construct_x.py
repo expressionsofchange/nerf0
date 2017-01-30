@@ -58,7 +58,7 @@ def x_note_play(note, structure, recurse, metadata):
     raise Exception("Unknown Note")
 
 
-def construct_x(results_lookup, possible_timelines, edge_nout_hash):
+def construct_x(m, stores, edge_nout_hash):
     """Constructs a TreeNode with the appropriate metadata. The fact that I'm not really sure what's appropriate yet (I
     just refactored it) is reflected in the `_x` part of this procedure's name.
 
@@ -89,14 +89,14 @@ def construct_x(results_lookup, possible_timelines, edge_nout_hash):
     """
     def recurse(nout_hash):
         # This is used for by `play` to construct Trees for nouts, i.e. for Replace & Insert.
-        return construct_x(results_lookup, possible_timelines, nout_hash)
+        return construct_x(m, stores, nout_hash)
 
     tree = None  # In the beginning, there is nothing, which we model as `None`
 
     todo = []
-    for tup in possible_timelines.all_nhtups_for_nout_hash(edge_nout_hash):
-        if tup.nout_hash in results_lookup:
-            tree = results_lookup[tup.nout_hash]
+    for tup in stores.note_nout.all_nhtups_for_nout_hash(edge_nout_hash):
+        if tup.nout_hash in m.construct_x:
+            tree = m.construct_x[tup.nout_hash]
             break
         todo.append(tup)
 
@@ -107,6 +107,6 @@ def construct_x(results_lookup, possible_timelines, edge_nout_hash):
         note = edge_nout.note
 
         tree = x_note_play(note, tree, recurse, YourOwnHash(edge_nout_hash))
-        results_lookup[edge_nout_hash] = tree
+        m.construct_x[edge_nout_hash] = tree
 
     return tree

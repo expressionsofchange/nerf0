@@ -1,6 +1,7 @@
 from channel import ClosableChannel
 from posacts import HashStoreChannelListener, LatestActualityListener
 from hashstore import NoutHashStore
+from memoization import Stores, Memoization
 
 from filehandler import read_from_file
 
@@ -43,18 +44,16 @@ read_from_file(filename, history_channel)
 
 nout_hash = lnh.nout_hash
 
+stores = Stores(
+    possible_timelines,
+    historiography_note_nout_store,
+)
+m = Memoization()
+
 for i in range(2):
     # this is what the HistoryWidget would do
     with Timer('1'):
-        new_htn, h2, new_annotated_hashes = construct_y_from_scratch(
-            construct_y_cache,
-            possible_timelines,
-
-            construct_y_cache,
-            historiography_cache,
-            historiography_note_nout_store,
-
-            nout_hash)
+        new_htn, h2, new_annotated_hashes = construct_y_from_scratch(m, stores, nout_hash)
 
     edge_nout_hash, _, _ = new_annotated_hashes[-1]
 

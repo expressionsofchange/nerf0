@@ -21,6 +21,7 @@ from widgets.history import HistoryWidget
 
 from dsn.historiography.legato import HistoriographyNoteNoutHash, HistoriographyNoteNout, HistoriographyNoteCapo
 from hashstore import NoutHashStore
+from memoization import Memoization, Stores
 
 # How to tell Kivy about font locations; should be generalized
 LabelBase.register(name="DejaVuSans",
@@ -35,10 +36,7 @@ class EditorGUI(App):
     def __init__(self, filename):
         super(EditorGUI, self).__init__()
 
-        self.very_particular_cache = {}
-        self.construct_x_cache = {}
-        self.construct_y_cache = {}
-        self.historiography_cache = {}
+        self.m = Memoization()
 
         self.historiography_note_nout_store = NoutHashStore(
             HistoriographyNoteNoutHash, HistoriographyNoteNout, HistoriographyNoteCapo)
@@ -49,6 +47,9 @@ class EditorGUI(App):
         self.filename = filename
 
         self.setup_channels()
+
+        self.stores = Stores(self.possible_timelines, self.historiography_note_nout_store)
+
         self.do_initial_file_read()
 
     def setup_channels(self):
@@ -71,19 +72,16 @@ class EditorGUI(App):
         horizontal_layout = BoxLayout(spacing=10, orientation='horizontal')
 
         tree = TreeWidget(
+            m=self.m,
+            stores=self.stores,
             size_hint=(.5, 1),
-            possible_timelines=self.possible_timelines,
             history_channel=history_channel,
-            construct_x_cache=self.construct_x_cache,
             )
 
         history_widget = HistoryWidget(
+            m=self.m,
+            stores=self.stores,
             size_hint=(.5, 1),
-            possible_timelines=tree.possible_timelines,
-            very_particular_cache=self.very_particular_cache,
-            construct_y_cache=self.construct_y_cache,
-            historiography_cache=self.historiography_cache,
-            historiography_note_nout_store=self.historiography_note_nout_store,
             )
         horizontal_layout.add_widget(history_widget)
         horizontal_layout.add_widget(tree)

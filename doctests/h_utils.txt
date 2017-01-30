@@ -1,4 +1,5 @@
 >>> from hashstore import NoutHashStore
+>>> from memoization import Stores, Memoization
 >>>
 >>> from dsn.s_expr.clef import BecomeNode, TextBecome, Delete
 >>> from dsn.s_expr.construct_y import construct_y_from_scratch
@@ -6,6 +7,7 @@
 >>> from dsn.s_expr.legato import NoteNout, NoteCapo, NoteNoutHash
 >>> from dsn.s_expr.test_utils import iinsert, rreplace
 >>> from dsn.s_expr.utils import nouts_for_notes_da_capo
+>>> from dsn.historiography.legato import HistoriographyNoteNoutHash, HistoriographyNoteNout, HistoriographyNoteCapo
 >>>
 >>>
 >>> def print_aliveness(steps, indentation):
@@ -16,6 +18,11 @@
 ...
 >>>
 >>> p = NoutHashStore(NoteNoutHash, NoteNout, NoteCapo)
+>>> historiography_note_nout_store = NoutHashStore(HistoriographyNoteNoutHash, HistoriographyNoteNout, HistoriographyNoteCapo)
+>>> _ = historiography_note_nout_store.add(HistoriographyNoteCapo())
+>>> stores = Stores(p, historiography_note_nout_store)
+>>> m = Memoization()
+>>> 
 >>>
 >>> capo = NoteCapo()
 >>> hash_capo = p.add(capo)
@@ -31,10 +38,9 @@
 ...     h = p.add(nh.nout)
 ...
 >>>
->>> htn, historiography_at, annotated_hashes = construct_y_from_scratch({}, p, nh.nout_hash)
+>>> htn, historiography_at, annotated_hashes = construct_y_from_scratch(m, stores, nh.nout_hash)
 >>>
->>> result = view_past_from_present(
-...     possible_timelines=p,
+>>> result = view_past_from_present(m, stores,
 ...     present_root_htn=htn,
 ...     annotated_hashes=annotated_hashes,
 ...     alive_at_my_level=list(p.all_preceding_nout_hashes(nh.nout_hash)),
@@ -70,10 +76,9 @@
 ...     h = p.add(nh.nout)
 ...
 >>>
->>> htn, historiography_at, annotated_hashes = construct_y_from_scratch({}, p, nh.nout_hash)
+>>> htn, historiography_at, annotated_hashes = construct_y_from_scratch(m, stores, nh.nout_hash)
 >>>
->>> result = view_past_from_present(
-...     possible_timelines=p,
+>>> result = view_past_from_present(m, stores,
 ...     present_root_htn=htn,
 ...     annotated_hashes=annotated_hashes,
 ...     alive_at_my_level=list(p.all_preceding_nout_hashes(nh.nout_hash)),
