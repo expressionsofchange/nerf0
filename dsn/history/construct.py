@@ -31,9 +31,9 @@ def annotated_hashes_for_s_address(annotated_hashes, s_address):
     if s_address == []:
         return annotated_hashes
 
-    for i, (nout_hash, dissonant, (t, children_steps)) in enumerate(annotated_hashes):
+    for i, annotated_hash in enumerate(annotated_hashes):
         if i == s_address[0]:
-            return annotated_hashes_for_s_address(children_steps, s_address[1:])
+            return annotated_hashes_for_s_address(annotated_hash.recursive_information.children_steps, s_address[1:])
 
     raise IndexError("s_address out of bounds")
 

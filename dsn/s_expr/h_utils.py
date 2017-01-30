@@ -1,6 +1,7 @@
 from collections import namedtuple
 
 from historiography import t_lookup
+from dsn.s_expr.construct_y import RecursiveHistoryInfo
 
 
 """
@@ -36,10 +37,9 @@ def view_past_from_present(m, stores, present_root_htn, annotated_hashes, alive_
 
 
 def _view_past_from_present(m, stores, present_root_htn, p_aliveness, annotated_hashes, t_path, alive_at_my_level):
-
     result = []
 
-    for nout_hash, dissonant, (t, children_steps) in annotated_hashes:
+    for nout_hash, dissonant, recursive_information in annotated_hashes:
         # Note: there is no passing of "dissonant" information to children. In the current version dissonents _never_
         # have children, as is explained in doctests/construct_y:
         # [..] notes that follow a broken action are still converted into steps, but not recursively explored. The
@@ -50,11 +50,11 @@ def _view_past_from_present(m, stores, present_root_htn, p_aliveness, annotated_
         if aliveness == ALIVE_AND_WELL and nout_hash not in alive_at_my_level:
             child_aliveness = aliveness = DEAD
 
-        if t is not None:
+        if recursive_information.t_address is not None:
             if aliveness == ALIVE_AND_WELL:
                 parent_htn = t_lookup(present_root_htn, t_path)
 
-                child_s_address = parent_htn.t2s[t]
+                child_s_address = parent_htn.t2s[recursive_information.t_address]
                 if child_s_address is None:
                     child_aliveness = DELETED
 
@@ -76,14 +76,15 @@ def _view_past_from_present(m, stores, present_root_htn, p_aliveness, annotated_
                 stores,
                 present_root_htn,
                 child_aliveness,
-                children_steps,
-                t_path + [t],
+                recursive_information.children_steps,
+                t_path + [recursive_information.t_address],
                 alive_at_child_level,
                 )
 
         else:
             recursive_result = []
 
-        result.append(AnnotatedWLIHash(nout_hash, dissonant, aliveness, (t, recursive_result)))
+        result.append(AnnotatedWLIHash(
+            nout_hash, dissonant, aliveness, RecursiveHistoryInfo(recursive_information.t_address, recursive_result)))
 
     return result
