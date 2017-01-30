@@ -31,8 +31,6 @@ def read_from_file(filename, channel):
 def initialize_history(channel):
     def as_iter():
         capo = NoteCapo()
-        yield Possibility(capo)
-
         root_node_nout = NoteSlur(BecomeNode(), NoteNoutHash.for_object(capo))
         yield Possibility(root_node_nout)
         yield Actuality(NoteNoutHash.for_object(root_node_nout))

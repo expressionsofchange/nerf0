@@ -13,7 +13,6 @@ The structure of Nouts & Notes below matches the drawing in green in the blue bo
 
 >>> p = NoutHashStore(NoteNoutHash, NoteNout, NoteCapo)
 >>> historiography_note_nout_store = NoutHashStore(HistoriographyNoteNoutHash, HistoriographyNoteNout, HistoriographyNoteCapo)
->>> _ = historiography_note_nout_store.add(HistoriographyNoteCapo())
 >>> stores = Stores(p, historiography_note_nout_store)
 >>> m = Memoization()
 >>> 
@@ -31,7 +30,7 @@ The structure of Nouts & Notes below matches the drawing in green in the blue bo
 ...         ]):
 ...     h = p.add(nh.nout)
 
->>> tree, garbage, annotated_hashes = construct_y_from_scratch(m, stores, nh.nout_hash) 
+>>> tree, annotated_hashes = construct_y_from_scratch(m, stores, nh.nout_hash) 
 >>> 
 >>> def steps_recursively(indentation, annotated_hashes):
 ...     for nout_hash, dissonant, rhi in annotated_hashes:
@@ -80,7 +79,7 @@ Now we make something similar, but start off our history in a broken state (dele
 ...         ]):
 ...     h = p.add(nh.nout)
 >>> 
->>> tree, garbage, annotated_hashes = construct_y_from_scratch(m, stores, nh.nout_hash)
+>>> tree, annotated_hashes = construct_y_from_scratch(m, stores, nh.nout_hash)
 >>> 
 
 The result: notes that follow a broken action are still converted into steps, but not recursively explored.
@@ -118,7 +117,7 @@ all actions in other subtrees are independent.
 ...         ]):
 ...     h = p.add(nh.nout)
 
->>> tree, garbage, annotated_hashes = construct_y_from_scratch(m, stores, nh.nout_hash)
+>>> tree, annotated_hashes = construct_y_from_scratch(m, stores, nh.nout_hash)
 >>> steps_recursively(0, annotated_hashes)
  437ba946fac9
  bbe8355a0520

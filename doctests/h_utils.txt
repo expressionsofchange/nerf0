@@ -19,7 +19,6 @@
 >>>
 >>> p = NoutHashStore(NoteNoutHash, NoteNout, NoteCapo)
 >>> historiography_note_nout_store = NoutHashStore(HistoriographyNoteNoutHash, HistoriographyNoteNout, HistoriographyNoteCapo)
->>> _ = historiography_note_nout_store.add(HistoriographyNoteCapo())
 >>> stores = Stores(p, historiography_note_nout_store)
 >>> m = Memoization()
 >>> 
@@ -38,7 +37,7 @@
 ...     h = p.add(nh.nout)
 ...
 >>>
->>> htn, historiography_at, annotated_hashes = construct_y_from_scratch(m, stores, nh.nout_hash)
+>>> htn, annotated_hashes = construct_y_from_scratch(m, stores, nh.nout_hash)
 >>>
 >>> result = view_past_from_present(m, stores,
 ...     present_root_htn=htn,
@@ -76,7 +75,7 @@
 ...     h = p.add(nh.nout)
 ...
 >>>
->>> htn, historiography_at, annotated_hashes = construct_y_from_scratch(m, stores, nh.nout_hash)
+>>> htn, annotated_hashes = construct_y_from_scratch(m, stores, nh.nout_hash)
 >>>
 >>> result = view_past_from_present(m, stores,
 ...     present_root_htn=htn,

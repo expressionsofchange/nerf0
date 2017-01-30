@@ -140,7 +140,7 @@ class HistoryWidget(FocusBehavior, Widget):
         self.refresh()
 
     def _trees(self, nout_hash):
-        new_htn, h2, new_annotated_hashes = construct_y_from_scratch(self.m, self.stores, nout_hash)
+        new_htn, new_annotated_hashes = construct_y_from_scratch(self.m, self.stores, nout_hash)
 
         edge_nout_hash, _, _ = new_annotated_hashes[-1]
         liveness_annotated_hashes = view_past_from_present(

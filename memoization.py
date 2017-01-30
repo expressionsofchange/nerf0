@@ -10,7 +10,7 @@ class Memoization(object):
     """Single point of access for all memoized functions"""
 
     def __init__(self):
-        self.very_particular = {}
         self.construct_x = {}
         self.construct_y = {}
         self.construct_historiography = {}
+        self.construct_historiography_treenode = {}

@@ -57,6 +57,7 @@ class NoutHashStore(HashStore):
     def __init__(self, Hash, Nout, NoutCapo):
         super(NoutHashStore, self).__init__(Hash, Nout)
         self.NoutCapo = NoutCapo
+        self.add(NoutCapo())
 
     def all_nhtups_for_nout_hash(self, nout_hash):
         while True:

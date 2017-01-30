@@ -53,7 +53,7 @@ def y_note_play(stores, note, structure, structure_is_dissonant, recurse):
             HistoriographyNoteNoutHash.for_object(HistoriographyNoteCapo())
         )
 
-        child, garbage, child_annotated_hashes = recurse(historiography_note_nout)
+        child, child_annotated_hashes = recurse(historiography_note_nout)
 
         children = l_insert(structure.children, note.index, child)
         historiographies = l_insert(
@@ -86,7 +86,7 @@ def y_note_play(stores, note, structure, structure_is_dissonant, recurse):
             structure.historiographies[note.index]
         )
 
-        child, garbage, child_annotated_hashes = recurse(historiography_note_nout)
+        child, child_annotated_hashes = recurse(historiography_note_nout)
 
         children = l_replace(structure.children, note.index, child)
         historiographies = l_replace(
@@ -103,39 +103,20 @@ def y_note_play(stores, note, structure, structure_is_dissonant, recurse):
     raise Exception("Unknown Note")
 
 
-def improved_construct_y(m, stores, historiography_note_nout):
-    # As long as we add historiography_note_nout in chronlogical order, we never run into problems. This happens in the
-    # current setup, but I'd still like to somehow make that more explicit.
-    historiography_note_nout_hash = stores.historiography_note_nout.add(historiography_note_nout)
-    if historiography_note_nout_hash in m.construct_y:
-        return m.construct_y[historiography_note_nout_hash]
-
-    historiography_at = construct_historiography(m, stores, historiography_note_nout_hash)
-
-    # there is only one type of note in this Clef (SetNoteNoutHash), so no need to distinguish.
-
-    result = old_construct_y(m, stores, historiography_at)
-
-    m.construct_y[historiography_note_nout_hash] = result
-    return result
-
-
-def old_construct_y(m, stores, historiography_at):
+def construct_y(m, stores, historiography_note_nout):
     """
-    # TODO better name for "very_particular_cache"... if it's even still useful to preserve it!
-
     construct_y constructs a structure that can be used to understand history (e.g. display it in a GUI to humans)
 
-    In particular, it takes:
+    In particular operates on:
     * The historiography
-    * An edge_nout_hash to advance to   # TODO NO LONGER TRUE
+    * An edge_nout_hash to advance to
+    (These 2 parameters are folded into a single historiography_note_nout)
 
     And it returns:
     * "Per step info": for each step that's required to advance: its hash and recursive information if it exists.
         (this can be used to draw recursive structures without knowledge of which notes have history-information)
 
     * The HistoriographyTreeNode, advanced to the edge_nout_hash.
-    * The HistoriographyAt after advancing to the edge_nout_hash.
 
     The idea is that `construct_y` can be used in a special way while playing "Replace": by passing in the existing
     historiography of the to-be-replaced node, we can "connect the historiographic dots". (For Insert, and the
@@ -148,10 +129,10 @@ def old_construct_y(m, stores, historiography_at):
     `construct_y` acts on both the linear historic level, and the historiographic level, but not at the same time. It is
     very important to keep seeing the distinction: [is it desirable to split these 2 levels into 2 functions?]
 
-    1. the constructed Historiography is "historiographically aware" (how could it not be?)
+    1. the constructed steps are is "historiographically aware"
     2. the constructed HistoriographyTreeNode, however, is not. By that we mean that it's constructed for a single
-        linear history. Collary: the parameter `historiography` is not used to construct the treenode (the treenode is
-        deduced fully from the last nout_hash, ignoring alternate (dead) histories.
+        linear history (NoteNout level). Collary: the treenode is deduced fully from the last nout_hash, ignoring
+        alternate (dead) histories.
 
         Of course, we _do_ create (potentially non-linear) historiographies for our children: that's the whole point of
         this excercise.
@@ -160,15 +141,23 @@ def old_construct_y(m, stores, historiography_at):
         anywhere; (while drawing this is not actually problematic, because you'll see the dead parent, which signals
         that no further querying of deadness is required)
     """
-
     # Reservations about Historiography & HistoriographyTreeNode: are those not over-engineered? As it stands, they're
     # being used only for:
     # * answering the "what's new?" questions.
     # * spacetime mappings
     # Perhapse we can simply use a set of all seen hashes, and a spacetime mapping? TBD...
 
+    # As long as we add historiography_note_nout in chronological order, we never run into problems. This usually
+    # happens automatically (to be able to point to a preceding nout hash, you'll have to thave seen it first)... but
+    # I'd still like to somehow make that more explicit to get better correctness guarantees.
+    historiography_note_nout_hash = stores.historiography_note_nout.add(historiography_note_nout)
+    if historiography_note_nout_hash in m.construct_y:
+        return m.construct_y[historiography_note_nout_hash]
+
+    historiography_at = construct_historiography(m, stores, historiography_note_nout_hash)
+
     def recurse(historiography_note_nout):
-        return improved_construct_y(m, stores, historiography_note_nout)
+        return construct_y(m, stores, historiography_note_nout)
 
     whats_new_pod = historiography_at.whats_new_pod()
     if whats_new_pod is None:
@@ -176,8 +165,8 @@ def old_construct_y(m, stores, historiography_at):
         structure, dissonant = None, False
     else:
         # The below is by definition: the POD with "what's new", so you must have seen (and built and stored) it before
-        assert whats_new_pod in m.very_particular
-        structure, dissonant = m.very_particular[whats_new_pod]
+        assert whats_new_pod in m.construct_historiography_treenode
+        structure, dissonant = m.construct_historiography_treenode[whats_new_pod]
 
     new_hashes = reversed(list(historiography_at.whats_new()))
     annotated_hashes = []
@@ -186,20 +175,19 @@ def old_construct_y(m, stores, historiography_at):
         new_nout = stores.note_nout.get(new_hash)
 
         structure, dissonant, rhi = y_note_play(stores, new_nout.note, structure, dissonant, recurse)
-        m.very_particular[new_hash] = structure, dissonant
+        m.construct_historiography_treenode[new_hash] = structure, dissonant
 
         annotated_hashes.append(AnnotatedHash(new_hash, dissonant, rhi))
 
-    return structure, "garbage", annotated_hashes
+    m.construct_y[historiography_note_nout_hash] = structure, annotated_hashes
+    return structure, annotated_hashes
 
 
 def construct_y_from_scratch(m, stores, edge_nout_hash):
-    # what does "construct from scratch" really mean in the cached context? it means we'll get a historiography by
-    # jumping to the edge_nout_hash in one jump. Which is fine, I suppose.
-
+    """Construct a historiography by jumping, in a single step, to edge_nout_hash."""
     historiography_note_nout = HistoriographyNoteSlur(
         SetNoteNoutHash(edge_nout_hash),
         HistoriographyNoteNoutHash.for_object(HistoriographyNoteCapo())
     )
 
-    return improved_construct_y(m, stores, historiography_note_nout)
+    return construct_y(m, stores, historiography_note_nout)

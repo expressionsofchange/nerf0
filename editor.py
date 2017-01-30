@@ -41,9 +41,6 @@ class EditorGUI(App):
         self.historiography_note_nout_store = NoutHashStore(
             HistoriographyNoteNoutHash, HistoriographyNoteNout, HistoriographyNoteCapo)
 
-        # TODO where to really put this??! Also: how does it compare to "possible timelines?"
-        self.historiography_note_nout_store.add(HistoriographyNoteCapo())
-
         self.filename = filename
 
         self.setup_channels()
