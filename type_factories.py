@@ -80,6 +80,9 @@ def nout_factory(NoteClass, name_prefix):
             }[byte0].from_stream(byte_stream)
 
     class CapoPrototype(object):
+        def __init__(self):
+            pass
+
         def __repr__(self):
             return "(CAPO)"
 

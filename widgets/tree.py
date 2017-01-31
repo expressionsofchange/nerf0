@@ -1,6 +1,7 @@
+from kivy.clock import Clock
 from kivy.core.text import Label
-from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle
+from kivy.uix.widget import Widget
 from kivy.metrics import pt
 from kivy.uix.popup import Popup
 from kivy.uix.textinput import TextInput
@@ -71,6 +72,7 @@ class TreeWidget(FocusBehavior, Widget):
         # communicate any information back to the (closed) history_channel. A problem with that (in the current
         # architecture) is that "Possibilities" flow over the same channel. This is not possible once the channel is
         # closed, and we'll fail to fetch hashes back from the shared HashStoreChannelListener.
+        self._invalidated = False
         self.closed = False
 
         self.m = kwargs.pop('m')
@@ -87,8 +89,8 @@ class TreeWidget(FocusBehavior, Widget):
 
         self.send_to_channel, _ = self.history_channel.connect(self.receive_from_channel, self.channel_closed)
 
-        self.bind(pos=self.refresh)
-        self.bind(size=self.refresh)
+        self.bind(pos=self.invalidate)
+        self.bind(size=self.invalidate)
 
     # ## Section for channel-communication
     def receive_from_channel(self, data):
@@ -107,14 +109,14 @@ class TreeWidget(FocusBehavior, Widget):
             # selected t_cursor is no longer valid)
             self.broadcast_cursor_update(t_address_for_s_address(self.ds.tree, self.ds.s_cursor))
 
-            self.refresh()
+            self.invalidate()
 
             for notify_child in self.notify_children.values():
                 notify_child()  # (data.nout_hash)
 
     def channel_closed(self):
         self.closed = True
-        self.refresh()
+        self.invalidate()
 
     def broadcast_cursor_update(self, t_address):
         """
@@ -177,7 +179,7 @@ class TreeWidget(FocusBehavior, Widget):
         # TODO we only really need to broadcast the new t_cursor if it has changed.
         self.broadcast_cursor_update(t_address_for_s_address(self.ds.tree, self.ds.s_cursor))
 
-        self.refresh()
+        self.invalidate()
 
         if last_actuality is not None:
             for notify_child in self.notify_children.values():
@@ -255,7 +257,7 @@ class TreeWidget(FocusBehavior, Widget):
             pp_tree,
         )
 
-        self.refresh()
+        self.invalidate()
 
     def _child_channel_for_t_address(self, t_address):
         child_channel = ClosableChannel()
@@ -334,6 +336,11 @@ class TreeWidget(FocusBehavior, Widget):
         new_widget.receive_from_channel(Actuality(cursor_node.metadata.nout_hash))
         new_widget.report_new_tree_to_app = self.report_new_tree_to_app
 
+    def invalidate(self, *args):
+        if not self._invalidated:
+            Clock.schedule_once(self.refresh, -1)
+            self._invalidated = True
+
     def refresh(self, *args):
         """refresh means: redraw (I suppose we could rename, but I believe it's "canonical Kivy" to use 'refresh'"""
         self.canvas.clear()
@@ -351,6 +358,8 @@ class TreeWidget(FocusBehavior, Widget):
         with apply_offset(self.canvas, self.offset):
             self.box_structure = self._nt_for_node(self.ds.pp_tree, [], self.ds.pp_tree.underlying_node.broken)
             self._render_box(self.box_structure)
+
+        self._invalidated = False
 
     def on_touch_down(self, touch):
         # see https://kivy.org/docs/guide/inputs.html#touch-event-basics

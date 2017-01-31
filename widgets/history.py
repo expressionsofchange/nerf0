@@ -1,10 +1,11 @@
 from collections import namedtuple
 
+from kivy.clock import Clock
 from kivy.core.text import Label
-from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle
 from kivy.metrics import pt
 from kivy.uix.behaviors.focus import FocusBehavior
+from kivy.uix.widget import Widget
 
 from dsn.historiography.legato import (
     HistoriographyNoteNoutHash,
@@ -60,6 +61,8 @@ ColWidths = namedtuple('ColWidths', ('my_hash', 'prev_hash', 'note', 'payload'))
 class HistoryWidget(FocusBehavior, Widget):
 
     def __init__(self, **kwargs):
+        self._invalidated = False
+
         self.m = kwargs.pop('m')
         self.stores = kwargs.pop('stores')
 
@@ -80,8 +83,8 @@ class HistoryWidget(FocusBehavior, Widget):
 
         self.ds = EHStructure([], [0])
 
-        self.bind(pos=self.refresh)
-        self.bind(size=self.refresh)
+        self.bind(pos=self.invalidate)
+        self.bind(size=self.invalidate)
 
     def parent_cursor_update(self, data):
         do_create = data
@@ -110,7 +113,7 @@ class HistoryWidget(FocusBehavior, Widget):
             self.ds.s_cursor,
         )
 
-        self.refresh()
+        self.invalidate()
 
     def _handle_eh_note(self, eh_note):
         new_s_cursor, posacts, error = eh_note_play(self.stores.note_nout, self.ds, eh_note)
@@ -138,7 +141,7 @@ class HistoryWidget(FocusBehavior, Widget):
             new_s_cursor,
         )
 
-        self.refresh()
+        self.invalidate()
 
     def _trees(self, nout_hash):
         historiography_note_nout = HistoriographyNoteSlur(
@@ -175,12 +178,17 @@ class HistoryWidget(FocusBehavior, Widget):
         elif textual_code in ['t', 's']:
             # For now I've decided not to put these actions into the EH clef, because they are display-only.
             self.display_mode = textual_code
-            self.refresh()
+            self.invalidate()
 
         elif textual_code in ['x', 'del']:
             self._handle_eh_note(EHDelete())
 
         return result
+
+    def invalidate(self, *args):
+        if not self._invalidated:
+            Clock.schedule_once(self.refresh, -1)
+            self._invalidated = True
 
     def refresh(self, *args):
         # As it stands: _PURE_ copy-pasta from TreeWidget;
@@ -199,6 +207,8 @@ class HistoryWidget(FocusBehavior, Widget):
 
             self.box_structure = BoxNonTerminal([], offset_nonterminals, [])
             self._render_box(self.box_structure)
+
+        self._invalidated = False
 
     NOTES_T = {
         BecomeNode: 'N',
@@ -375,6 +385,6 @@ class HistoryWidget(FocusBehavior, Widget):
         if clicked_item is not None:
             # THIS IS THE ONLY DIFFERENCE WHILE COPY/PASTING
             self._handle_eh_note(EHCursorSet(clicked_item.semantics))
-            self.refresh()
+            self.invalidate()
 
         return ret
