@@ -43,6 +43,19 @@ def view_past_from_present(m, stores, historiography_note_nout, present_note_nou
         steps in history)
 
     * present_note_nout: "the present", represented as an end-point in history.
+
+    Some thoughts about optimizing this: In general, the current approach (naive caching of previous results) has at
+    least some properties of reuse "over time", but we can probably do better.
+
+    Things that are interesting to think about are: can we reuse previous results when the present is updated?  The part
+    that already works well is: because we cache, for each subtree, the `present_note_nout_hash` of that subtree, we at
+    least don't have to recalculate history for other subtrees, when the history for a certain unrelated subtree is
+    updated.
+
+    However, when present_note_nout_hash gets updated in any way whatsover, we currently recalculate all
+    live / deleted / dead information about any previous step, even though scenarios are imaginable (and often
+    occurring) in which no such recalculations are needed. Example: any linear extension of an endpoint of history has
+    the property of not making old stuff either dead or alive.
     """
     # Note: I don't like the asymmetry hash/no hash; I may want to reconsider.
 
