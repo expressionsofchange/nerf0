@@ -594,6 +594,9 @@ class TreeWidget(FocusBehavior, Widget):
                 self._render_box(nt)
 
     def _texture_for_text(self, text):
+        if text in self.m.texture_for_text:
+            return self.m.texture_for_text[text]
+
         kw = {
             'font_size': pt(13),
             'font_name': 'DejaVuSans',
@@ -606,4 +609,6 @@ class TreeWidget(FocusBehavior, Widget):
 
         label = Label(text=text, **kw)
         label.refresh()
+
+        self.m.texture_for_text[text] = label.texture
         return label.texture

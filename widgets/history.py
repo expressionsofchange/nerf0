@@ -330,6 +330,9 @@ class HistoryWidget(FocusBehavior, Widget):
         return BoxTerminal(instructions, bottom_right)
 
     def _texture_for_text(self, text):
+        if text in self.m.texture_for_text:
+            return self.m.texture_for_text[text]
+
         kw = {
             'font_size': pt(13),
             'font_name': 'DejaVuSans',
@@ -348,6 +351,8 @@ class HistoryWidget(FocusBehavior, Widget):
 
         label = Label(text=text, **kw)
         label.refresh()
+
+        self.m.texture_for_text[text] = label.texture
         return label.texture
 
     # Mouse handling: PURE COPY/PASTA (for now) from TreeWidget

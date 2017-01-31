@@ -15,3 +15,4 @@ class Memoization(object):
         self.construct_historiography = {}
         self.construct_historiography_treenode = {}
         self.view_past_from_present = {}
+        self.texture_for_text = {}
