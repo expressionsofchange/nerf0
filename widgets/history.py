@@ -221,19 +221,19 @@ class HistoryWidget(FocusBehavior, Widget):
             this_s_path = s_path + [i]
 
             if aliveness == DELETED:
-                box_color = Color(*RED)
+                box_color = RED
             elif aliveness == DEAD:
-                box_color = Color(*DARK_GREY)
+                box_color = DARK_GREY
             elif dissonant:
                 # I now understand that aliveness & being in dissonant state are orthogonal concerns. We _could_ express
                 # that by using another UI element than a color (e.g. strike-through). For now, we'l just stick with
                 # pink (with lower priority than RED/GREY)
-                box_color = Color(*PINK)
+                box_color = PINK
             else:
-                box_color = Color(*LIGHT_YELLOW)
+                box_color = LIGHT_YELLOW
 
             if this_s_path == self.ds.s_cursor:
-                box_color = Color(*GREY)
+                box_color = GREY
 
             nout = self.stores.note_nout.get(nout_hash)
 
@@ -312,7 +312,7 @@ class HistoryWidget(FocusBehavior, Widget):
         bottom_right = (bottom_left[X] + PADDING + MARGIN + content_width + MARGIN + PADDING, bottom_left[Y])
 
         instructions = [
-            box_color,
+            Color(*box_color),
             Rectangle(
                 pos=(bottom_left[0] + PADDING, bottom_left[1] + PADDING),
                 size=(content_width + 2 * MARGIN, content_height + 2 * MARGIN),

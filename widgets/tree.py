@@ -429,7 +429,7 @@ class TreeWidget(FocusBehavior, Widget):
         bottom_right = (bottom_left[X] + PADDING + MARGIN + content_width + MARGIN + PADDING, bottom_left[Y])
 
         instructions = [
-            box_color,
+            Color(*box_color),
             Rectangle(
                 pos=(bottom_left[0] + PADDING, bottom_left[1] + PADDING),
                 size=(content_width + 2 * MARGIN, content_height + 2 * MARGIN),
@@ -446,10 +446,10 @@ class TreeWidget(FocusBehavior, Widget):
 
     def color_for_cursor(self, is_cursor, broken):
         if is_cursor:
-            return Color(0.95, 0.95, 0.95, 1)  # Ad Hoc Grey
+            return (0.95, 0.95, 0.95, 1)  # Ad Hoc Grey
         if broken:
-            return Color(*PINK)
-        return Color(1, 1, 0.97, 1)  # Ad Hoc Light Yellow
+            return PINK
+        return (1, 1, 0.97, 1)  # Ad Hoc Light Yellow
 
     def _nt_for_node(self, annotated_node, s_address, broken):
         lookup = {
