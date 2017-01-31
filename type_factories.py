@@ -68,6 +68,9 @@ def nout_factory(NoteClass, name_prefix):
     """
 
     class NoutPrototype(object):
+        def __init__(self, *args, **kwargs):
+            raise TypeError("%s is Abstract; use %s or %s instead" % (Nout.__name__, Capo.__name__, Slur.__name__))
+
         @staticmethod
         def from_stream(byte_stream):
             byte0 = next(byte_stream)
