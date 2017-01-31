@@ -5,9 +5,15 @@ from memoization import Stores, Memoization
 
 from filehandler import read_from_file
 
-from dsn.s_expr.construct_y import construct_y_from_scratch
 from dsn.s_expr.h_utils import view_past_from_present
-from dsn.historiography.legato import HistoriographyNoteNoutHash, HistoriographyNoteNout, HistoriographyNoteCapo
+from dsn.historiography.legato import (
+    HistoriographyNoteNoutHash,
+    HistoriographyNoteNout,
+    HistoriographyNoteSlur,
+    HistoriographyNoteCapo,
+)
+
+from dsn.historiography.clef import SetNoteNoutHash
 
 from time import clock
 
@@ -47,18 +53,16 @@ m = Memoization()
 
 for i in range(2):
     # this is what the HistoryWidget would do
-    with Timer('1'):
-        new_htn, new_annotated_hashes = construct_y_from_scratch(m, stores, nout_hash)
 
-    edge_nout_hash, _, _ = new_annotated_hashes[-1]
+    historiography_note_nout = HistoriographyNoteSlur(
+        SetNoteNoutHash(nout_hash),
+        HistoriographyNoteNoutHash.for_object(HistoriographyNoteCapo()),
+    )
 
     with Timer('2'):
         liveness_annotated_hashes = view_past_from_present(
-            m=m,
-            stores=stores,
-            present_root_htn=new_htn,
-            annotated_hashes=new_annotated_hashes,
-
-            # Alternatively, we use the knowledge that at the top_level "everything is live"
-            alive_at_my_level=list(possible_timelines.all_preceding_nout_hashes(edge_nout_hash)),
+            m,
+            stores,
+            historiography_note_nout,
+            nout_hash,
             )

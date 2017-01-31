@@ -13,8 +13,12 @@ from dsn.historiography.legato import HistoriographyNoteSlur, HistoriographyNote
 
 
 # A tuple containing information about histories at a lower level
-RecursiveHistoryInfo = namedtuple('RecursiveHistory', (
-    't_address',  # the history at the lower level takes place at a certain t_address
+RecursiveHistoryInfo = namedtuple('RecursiveHistoryInfo', (
+    # the history at the lower level takes place at a certain t_address
+    't_address',
+
+    # historiography_note_nout is fully descriptive of the children_steps; those are left in for convenience sake
+    'historiography_note_nout',
     'children_steps'))
 
 
@@ -27,7 +31,7 @@ AnnotatedHash = namedtuple('AnnotatedHash', (
 
 def y_note_play(stores, note, structure, structure_is_dissonant, recurse):
     def dissonant():
-        return structure, True, RecursiveHistoryInfo(None, [])
+        return structure, True, RecursiveHistoryInfo(None, HistoriographyNoteCapo(), [])
 
     if structure_is_dissonant:
         # perhaps: don't do this inside y_note_play ? i.e. make y_note_play take non-dissonant structures only.
@@ -38,11 +42,13 @@ def y_note_play(stores, note, structure, structure_is_dissonant, recurse):
             return dissonant()  # "You can only BecomeNode out of nothingness"
 
         t2s, s2t = st_become()
-        return HistoriographyTreeNode(l_become(), l_become(), t2s, s2t), False, RecursiveHistoryInfo(None, [])
+        return HistoriographyTreeNode(
+            l_become(), l_become(), t2s, s2t), False, RecursiveHistoryInfo(None, HistoriographyNoteCapo(), [])
 
     if isinstance(note, TextBecome):
         # We're "misreusing" TextBecome here (it serves as the leaf of both TreeNode and HistoriographyTreeNode).
-        return TreeText(note.unicode_, 'no metadata available'), False, RecursiveHistoryInfo(None, [])
+        return TreeText(
+            note.unicode_, 'no metadata available'), False, RecursiveHistoryInfo(None, HistoriographyNoteCapo(), [])
 
     if isinstance(note, Insert):
         if not (0 <= note.index <= len(structure.children)):  # Note: insert _at_ len(..) is ok (a.k.a. append)
@@ -64,7 +70,7 @@ def y_note_play(stores, note, structure, structure_is_dissonant, recurse):
         t2s, s2t = st_insert(structure.t2s, structure.s2t, note.index)
         new_t = len(t2s) - 1
 
-        rhi = RecursiveHistoryInfo(new_t, child_annotated_hashes)
+        rhi = RecursiveHistoryInfo(new_t, historiography_note_nout, child_annotated_hashes)
 
         return HistoriographyTreeNode(children, historiographies, t2s, s2t), False, rhi
 
@@ -76,9 +82,9 @@ def y_note_play(stores, note, structure, structure_is_dissonant, recurse):
         historiographies = l_delete(structure.historiographies, note.index)
 
         t2s, s2t = st_delete(structure.t2s, structure.s2t, note.index)
-        t = structure.s2t[note.index]
 
-        return HistoriographyTreeNode(children, historiographies, t2s, s2t), False, RecursiveHistoryInfo(t, [])
+        return HistoriographyTreeNode(
+            children, historiographies, t2s, s2t), False, RecursiveHistoryInfo(None, HistoriographyNoteCapo(), [])
 
     if isinstance(note, Replace):
         historiography_note_nout = HistoriographyNoteSlur(
@@ -96,7 +102,7 @@ def y_note_play(stores, note, structure, structure_is_dissonant, recurse):
 
         t2s, s2t = st_replace(structure.t2s, structure.s2t, note.index)
 
-        rhi = RecursiveHistoryInfo(s2t[note.index], child_annotated_hashes)
+        rhi = RecursiveHistoryInfo(s2t[note.index], historiography_note_nout, child_annotated_hashes)
 
         return HistoriographyTreeNode(children, historiographies, t2s, s2t), False, rhi
 

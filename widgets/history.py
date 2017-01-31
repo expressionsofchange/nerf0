@@ -6,6 +6,12 @@ from kivy.graphics import Color, Rectangle
 from kivy.metrics import pt
 from kivy.uix.behaviors.focus import FocusBehavior
 
+from dsn.historiography.legato import (
+    HistoriographyNoteNoutHash,
+    HistoriographyNoteSlur,
+    HistoriographyNoteCapo,
+)
+from dsn.historiography.clef import SetNoteNoutHash
 
 from dsn.history.clef import (
     EHDelete,
@@ -24,7 +30,6 @@ from dsn.s_expr.clef import (
     Replace,
     TextBecome,
 )
-from dsn.s_expr.construct_y import construct_y_from_scratch
 from dsn.s_expr.h_utils import view_past_from_present, DEAD, DELETED
 
 from posacts import Actuality
@@ -72,9 +77,8 @@ class HistoryWidget(FocusBehavior, Widget):
         #
         # AFAIU:
         # 1. We could basically set any value below.
-        # 2. The exact same remarks apply for TreeWidget
 
-        self.ds = EHStructure([], "htn", [0])
+        self.ds = EHStructure([], [0])
 
         self.bind(pos=self.refresh)
         self.bind(size=self.refresh)
@@ -97,13 +101,12 @@ class HistoryWidget(FocusBehavior, Widget):
             self.update_nout_hash(data.nout_hash)
 
     def update_nout_hash(self, nout_hash):
-        new_htn, new_annotated_hashes = self._trees(nout_hash)
+        new_annotated_hashes = self._trees(nout_hash)
 
         # TODO here we can implement cursor_safe-guarding behaviors.
 
         self.ds = EHStructure(
             new_annotated_hashes,
-            new_htn,
             self.ds.s_cursor,
         )
 
@@ -127,33 +130,30 @@ class HistoryWidget(FocusBehavior, Widget):
 
         if last_actuality is None:
             new_annotated_hashes = self.ds.annotated_hashes
-            new_htn = self.ds.htn
         else:
-            new_htn, new_annotated_hashes = self._trees(last_actuality.nout_hash)
+            new_annotated_hashes = self._trees(last_actuality.nout_hash)
 
         self.ds = EHStructure(
             new_annotated_hashes,
-            new_htn,
             new_s_cursor,
         )
 
         self.refresh()
 
     def _trees(self, nout_hash):
-        new_htn, new_annotated_hashes = construct_y_from_scratch(self.m, self.stores, nout_hash)
+        historiography_note_nout = HistoriographyNoteSlur(
+            SetNoteNoutHash(nout_hash),
+            HistoriographyNoteNoutHash.for_object(HistoriographyNoteCapo()),
+        )
 
-        edge_nout_hash, _, _ = new_annotated_hashes[-1]
         liveness_annotated_hashes = view_past_from_present(
-            m=self.m,
-            stores=self.stores,
-            present_root_htn=new_htn,
-            annotated_hashes=new_annotated_hashes,
-
-            # Alternatively, we use the knowledge that at the top_level "everything is live"
-            alive_at_my_level=list(self.stores.note_nout.all_preceding_nout_hashes(edge_nout_hash)),
+            self.m,
+            self.stores,
+            historiography_note_nout,
+            nout_hash,
             )
 
-        return new_htn, liveness_annotated_hashes
+        return liveness_annotated_hashes
 
     def keyboard_on_key_down(self, window, keycode, text, modifiers):
         result = FocusBehavior.keyboard_on_key_down(self, window, keycode, text, modifiers)
@@ -217,7 +217,7 @@ class HistoryWidget(FocusBehavior, Widget):
         per_step_offset_non_terminals = []
         offset_y = 0
 
-        for i, (nout_hash, dissonant, aliveness, (t, children_steps)) in enumerate(steps_with_aliveness):
+        for i, (nout_hash, dissonant, aliveness, rhi) in enumerate(steps_with_aliveness):
             this_s_path = s_path + [i]
 
             if aliveness == DELETED:
@@ -250,8 +250,8 @@ class HistoryWidget(FocusBehavior, Widget):
                 cols.append((nout.note.unicode_, col_widths.payload))
             else:
                 if self.display_mode == 't':
-                    if t is not None:
-                        cols.append(("T: " + repr(t), col_widths.payload))
+                    if rhi.t_address is not None:
+                        cols.append(("T: " + repr(rhi.t_address), col_widths.payload))
                 if self.display_mode == 's':
                     if hasattr(nout.note, 'index'):
                         cols.append(("S: " + repr(nout.note.index), col_widths.payload))
@@ -261,8 +261,8 @@ class HistoryWidget(FocusBehavior, Widget):
                     terminals.append(OffsetBox((offset_x, 0), self._t_for_text(col_text, box_color, col_width)))
                     offset_x += col_width
 
-            if t is not None:
-                recursive_result = self.draw_past_from_present(children_steps, this_s_path, col_widths)
+            if rhi.t_address is not None:
+                recursive_result = self.draw_past_from_present(rhi.children_steps, this_s_path, col_widths)
                 non_terminals = [OffsetBox((offset_x, o[Y]), nt) for (o, nt) in recursive_result]
             else:
                 non_terminals = []

@@ -21,8 +21,8 @@ def ad_hoc_s_dfs(annotated_hashes, s_address):
     else:
         result = [s_address]
 
-    for i, (nout_hash, dissonant, aliveness, (t, children_steps)) in enumerate(annotated_hashes):
-        result.extend(ad_hoc_s_dfs(children_steps, s_address + [i]))
+    for i, (nout_hash, dissonant, aliveness, rhi) in enumerate(annotated_hashes):
+        result.extend(ad_hoc_s_dfs(rhi.children_steps, s_address + [i]))
 
     return result
 
@@ -71,7 +71,7 @@ def eh_note_play(possible_timelines, structure, edit_note):
             # last_hash = self.possible_timelines.get(to_be_deleted).previous_hash
 
             penultimate_step = structure.annotated_hashes[-2]
-            last_hash, dissonant, _, (t, children_steps) = penultimate_step
+            last_hash, dissonant, _, rhi = penultimate_step
 
         else:
             results = some_more_cut_paste(

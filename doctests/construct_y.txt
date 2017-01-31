@@ -36,8 +36,7 @@ The structure of Nouts & Notes below matches the drawing in green in the blue bo
 ...     for nout_hash, dissonant, rhi in annotated_hashes:
 ...         print(" " * indentation, nout_hash)
 ...         if rhi is not None:
-...             t_address, children_steps = rhi
-...             steps_recursively(indentation + 4, children_steps)
+...             steps_recursively(indentation + 4, rhi.children_steps)
 ... 
 
 Though a bit obfuscated w/ all the hashes, the below shows us at least: that the second usage of "BecomeNode" is not 

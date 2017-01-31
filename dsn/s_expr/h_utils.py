@@ -1,7 +1,7 @@
 from collections import namedtuple
 
-from historiography import t_lookup
-from dsn.s_expr.construct_y import RecursiveHistoryInfo
+from dsn.s_expr.construct_y import RecursiveHistoryInfo, construct_y
+from dsn.historiography.legato import HistoriographyNoteNoutHash
 
 
 """
@@ -32,59 +32,125 @@ AnnotatedWLIHash = namedtuple('AnnotatedHash', (
 ))
 
 
-def view_past_from_present(m, stores, present_root_htn, annotated_hashes, alive_at_my_level):
-    return _view_past_from_present(m, stores, present_root_htn, ALIVE_AND_WELL, annotated_hashes, [], alive_at_my_level)
+def view_past_from_present(m, stores, historiography_note_nout, present_note_nout_hash):
+    """Views the past through the eyes of the present, annotating dead and deleted hashes accordingly.
+    view_past_from_present assumes an alive starting-point; use _view_past_from_present_for_aliveness if you're already
+    in a dead/deleted state.
 
+    The 2 parameters are interpreted as such:
 
-def _view_past_from_present(m, stores, present_root_htn, p_aliveness, annotated_hashes, t_path, alive_at_my_level):
+    * historiography_note_nout: do the calculation for the (singular) last historiographic step (which may be multiple
+        steps in history)
+
+    * present_note_nout: "the present", represented as an end-point in history.
+    """
+    # Note: I don't like the asymmetry hash/no hash; I may want to reconsider.
+
+    historiography_note_nout_hash = HistoriographyNoteNoutHash.for_object(historiography_note_nout)
+
+    if (historiography_note_nout_hash, present_note_nout_hash) in m.view_past_from_present:
+        return m.view_past_from_present[(historiography_note_nout_hash, present_note_nout_hash)]
+
+    # In the below, past_htn is an unused variable. Although it's tempting to think of it as a good source of
+    # information for e.g.  the children's historiography_note_nout parameter, such values are not available granularly
+    # enough. Namely: we have a `past_htn` available for each "historiographic step" (call to Historiography.append_x),
+    # but in general we're interested in such information for each AnnotatedHash (i.e. for each historic step).
+
+    # The approach of reconstructing the whole past again and again (using construct_y) might seem very inefficient, but
+    # because the results are memoized this is in fact not the case.
+    past_htn, annotated_hashes = construct_y(m, stores, historiography_note_nout)
+
+    # Note; I don't like using caches for application-logic. "but for now it works"
+    present_htn, dissonant_ = m.construct_historiography_treenode[present_note_nout_hash]
+
+    alive_at_my_level = list(stores.note_nout.all_preceding_nout_hashes(present_note_nout_hash))
     result = []
 
-    for nout_hash, dissonant, recursive_information in annotated_hashes:
+    for ah in annotated_hashes:
         # Note: there is no passing of "dissonant" information to children. In the current version dissonents _never_
         # have children, as is explained in doctests/construct_y:
         # [..] notes that follow a broken action are still converted into steps, but not recursively explored. The
         # reasoning is: after breakage, all bets are off (but you still want to display as much info as possible)
 
-        child_aliveness = aliveness = p_aliveness
+        child_aliveness = aliveness = ALIVE_AND_WELL
 
-        if aliveness == ALIVE_AND_WELL and nout_hash not in alive_at_my_level:
+        if ah.hash not in alive_at_my_level:
             child_aliveness = aliveness = DEAD
 
-        if recursive_information.t_address is not None:
-            if aliveness == ALIVE_AND_WELL:
-                parent_htn = t_lookup(present_root_htn, t_path)
+        child_historiography_note_nout = ah.recursive_information.historiography_note_nout
 
-                child_s_address = parent_htn.t2s[recursive_information.t_address]
-                if child_s_address is None:
+        if ah.recursive_information.t_address is not None:
+            if aliveness == ALIVE_AND_WELL:
+                child_s_index = present_htn.t2s[ah.recursive_information.t_address]
+
+                if child_s_index is None:
                     child_aliveness = DELETED
 
                 else:
-                    child_historiography_in_present_something = parent_htn.historiographies[child_s_address]
+                    child_in_present_historiography_note_nout_hash = present_htn.historiographies[child_s_index]
 
-                    historiography_note_nout = stores.historiography_note_nout.get(
-                        child_historiography_in_present_something
+                    child_in_present_historiography_note_nout = stores.historiography_note_nout.get(
+                        child_in_present_historiography_note_nout_hash
                     )
 
-                    alive_at_child_level = list(stores.note_nout.all_preceding_nout_hashes(
-                        historiography_note_nout.note.note_nout_hash))
+                    child_in_present_nout_hash = child_in_present_historiography_note_nout.note.note_nout_hash
 
             if child_aliveness != ALIVE_AND_WELL:
-                alive_at_child_level = "_"
+                # the child is not ALIVE_AND_WELL, so it has no "present" either; we simply display it broken in the
+                # same way as its ancestor.
+                recursive_result = _view_past_from_present_for_aliveness(
+                    m,
+                    stores,
+                    child_historiography_note_nout,
+                    child_aliveness,
+                    )
 
-            recursive_result = _view_past_from_present(
-                m,
-                stores,
-                present_root_htn,
-                child_aliveness,
-                recursive_information.children_steps,
-                t_path + [recursive_information.t_address],
-                alive_at_child_level,
-                )
+            else:
+                recursive_result = view_past_from_present(
+                    m,
+                    stores,
+                    child_historiography_note_nout,
+                    child_in_present_nout_hash,
+                    )
 
         else:
             recursive_result = []
 
         result.append(AnnotatedWLIHash(
-            nout_hash, dissonant, aliveness, RecursiveHistoryInfo(recursive_information.t_address, recursive_result)))
+            ah.hash,
+            ah.dissonant,
+            aliveness,
+            RecursiveHistoryInfo(ah.recursive_information.t_address, child_historiography_note_nout, recursive_result)))
+
+    m.view_past_from_present[(historiography_note_nout_hash, present_note_nout_hash)] = result
+    return result
+
+
+def _view_past_from_present_for_aliveness(m, stores, historiography_note_nout, aliveness):
+    """From the moment a branch is marked dead/deleted, all its descendants are also dead/deleted.
+    The present function simply assings a certain not-aliveness to all nodes in the tree.
+    """
+    past_htn, annotated_hashes = construct_y(m, stores, historiography_note_nout)
+
+    result = []
+
+    for ah in annotated_hashes:
+        child_historiography_note_nout = ah.recursive_information.historiography_note_nout
+
+        if ah.recursive_information.t_address is not None:
+            recursive_result = _view_past_from_present_for_aliveness(
+                m,
+                stores,
+                child_historiography_note_nout,
+                aliveness,
+                )
+        else:
+            recursive_result = []
+
+        result.append(AnnotatedWLIHash(
+            ah.hash,
+            ah.dissonant,
+            aliveness,
+            RecursiveHistoryInfo(ah.recursive_information.t_address, child_historiography_note_nout, recursive_result)))
 
     return result

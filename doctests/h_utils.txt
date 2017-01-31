@@ -7,14 +7,15 @@
 >>> from dsn.s_expr.legato import NoteNout, NoteCapo, NoteNoutHash
 >>> from dsn.s_expr.test_utils import iinsert, rreplace
 >>> from dsn.s_expr.utils import nouts_for_notes_da_capo
->>> from dsn.historiography.legato import HistoriographyNoteNoutHash, HistoriographyNoteNout, HistoriographyNoteCapo
+>>> from dsn.historiography.legato import HistoriographyNoteNoutHash, HistoriographyNoteNout, HistoriographyNoteCapo, HistoriographyNoteSlur
+>>> from dsn.historiography.clef import SetNoteNoutHash
 >>>
 >>>
 >>> def print_aliveness(steps, indentation):
 ...     d = {ALIVE_AND_WELL: "ALIVE", DEAD: "DEAD", DELETED: "DELETED"}
-...     for (nout_hash, dissonant, aliveness, (t, children)) in steps:
+...     for (nout_hash, dissonant, aliveness, rhi) in steps:
 ...         print(indentation * " ", nout_hash, dissonant, d[aliveness])
-...         print_aliveness(children, indentation + 4)
+...         print_aliveness(rhi.children_steps, indentation + 4)
 ...
 >>>
 >>> p = NoutHashStore(NoteNoutHash, NoteNout, NoteCapo)
@@ -37,12 +38,15 @@
 ...     h = p.add(nh.nout)
 ...
 >>>
->>> htn, annotated_hashes = construct_y_from_scratch(m, stores, nh.nout_hash)
->>>
+
+>>> historiography_note_nout = HistoriographyNoteSlur(
+...     SetNoteNoutHash(nh.nout_hash),
+...     HistoriographyNoteNoutHash.for_object(HistoriographyNoteCapo()),
+... )
+
 >>> result = view_past_from_present(m, stores,
-...     present_root_htn=htn,
-...     annotated_hashes=annotated_hashes,
-...     alive_at_my_level=list(p.all_preceding_nout_hashes(nh.nout_hash)),
+...     historiography_note_nout,
+...     nh.nout_hash,
 ...     )
 >>>
 >>> print_aliveness(result, 0)
@@ -75,12 +79,14 @@
 ...     h = p.add(nh.nout)
 ...
 >>>
->>> htn, annotated_hashes = construct_y_from_scratch(m, stores, nh.nout_hash)
->>>
+>>> historiography_note_nout = HistoriographyNoteSlur(
+...     SetNoteNoutHash(nh.nout_hash),
+...     HistoriographyNoteNoutHash.for_object(HistoriographyNoteCapo()),
+... )
+
 >>> result = view_past_from_present(m, stores,
-...     present_root_htn=htn,
-...     annotated_hashes=annotated_hashes,
-...     alive_at_my_level=list(p.all_preceding_nout_hashes(nh.nout_hash)),
+...     historiography_note_nout,
+...     nh.nout_hash,
 ...     )
 >>>
 >>> print_aliveness(result, 0)
