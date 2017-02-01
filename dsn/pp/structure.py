@@ -1,3 +1,7 @@
+from annotated_tree import annotated_node_factory
+from dsn.s_expr.structure import SExpr
+
+
 class PPAnnotation(object):
     pass
 
@@ -13,3 +17,6 @@ class PPSingleLine(PPAnnotation):
 
 class PPLispy(PPAnnotation):
     pass
+
+
+PPAnnotatedSExpr = annotated_node_factory('PPAnnotatedSExpr', SExpr, PPAnnotation)

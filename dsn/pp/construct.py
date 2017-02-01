@@ -1,9 +1,9 @@
-from dsn.s_expr.structure import TreeText
-from annotated_tree import AnnotatedNode
 from spacetime import get_s_address_for_t_address
 from s_address import node_for_s_address
 
-from dsn.pp.structure import PPNone, PPSingleLine, PPLispy
+from dsn.s_expr.structure import TreeText
+
+from dsn.pp.structure import PPNone, PPSingleLine, PPLispy, PPAnnotatedSExpr
 from dsn.pp.clef import PPUnset, PPSetSingleLine, PPSetLispy
 
 
@@ -13,7 +13,7 @@ def build_annotated_tree(node, default_annotation):
     else:
         annotated_children = [build_annotated_tree(child, default_annotation) for child in node.children]
 
-    return AnnotatedNode(
+    return PPAnnotatedSExpr(
         node,
         default_annotation,
         annotated_children,

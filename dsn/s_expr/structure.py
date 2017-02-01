@@ -11,7 +11,12 @@ class YourOwnHash(object):
         self.nout_hash = nout_hash
 
 
-class TreeNode(object):
+class SExpr(object):
+    def __init__(self, *args, **kwargs):
+        raise TypeError("SExpr is Abstract; use TreeNode or TreeText instead")
+
+
+class TreeNode(SExpr):
 
     def __init__(self, children, t2s=None, s2t=None, metadata=None):
         self.children = children
@@ -34,7 +39,7 @@ class TreeNode(object):
         return result
 
 
-class TreeText(object):
+class TreeText(SExpr):
 
     def __init__(self, unicode_, metadata):
         pmts(unicode_, str)
