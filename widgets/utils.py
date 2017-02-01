@@ -2,6 +2,9 @@ from kivy.graphics.context_instructions import PushMatrix, PopMatrix, Translate
 from contextlib import contextmanager
 from collections import namedtuple
 
+from annotated_tree import annotated_node_factory
+
+
 X = 0
 Y = 1
 
@@ -15,23 +18,19 @@ BoxTerminal = namedtuple('BoxTerminal', ('instructions', 'outer_dimensions', ))
 
 
 class BoxNonTerminal(object):
-    def __init__(self, semantics, offset_nonterminals, offset_terminals):
+    def __init__(self, offset_nonterminals, offset_terminals):
         """The idea here is: draw tree-like structures using 'boxes', rectangular shapes that may contain other such
         shapes. Some details:
 
         * The direction of drawing is from top left to bottom right. Children may have (X, Y) offsets of respectively
             postive (including 0), and negative (including 0) values.
 
-        * We tie some "semantics" to a node in the "box tree", by this we simply mean the underlying thing that's being
-            drawn. Any actual drawing related to the present semantics is represented in the terminals.
-
-        * The current box may have some child-boxes, which have underlying semantics.
+        * The current box may have some child-boxes
 
         * There outer_dimensions of represent the smallest box that can be drawn around this entire node. This is useful
             to quickly decide whether the current box needs to be considered at all in e.g. collision checks.
         """
 
-        self.semantics = semantics
         self.offset_nonterminals = offset_nonterminals
         self.offset_terminals = offset_terminals
 
@@ -46,27 +45,6 @@ class BoxNonTerminal(object):
                     for obs in self.offset_terminals + self.offset_nonterminals])
 
         return (max_x, min_y)
-
-    def from_point(self, point):
-        """X & Y in the reference frame of `self`"""
-
-        # If any of our terminals matches, we match
-        for o, t in self.offset_terminals:
-            if (point[X] >= o[X] and point[X] <= o[X] + t.outer_dimensions[X] and
-                    point[Y] <= o[Y] and point[Y] >= o[Y] + t.outer_dimensions[Y]):
-                return self
-
-        # Otherwise, recursively check our children
-        for o, nt in self.offset_nonterminals:
-            if (point[X] >= o[X] and point[X] <= o[X] + nt.outer_dimensions[X] and
-                    point[Y] <= o[Y] and point[Y] >= o[Y] + nt.outer_dimensions[Y]):
-
-                # it's within the outer bounds, and _might_ be a hit. recurse to check:
-                result = nt.from_point(bring_into_offset(o, point))
-                if result is not None:
-                    return result
-
-        return None
 
     def get_all_terminals(self):
         def k(ob):
@@ -94,3 +72,45 @@ def apply_offset(canvas, offset):
     canvas.add(Translate(*offset))
     yield
     canvas.add(PopMatrix())
+
+
+SAddress = list  # the most basic expression of an SAddress' type; we can do something more powerful if needed
+
+SAddressAnnotatedBoxNonTerminal = annotated_node_factory('SAddressAnnotatedBoxNonTerminal', BoxNonTerminal, SAddress)
+
+
+def annotate_boxes_with_s_addresses(nt, path):
+    children = [
+        annotate_boxes_with_s_addresses(offset_box.item, path + [i])
+        for (i, offset_box) in enumerate(nt.offset_nonterminals)]
+
+    return SAddressAnnotatedBoxNonTerminal(
+        underlying_node=nt,
+        annotation=path,
+        children=children
+    )
+
+
+def from_point(nt_with_s_address, point):
+    """X & Y in the reference frame of `nt_with_s_address`"""
+
+    nt = nt_with_s_address.underlying_node
+
+    # If any of our terminals matches, we match
+    for o, t in nt.offset_terminals:
+        if (point[X] >= o[X] and point[X] <= o[X] + t.outer_dimensions[X] and
+                point[Y] <= o[Y] and point[Y] >= o[Y] + t.outer_dimensions[Y]):
+
+            return nt_with_s_address
+
+    # Otherwise, recursively check our children
+    for child_with_s_address, (o, nt) in zip(nt_with_s_address.children, nt.offset_nonterminals):
+        if (point[X] >= o[X] and point[X] <= o[X] + nt.outer_dimensions[X] and
+                point[Y] <= o[Y] and point[Y] >= o[Y] + nt.outer_dimensions[Y]):
+
+            # it's within the outer bounds, and _might_ be a hit. recurse to check:
+            result = from_point(child_with_s_address, bring_into_offset(o, point))
+            if result is not None:
+                return result
+
+    return None

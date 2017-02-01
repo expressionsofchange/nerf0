@@ -36,10 +36,12 @@ from dsn.s_expr.h_utils import view_past_from_present, DEAD, DELETED
 from posacts import Actuality
 
 from widgets.utils import (
+    annotate_boxes_with_s_addresses,
     apply_offset,
-    BoxTerminal,
     BoxNonTerminal,
+    BoxTerminal,
     bring_into_offset,
+    from_point,
     OffsetBox,
     X,
     Y,
@@ -203,10 +205,11 @@ class HistoryWidget(FocusBehavior, Widget):
 
         with apply_offset(self.canvas, self.offset):
             offset_nonterminals = self.draw_past_from_present(
-                    self.ds.annotated_hashes, [], ColWidths(150, 150, 30, 100))
+                    self.ds.annotated_hashes, ColWidths(150, 150, 30, 100))
 
-            self.box_structure = BoxNonTerminal([], offset_nonterminals, [])
-            self._render_box(self.box_structure)
+            self.box_structure = annotate_boxes_with_s_addresses(BoxNonTerminal(offset_nonterminals, []), [])
+
+            self._render_box(self.box_structure.underlying_node)
 
         self._invalidated = False
 
@@ -218,7 +221,7 @@ class HistoryWidget(FocusBehavior, Widget):
         Delete: 'D',
     }
 
-    def draw_past_from_present(self, steps_with_aliveness, s_path, col_widths):
+    def draw_past_from_present(self, steps_with_aliveness, col_widths):
         """
         s_path is an s_path at the level of the _history_
         t_path is a t_path on the underlying structure (tree)
@@ -228,8 +231,6 @@ class HistoryWidget(FocusBehavior, Widget):
         offset_y = 0
 
         for i, (nout_hash, dissonant, aliveness, rhi) in enumerate(steps_with_aliveness):
-            this_s_path = s_path + [i]
-
             if aliveness == DELETED:
                 box_color = RED
             elif aliveness == DEAD:
@@ -242,7 +243,7 @@ class HistoryWidget(FocusBehavior, Widget):
             else:
                 box_color = LIGHT_YELLOW
 
-            if this_s_path == self.ds.s_cursor:
+            if False:  # temporarily broken, because we've lost access to `s_path`
                 box_color = GREY
 
             nout = self.stores.note_nout.get(nout_hash)
@@ -272,12 +273,12 @@ class HistoryWidget(FocusBehavior, Widget):
                     offset_x += col_width
 
             if rhi.t_address is not None:
-                recursive_result = self.draw_past_from_present(rhi.children_steps, this_s_path, col_widths)
+                recursive_result = self.draw_past_from_present(rhi.children_steps, col_widths)
                 non_terminals = [OffsetBox((offset_x, o[Y]), nt) for (o, nt) in recursive_result]
             else:
                 non_terminals = []
 
-            per_step_result = BoxNonTerminal(this_s_path, non_terminals, terminals)
+            per_step_result = BoxNonTerminal(non_terminals, terminals)
             per_step_offset_non_terminals.append(
                 OffsetBox((0, offset_y), per_step_result))
 
@@ -380,11 +381,11 @@ class HistoryWidget(FocusBehavior, Widget):
 
         self.focus = True
 
-        clicked_item = self.box_structure.from_point(bring_into_offset(self.offset, (touch.x, touch.y)))
+        clicked_item = from_point(self.box_structure, bring_into_offset(self.offset, (touch.x, touch.y)))
 
         if clicked_item is not None:
             # THIS IS THE ONLY DIFFERENCE WHILE COPY/PASTING
-            self._handle_eh_note(EHCursorSet(clicked_item.semantics))
+            self._handle_eh_note(EHCursorSet(clicked_item.annotation))
             self.invalidate()
 
         return ret
