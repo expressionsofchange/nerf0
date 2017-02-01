@@ -561,8 +561,10 @@ class TreeWidget(FocusBehavior, Widget):
         if len(annotated_node.children) > 0:
             # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that
             # we are robust for (we render it as flat text); but it's not the expected use-case.
-            # CHECK! (and potentially remove the warning?)
-            nt = self._nt_for_node(annotated_node.children[0], s_address + [0])
+
+            # If we were ever to make it a user-decision how to render that child (i.e. allow for a non-single-line
+            # override), the below must also be updated (offset_down for child[n > 0] should be non-zero)
+            nt = self._nt_for_node_single_line(annotated_node.children[0], s_address + [0])
 
             offset_nonterminals.append(
                 OffsetBox((offset_right, offset_down), nt)
