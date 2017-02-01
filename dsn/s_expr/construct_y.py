@@ -30,6 +30,9 @@ AnnotatedHash = namedtuple('AnnotatedHash', (
 
 
 def y_note_play(stores, note, structure, structure_is_dissonant, recurse):
+    # Note on an asymmetry with x_note_play: here we pass around is_dissonent as an explicit paratemer/result-element,
+    # in x_note_play we have included it as an attribute of the treenodes.
+
     def dissonant():
         return structure, True, RecursiveHistoryInfo(None, HistoriographyNoteCapo(), [])
 

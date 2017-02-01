@@ -356,7 +356,7 @@ class TreeWidget(FocusBehavior, Widget):
             Rectangle(pos=self.pos, size=self.size,)
 
         with apply_offset(self.canvas, self.offset):
-            self.box_structure = self._nt_for_node(self.ds.pp_tree, [], self.ds.pp_tree.underlying_node.broken)
+            self.box_structure = self._nt_for_node(self.ds.pp_tree, [])
             self._render_box(self.box_structure)
 
         self._invalidated = False
@@ -460,7 +460,7 @@ class TreeWidget(FocusBehavior, Widget):
             return PINK
         return (1, 1, 0.97, 1)  # Ad Hoc Light Yellow
 
-    def _nt_for_node(self, annotated_node, s_address, broken):
+    def _nt_for_node(self, annotated_node, s_address):
         lookup = {
             PPNone: self._nt_for_node_single_line,
             PPSingleLine: self._nt_for_node_single_line,
@@ -468,9 +468,10 @@ class TreeWidget(FocusBehavior, Widget):
         }
         pp_annotation = annotated_node.annotation
         m = lookup[type(pp_annotation)]
-        return m(annotated_node, s_address, broken or annotated_node.underlying_node.broken)
+        return m(annotated_node, s_address)
 
-    def _nt_for_node_single_line(self, annotated_node, s_address, broken):
+    def _nt_for_node_single_line(self, annotated_node, s_address):
+        broken = annotated_node.underlying_node.broken
         is_cursor = s_address == self.ds.s_cursor
         node = annotated_node.underlying_node
 
@@ -488,7 +489,7 @@ class TreeWidget(FocusBehavior, Widget):
         offset_down = 0
 
         for i, child in enumerate(annotated_node.children):
-            nt = self._nt_for_node_single_line(child, s_address + [i], broken or child.underlying_node.broken)
+            nt = self._nt_for_node_single_line(child, s_address + [i])
             offset_nonterminals.append(OffsetBox((offset_right, offset_down), nt))
             offset_right += nt.outer_dimensions[X]
 
@@ -500,8 +501,9 @@ class TreeWidget(FocusBehavior, Widget):
             offset_nonterminals,
             offset_terminals)
 
-    def _nt_for_node_as_todo_list(self, annotated_node, s_address, broken):
+    def _nt_for_node_as_todo_list(self, annotated_node, s_address):
         raise Exception("Not updated for the introduction of PP-annotations")
+        broken = annotated_node.underlying_node.broken
         is_cursor = s_address == self.ds.s_cursor
 
         node = annotated_node.underlying_node
@@ -517,7 +519,7 @@ class TreeWidget(FocusBehavior, Widget):
         # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that we
         # are robust for (we render it as flat text); but it's not the expected use-case.
         nt = self._nt_for_node_single_line(
-            annotated_node.children[0], s_address + [0], broken or annotated_node.children[0].underlying_node.broken)
+            annotated_node.children[0], s_address + [0])
 
         offset_nonterminals = [
             no_offset(nt)
@@ -526,7 +528,7 @@ class TreeWidget(FocusBehavior, Widget):
         offset_right = 50  # Magic number for indentation
 
         for i, child in enumerate(annotated_node.children[1:]):
-            nt = self._nt_for_node_as_todo_list(child, s_address + [i + 1], broken or child.underlying_node.broken)
+            nt = self._nt_for_node_as_todo_list(child, s_address + [i + 1])
             offset_nonterminals.append(OffsetBox((offset_right, offset_down), nt))
             offset_down += nt.outer_dimensions[Y]
 
@@ -535,9 +537,10 @@ class TreeWidget(FocusBehavior, Widget):
             offset_nonterminals,
             [])
 
-    def _nt_for_node_as_lispy_layout(self, annotated_node, s_address, broken):
+    def _nt_for_node_as_lispy_layout(self, annotated_node, s_address):
         # "Lisp Style indentation, i.e. xxx yyy
         #                                   zzz
+        broken = annotated_node.underlying_node.broken
         is_cursor = s_address == self.ds.s_cursor
 
         node = annotated_node.underlying_node
@@ -559,9 +562,7 @@ class TreeWidget(FocusBehavior, Widget):
             # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that
             # we are robust for (we render it as flat text); but it's not the expected use-case.
             # CHECK! (and potentially remove the warning?)
-            nt = self._nt_for_node(
-                annotated_node.children[0], s_address + [0],
-                broken or annotated_node.children[0].underlying_node.broken)
+            nt = self._nt_for_node(annotated_node.children[0], s_address + [0])
 
             offset_nonterminals.append(
                 OffsetBox((offset_right, offset_down), nt)
@@ -570,7 +571,7 @@ class TreeWidget(FocusBehavior, Widget):
 
             if len(annotated_node.children) > 1:
                 for i, child_x in enumerate(annotated_node.children[1:]):
-                    nt = self._nt_for_node(child_x, s_address + [i + 1], broken or child_x.underlying_node.broken)
+                    nt = self._nt_for_node(child_x, s_address + [i + 1])
                     offset_nonterminals.append(OffsetBox((offset_right, offset_down), nt))
                     offset_down += nt.outer_dimensions[Y]
 

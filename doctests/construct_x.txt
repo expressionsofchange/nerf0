@@ -61,3 +61,19 @@ just because there was a failure _somewhere_ in the chain doesn't mean the top-l
 ((() (original)), False)
 >>> show(Replace(0, hash), test_tree, recurse_dissonant, metadata)
 ((()), False)
+
+Recursive failures: there is no downward propagation.
+As it stands, errors are not propagated downwards to the children. i.e. just because there was an error somewhere
+in the construction of a node, does not means all its children get marked as dissonant.
+
+Whether this is the right decision is still a bit of a question to me. The underlying point is: once a node is
+dissonent, all bets are off, so there are no further updates on the nodes' children from that point onwards.
+
+You could argue both ways here:
+* No propagation: the construction of the children, as far as we got with it, is in itself not broken.
+    * counterpoint: "as far as we got" is also what we show on the parent, so that in itself is not really an excuse.
+
+* Propagation: because the parent is broken, no further updates are done on the children. So the children you're
+    seeing are only updated to the point of the breakage. Not fully updated should be displayed as broken.
+
+Recursive failures, downward propagation behavior is not tested yet.
