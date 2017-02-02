@@ -27,16 +27,17 @@ from dsn.editor.clef import (
 from dsn.editor.construct import edit_note_play, bubble_history_up
 from dsn.editor.structure import EditStructure
 
+from annotated_tree import annotated_node_factory
 from posacts import Possibility, Actuality
 
-from dsn.pp.structure import PPNone, PPSingleLine, PPLispy
+from dsn.pp.structure import PPNone, PPSingleLine
 from dsn.pp.clef import PPUnset, PPSetSingleLine, PPSetLispy
 from dsn.pp.construct import construct_pp_tree
 
 from s_address import node_for_s_address
 from spacetime import t_address_for_s_address, best_s_address_for_t_address, get_s_address_for_t_address
 
-from dsn.s_expr.structure import TreeNode, TreeText
+from dsn.s_expr.structure import SExpr, TreeNode, TreeText
 from dsn.s_expr.construct_x import construct_x
 
 from widgets.utils import (
@@ -62,6 +63,63 @@ from widgets.layout_constants import (
 # moddeled as -1 rather than 0, which is why I made the correct indexes constants
 INSERT_BEFORE = 0
 INSERT_AFTER = 1
+
+
+# Multiline modes:
+LISPY = 0
+SINGLE_LINE = 1
+
+
+class InheritedRenderingInformation(object):
+    """When rendering trees, ancestors may affect how their descendants are rendered.
+
+    Such information is formalized as InheritedRenderingInformation."""
+
+    def __init__(self, multiline_mode):
+        self.multiline_mode = multiline_mode
+
+
+IriAnnotatedNode = annotated_node_factory("IriAnnotatedNode", SExpr, InheritedRenderingInformation)
+
+
+def construct_lispy_iri_top_down(pp_annotated_node, inherited_information):
+    """Constructs the InheritedRenderingInformation in a top-down fashion. Note the difference between the PP
+    instructions and the InheritedRenderingInformation: the PP instructions must be viewed in the light of their
+    ancestors, the InheritedRenderingInformation can be used without such lookups in the tree, and is therefore more
+    easily used. Of course, we must construct it first, which is what we do in the present function.
+    """
+
+    # I attempted to write this more generally, as a generic map-over-trees function and a function that operates on a
+    # single node; however: the fact that the index of a child is such an important piece of information (it determines
+    # SINGLE_LINE mode) made this very unnatural, so I just wrote a single non-generic recursive function instead.
+
+    children = getattr(pp_annotated_node, 'children', [])
+    annotated_children = []
+
+    my_information = inherited_information
+
+    if type(pp_annotated_node.annotation) in [PPSingleLine, PPNone]:
+        # "no hint" is currently interpreted as "Single line"; this might change in the future.
+        my_information = InheritedRenderingInformation(SINGLE_LINE)
+
+    for i, child in enumerate(children):
+        if i == 0 or my_information.multiline_mode == SINGLE_LINE:
+            # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that
+            # we are robust for (we render it as flat text); but it's not the expected use-case.
+
+            # If we were ever to make it a user-decision how to render that child (i.e. allow for a non-single-line
+            # override), the below must also be updated (offset_down for child[n > 0] should be non-zero)
+            child_information = InheritedRenderingInformation(SINGLE_LINE)
+        else:
+            child_information = InheritedRenderingInformation(LISPY)
+
+        annotated_children.append(construct_lispy_iri_top_down(child, child_information))
+
+    return IriAnnotatedNode(
+        underlying_node=pp_annotated_node.underlying_node,
+        annotation=my_information,
+        children=annotated_children,
+    )
 
 
 class TreeWidget(FocusBehavior, Widget):
@@ -358,7 +416,7 @@ class TreeWidget(FocusBehavior, Widget):
             Rectangle(pos=self.pos, size=self.size,)
 
         with apply_offset(self.canvas, self.offset):
-            self.box_structure = annotate_boxes_with_s_addresses(self._nt_for_node(self.ds.pp_tree), [])
+            self.box_structure = annotate_boxes_with_s_addresses(self._nts_for_pp_annotated_node(self.ds.pp_tree), [])
             self._render_box(self.box_structure.underlying_node)
 
         self._invalidated = False
@@ -462,20 +520,37 @@ class TreeWidget(FocusBehavior, Widget):
             return PINK
         return (1, 1, 0.97, 1)  # Ad Hoc Light Yellow
 
-    def _nt_for_node(self, annotated_node):
-        lookup = {
-            PPNone: self._nt_for_node_single_line,
-            PPSingleLine: self._nt_for_node_single_line,
-            PPLispy: self._nt_for_node_as_lispy_layout,
-        }
-        pp_annotation = annotated_node.annotation
-        m = lookup[type(pp_annotation)]
-        return m(annotated_node)
+    def _nts_for_pp_annotated_node(self, pp_annotated_node):
+        iri_annotated_node = construct_lispy_iri_top_down(
+            pp_annotated_node,
 
-    def _nt_for_node_single_line(self, annotated_node):
-        broken = annotated_node.underlying_node.broken
-        is_cursor = False  # temporarily broken, because we've lost access to `s_address`
-        node = annotated_node.underlying_node
+            # We start LISPY (but if the first PP node is annotated non-lispy, the result will still be a single line)
+            InheritedRenderingInformation(LISPY),
+        )
+        return self.bottom_up_construct(self._nt_for_iri, iri_annotated_node, [])
+
+    def bottom_up_construct(self, f, node, s_address):
+        children = [self.bottom_up_construct(f, child, s_address + [i]) for i, child in enumerate(node.children)]
+        return f(node, children, s_address)
+
+    def _nt_for_iri(self, iri_annotated_node, children_nts, s_address):
+        is_cursor = s_address == self.ds.s_cursor
+
+        # PoC of "editing TreeText w/o popping up a dialog box:
+        # if s_address == [1, 0]:
+        #     return BoxNonTerminal([], [no_offset(
+        #         self._t_for_text("This is where you type", (1, 0, 0, 1)))])
+
+        if iri_annotated_node.annotation.multiline_mode == LISPY:
+            f = self._nt_for_node_as_lispy_layout
+        else:  # SINGLE_LINE
+            f = self._nt_for_node_single_line
+
+        return f(iri_annotated_node, children_nts, is_cursor)
+
+    def _nt_for_node_single_line(self, iri_annotated_node, children_nts, is_cursor):
+        broken = iri_annotated_node.underlying_node.broken
+        node = iri_annotated_node.underlying_node
 
         if isinstance(node, TreeText):
             return BoxNonTerminal([], [no_offset(
@@ -490,60 +565,52 @@ class TreeWidget(FocusBehavior, Widget):
         offset_right = t.outer_dimensions[X]
         offset_down = 0
 
-        for i, child in enumerate(annotated_node.children):
-            nt = self._nt_for_node_single_line(child)
+        for nt in children_nts:
             offset_nonterminals.append(OffsetBox((offset_right, offset_down), nt))
             offset_right += nt.outer_dimensions[X]
 
         t = self._t_for_text(")", self.color_for_cursor(is_cursor, broken))
         offset_terminals.append(OffsetBox((offset_right, offset_down), t))
 
-        return BoxNonTerminal(
-            offset_nonterminals,
-            offset_terminals)
+        return BoxNonTerminal(offset_nonterminals, offset_terminals)
 
-    def _nt_for_node_as_todo_list(self, annotated_node):
+    def _nt_for_node_as_todo_list(self, iri_annotated_node, children_nts, is_cursor):
         raise Exception("Not updated for the introduction of PP-annotations")
-        broken = annotated_node.underlying_node.broken
-        is_cursor = False  # temporarily broken, because we've lost access to `s_address`
+        broken = iri_annotated_node.underlying_node.broken
 
-        node = annotated_node.underlying_node
+        node = iri_annotated_node.underlying_node
 
         if isinstance(node, TreeText):
             return BoxNonTerminal([], [no_offset(self._t_for_text(
                 node.unicode_, self.color_for_cursor(is_cursor, broken)))])
 
-        if len(annotated_node.children) == 0:
+        if len(children_nts) == 0:
             return BoxNonTerminal([], [no_offset(self._t_for_text(
                 "(...)", self.color_for_cursor(is_cursor, broken)))])
 
         # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that we
         # are robust for (we render it as flat text); but it's not the expected use-case.
-        nt = self._nt_for_node_single_line(
-            annotated_node.children[0])
 
+        # WHEN_RESTORING: "first child is single line" should be pushed into the "top down" functionality
+        nt = children_nts[0]
         offset_nonterminals = [
             no_offset(nt)
         ]
         offset_down = nt.outer_dimensions[Y]
         offset_right = 50  # Magic number for indentation
 
-        for i, child in enumerate(annotated_node.children[1:]):
-            nt = self._nt_for_node_as_todo_list(child)
+        for nt in children_nts[1:]:
             offset_nonterminals.append(OffsetBox((offset_right, offset_down), nt))
             offset_down += nt.outer_dimensions[Y]
 
-        return BoxNonTerminal(
-            offset_nonterminals,
-            [])
+        return BoxNonTerminal(offset_nonterminals, [])
 
-    def _nt_for_node_as_lispy_layout(self, annotated_node):
+    def _nt_for_node_as_lispy_layout(self, iri_annotated_node, children_nts, is_cursor):
         # "Lisp Style indentation, i.e. xxx yyy
         #                                   zzz
-        broken = annotated_node.underlying_node.broken
-        is_cursor = False  # temporarily broken, because we've lost access to `s_address`
+        broken = iri_annotated_node.underlying_node.broken
 
-        node = annotated_node.underlying_node
+        node = iri_annotated_node.underlying_node
 
         if isinstance(node, TreeText):
             return BoxNonTerminal([], [no_offset(self._t_for_text(
@@ -558,22 +625,16 @@ class TreeWidget(FocusBehavior, Widget):
         ]
         offset_nonterminals = []
 
-        if len(annotated_node.children) > 0:
-            # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that
-            # we are robust for (we render it as flat text); but it's not the expected use-case.
-
-            # If we were ever to make it a user-decision how to render that child (i.e. allow for a non-single-line
-            # override), the below must also be updated (offset_down for child[n > 0] should be non-zero)
-            nt = self._nt_for_node_single_line(annotated_node.children[0])
+        if len(children_nts) > 0:
+            nt = children_nts[0]
 
             offset_nonterminals.append(
                 OffsetBox((offset_right, offset_down), nt)
             )
             offset_right += nt.outer_dimensions[X]
 
-            if len(annotated_node.children) > 1:
-                for i, child_x in enumerate(annotated_node.children[1:]):
-                    nt = self._nt_for_node(child_x)
+            if len(children_nts) > 1:
+                for nt in children_nts[1:]:
                     offset_nonterminals.append(OffsetBox((offset_right, offset_down), nt))
                     offset_down += nt.outer_dimensions[Y]
 
@@ -590,9 +651,7 @@ class TreeWidget(FocusBehavior, Widget):
         t = self._t_for_text(")", self.color_for_cursor(is_cursor, broken))
         offset_terminals.append(OffsetBox((offset_right, offset_down), t))
 
-        return BoxNonTerminal(
-            offset_nonterminals,
-            offset_terminals)
+        return BoxNonTerminal(offset_nonterminals, offset_terminals)
 
     def _render_box(self, box):
         for o, t in box.offset_terminals:
