@@ -245,14 +245,65 @@ class TreeWidget(FocusBehavior, Widget):
             for notify_child in self.notify_children.values():
                 notify_child()  # (last_actuality.nout_hash)
 
+    def keyboard_on_textinput(self, window, text):
+        result = FocusBehavior.keyboard_on_textinput(self, window, text)
+        self.generalized_key_press(text)
+        return result
+
     def keyboard_on_key_down(self, window, keycode, text, modifiers):
+        result = FocusBehavior.keyboard_on_key_down(self, window, keycode, text, modifiers)
+        code, textual_code = keycode
+
+        also_on_textinput = (
+                [chr(ord('a') + i) for i in range(26)] +  # a-z
+                [chr(ord('0') + i) for i in range(10)] +  # 0-9
+                ['`', '-', '=',  ',', '.', '/', "'", ';', '\\'])
+
+        # these are modifier-keys; we don't independently deal with them, so we ignore them explicitly.
+        # on my system, right-alt and right-super are not recognized at present; they show up as '' here;
+        # (their keycodes are respectively 1073741925 and 1073742055)
+        modifiers = ['alt', 'alt-gr', 'lctrl', 'rctrl', 'rshift', 'shift', 'super', '']
+
+        if textual_code not in modifiers + also_on_textinput:
+            return self.generalized_key_press(textual_code)
+
+        return result
+
+    def generalized_key_press(self, textual_code):
+        """
+        Kivy's keyboard-handling is lacking in documentation (or I cannot find it).
+
+        Some (partially) open questions are:
+
+        Q: what are the possible values for keyboard_on_key_down's `keycode` parameter?
+        A (partial): It's a tuple: code, textual_code = keycode; code is a number, textual_code is a textual
+        representation of it (which, according to the source, is stolen from pygame, although I cannot find the
+        original source)
+
+        A (partial): as far as I understand it: the system's keycode gets passed straight to keyboard_on_key_down, via
+        kivy.code.Window; Same for keyboard_on_textinput, but with text in that case.
+
+        Q: What is the relationship between keyboard_on_textinput and keyboard_on_key_down?
+        A (partial): https://groups.google.com/forum/#!topic/kivy-users/iYwK2uBOZPM
+
+        I need at least the following:
+        1. know when the alpha-numeric & interpunction keys are pressed.
+        2. the combined effect of combining shift (sometimes this is .upper; but note that this is not so for digits)
+            with such a key.
+        3. know that "special keys" such as the cursor keys and escape are pressed.
+
+        keyboard_on_key_down provides us with 1 & 3, but not 2; keyboard_on_textinput provides us with 1 & 2 but not 3.
+        In cases where keyboard_on_key_down provides us with insufficient information, which has an equivalent in
+        keyboard_on_textinput we ignore it. This is done by explicitly enumerating those cases.
+
+        I have _no idea_ how this generalizes to any keyboard other than the one I happen to be typing on...  But for
+        now I'm just going to push forward to something that I _do_ understand (and is documented) so that we can at
+        least build on that.
+        """
+
         if self.closed:
             # See the remarks in __init__
             return
-
-        result = FocusBehavior.keyboard_on_key_down(self, window, keycode, text, modifiers)
-
-        code, textual_code = keycode
 
         if textual_code in ['left', 'h']:
             self._handle_edit_note(CursorParent())
@@ -298,8 +349,6 @@ class TreeWidget(FocusBehavior, Widget):
 
         elif textual_code in ['n']:
             self._create_child_window()
-
-        return result
 
     def _change_pp_style(self, pp_note_type):
         t_address = t_address_for_s_address(self.ds.tree, self.ds.s_cursor)
