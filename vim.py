@@ -32,7 +32,7 @@ current version.
 
 
 MOVE_TO_CHAR_KEYS = ['f', 'F', 't', 'T']
-MOTION_KEYS = MOVE_TO_CHAR_KEYS + ['h', 'l']
+MOTION_KEYS = MOVE_TO_CHAR_KEYS + ['h', 'l', 'left', 'right', '$', '0']
 
 
 class Vim(object):
@@ -71,7 +71,7 @@ def normal_mode(text, cursor_pos):
     count = 1
     key = yield text, cursor_pos
 
-    if key.isdigit():
+    if key.isdigit() and key != '0':
         key, count = yield from numeral(text, cursor_pos, key)
 
     if key in MOTION_KEYS:
@@ -115,6 +115,18 @@ def normal_mode(text, cursor_pos):
 
         return text, cursor_pos
 
+    if key in ['D', 'C']:
+        text, cursor_pos = ibeam_delete(text, cursor_pos, len(text))
+
+        if key == 'C':
+            text, cursor_pos = yield from insert_mode(text, cursor_pos)
+        else:
+            # meh... this is basically a correction on the missing block_delete() above; better would be to have the +1
+            # in the other branch.
+            cursor_pos -= 1
+
+        return text, cursor_pos
+
     if key in ['x']:
         text, cursor_pos = ibeam_delete(text, cursor_pos, cursor_pos + count)
         return text, cursor_pos
@@ -134,13 +146,21 @@ def insert_mode(text, cursor_pos):
             # 'i'/'escape'.
             return text, max(cursor_pos - 1, 0)
 
-        if key == 'backspace':
+        elif key == 'backspace':
             text, cursor_pos = ibeam_delete(text, cursor_pos, cursor_pos - 1)
-            key = yield text, cursor_pos
-            continue
 
-        text = text[:cursor_pos] + key + text[cursor_pos:]
-        cursor_pos += 1
+        elif key == 'left':
+            cursor_pos = max(cursor_pos - 1, 0)
+
+        elif key == 'right':
+            cursor_pos = min(cursor_pos + 1, len(text))
+
+        elif len(key) != 1:
+            pass  # some special key that we have no behaviors for
+
+        else:
+            text = text[:cursor_pos] + key + text[cursor_pos:]
+            cursor_pos += 1
 
         key = yield text, cursor_pos
 
@@ -199,22 +219,23 @@ def motion(text, cursor_pos, key, count):
     >>> g.send('e')
     ('R', None)
     """
+    if key in ['h', 'left']:
+        return max(cursor_pos - count, 0), False
 
-    # TODO Once we implement '0' to mean "beginning of line", we don't need this case anymore.
-    if count == 0:
-        return None
-
-    if key == 'h':
-        cursor_pos = max(cursor_pos - count, 0)
-        return cursor_pos, False
-
-    if key == 'l':
+    if key in ['l', 'right']:
         # In normal mode there are as many positions as characters, hence `len(text) - 1`
-        cursor_pos = min(cursor_pos + count, len(text) - 1)
-        return cursor_pos, False
+        return min(cursor_pos + count, len(text) - 1), False
+
+    if key in ['0']:
+        return 0, False
+
+    if key in ['$']:
+        return len(text) - 1, True
 
     if key in MOVE_TO_CHAR_KEYS:
         char = yield text, cursor_pos
+        if len(char) != 1:
+            return None  # i.e. not actually a char; we cannot jump to special keys
 
         for i in range(count):
             result = ftFT(key, char, text, cursor_pos)
@@ -222,7 +243,9 @@ def motion(text, cursor_pos, key, count):
                 return result
             cursor_pos, inclusive = result
 
-    return cursor_pos, inclusive
+        return cursor_pos, inclusive
+
+    return None
 
 
 def ftFT(key, char, text, cursor_pos):
