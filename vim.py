@@ -4,8 +4,30 @@ Vim-like interface for single-line editing.
 This is not supposed to be have feature-parity with Vim; rather it's supposed to have just those features that I
 personally have come to depend on.
 
-For the interface/type of 'sent keys' we use `generalized_key_press`, i.e. "Kivy with some changes".
+# Python Generators
 
+The below is implemented using Python generators/coroutines.
+
+Some hints as to how this works:
+
+`yield from` may be used to decompose generators; The passed parameters and returned value may be of any type that's
+useful to you in the process of decomposition. This may contain `(text, cursor_pos)` info, but only if useful.
+
+`yield` forms a direct interface between "the I/O" (screen, keyboard) and the yielding location. The yielding location
+knows the latest state to be _output_ and communicates this; it yields control waiting for new _inputs_.
+
+This is independent of choices made in the decomposition of the functions. From the perspective of the "yielding
+location" this interface looks like this:
+
+* You must always yield the current state `(text, cursor_pos)`.
+* a `key` will be sent to you once control returns. (For the interface/type of 'sent keys' we use
+    `generalized_key_press`, i.e. "Kivy with some changes".)
+
+
+Are generators the right abstraction here? I think so: they allow for a linear-style of writing "I will wait until a new
+keypress", without resorting to multi-threading.  A single-thread rewrite without generators would need extensive
+callbacks, which hinders understanding. Of course, you do need to understand generators to be able to understand the
+current version.
 """
 
 
@@ -13,21 +35,23 @@ MOVE_TO_CHAR_KEYS = ['f', 'F', 't', 'T']
 MOTION_KEYS = MOVE_TO_CHAR_KEYS + ['h', 'l']
 
 
-class vim(object):
+class Vim(object):
+    """
+    >>> vim = Vim('some text to edit', 0)
+    >>> vim.send('2')
+    >>> vim.send('d')
+    >>> vim.send('f')
+    >>> vim.send('e')
+    >>> vim.text
+    'xt to edit'
+    """
+
     def __init__(self, text, cursor_pos):
-        self.text = text
-        self.cursor_pos = cursor_pos
         self.v = normal_mode_loop(text, cursor_pos)
-        next(self.v)
+        self.send(None)
 
     def send(self, key):
-        result = self.v.send(key)
-
-        # Debug-only: raise at the problematic point; once this stops happening, we can get rid of it:
-        if result is None:
-            self.v.throw(Exception("Please don't yield None"))
-
-        self.text, self.cursor_pos = result
+        self.text, self.cursor_pos = self.v.send(key)
 
 
 def normal_mode_loop(text, cursor_pos):
@@ -36,18 +60,26 @@ def normal_mode_loop(text, cursor_pos):
 
 
 def normal_mode(text, cursor_pos):
+    """
+    Performs 1 normal_mode action.
+
+    The return type is: (text, cursor_pos). This is a necessary consequence of the requirement to chain operations: i.e.
+    we need a value to pass into the next call.  It is _not_ a necessary consequence of the 'yield interface' (receive
+    keyspresses by yielding the current state), despite being the same.
+    """
+
     count = 1
     key = yield text, cursor_pos
 
     if key.isdigit():
-        key, count = yield from numeral(key)
+        key, count = yield from numeral(text, cursor_pos, key)
 
     if key in MOTION_KEYS:
         motion_result = yield from motion(text, cursor_pos, key, count)
         if motion_result is None:
             return text, cursor_pos
 
-        cursor_pos, inclusive = motion_result
+        cursor_pos, inclusive_ = motion_result
         return text, cursor_pos
 
     if key in ['i', 'a', 'I', 'A']:
@@ -84,7 +116,7 @@ def normal_mode(text, cursor_pos):
         return text, cursor_pos
 
     if key in ['x']:
-        text, cursor_pos = ibeam_delete(text, cursor_pos, cursor_pos + 1)
+        text, cursor_pos = ibeam_delete(text, cursor_pos, cursor_pos + count)
         return text, cursor_pos
 
     return text, cursor_pos
@@ -113,16 +145,61 @@ def insert_mode(text, cursor_pos):
         key = yield text, cursor_pos
 
 
-def numeral(key):
+def numeral(text, cursor_pos, key):
+    """Parses a 'count' value; returns that count and the first unusable key (to be consumed by some place that _does_
+    know what to do with it).
+
+    Note that we don't actually need the state (text, cursor_pos) to do such parsing, nor do we have anything new to say
+    about that state. However, in our current `yield` interface we must _always_ yield the current state if we want to
+    get a key; which means we need to know it. A simplification could be: codifying the fact that there is no output
+    information as a possible yieldable value (and dealing with it on the receiving end). Because `numeral` is the only
+    example of this, I have not yet done that.
+    """
+
     count = 0
     while key.isdigit():
         count *= 10
         count += int(key)
-        key = yield
+        key = yield text, cursor_pos
+
     return key, count
 
 
 def motion(text, cursor_pos, key, count):
+    """
+    >>> from test_utils import Generator
+    >>>
+    >>> text = 'some text as an example'
+
+    h & l return immediately, no further info required
+    >>> g = Generator(motion(text, 0, 'l', 5))
+    ('R', (5, False))
+
+    Findable text
+    >>> g = Generator(motion(text, 0, 'f', 1))
+    ('Y', ('some text as an example', 0))
+    >>> g.send('e')
+    ('R', (3, True))
+
+    nth occurence using 'count'
+    >>> g = Generator(motion(text, 0, 'f', 2))
+    ('Y', ('some text as an example', 0))
+    >>> g.send('e')
+    ('R', (6, True))
+
+    Unfindable text returns None
+    >>> g = Generator(motion(text, 0, 'f', 1))
+    ('Y', ('some text as an example', 0))
+    >>> g.send('Q')
+    ('R', None)
+
+    Not enough occurrences returns None:
+    >>> g = Generator(motion(text, 0, 'f', 5))
+    ('Y', ('some text as an example', 0))
+    >>> g.send('e')
+    ('R', None)
+    """
+
     # TODO Once we implement '0' to mean "beginning of line", we don't need this case anymore.
     if count == 0:
         return None

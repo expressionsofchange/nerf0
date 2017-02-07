@@ -38,7 +38,7 @@ from spacetime import t_address_for_s_address, best_s_address_for_t_address, get
 from dsn.s_expr.structure import SExpr, TreeNode, TreeText
 from dsn.s_expr.construct_x import construct_x
 
-from vim import vim
+from vim import Vim
 
 from widgets.utils import (
     annotate_boxes_with_s_addresses,
@@ -528,13 +528,13 @@ class TreeWidget(FocusBehavior, Widget):
         cursor_node = node_for_s_address(self.ds.tree, self.ds.s_cursor)
         if not isinstance(cursor_node, TreeNode):
             # edit this text node
-            self.vim_ds = VimDS("R", self.ds.s_cursor, vim(cursor_node.unicode_, 0))
+            self.vim_ds = VimDS("R", self.ds.s_cursor, Vim(cursor_node.unicode_, 0))
             self.invalidate()
             return
 
         # create a child node, and edit that
         index = len(cursor_node.children)
-        self.vim_ds = VimDS("I", self.ds.s_cursor + [index], vim("", 0))
+        self.vim_ds = VimDS("I", self.ds.s_cursor + [index], Vim("", 0))
         self.invalidate()
 
     def _add_sibbling_text(self, direction):
@@ -542,7 +542,7 @@ class TreeWidget(FocusBehavior, Widget):
             return  # adding sibblings to the root is not possible (it would lead to a forest)
 
         # because direction is in [0, 1]... no need to minimize/maximize (PROVE!)
-        self.vim_ds = VimDS("I", self.ds.s_cursor[:-1] + [self.ds.s_cursor[-1] + direction], vim("", 0))
+        self.vim_ds = VimDS("I", self.ds.s_cursor[:-1] + [self.ds.s_cursor[-1] + direction], Vim("", 0))
 
     # ## Section for drawing boxes
     def _t_for_text(self, text, box_color):
