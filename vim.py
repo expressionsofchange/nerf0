@@ -35,6 +35,23 @@ MOVE_TO_CHAR_KEYS = ['f', 'F', 't', 'T']
 MOTION_KEYS = MOVE_TO_CHAR_KEYS + ['h', 'l', 'left', 'right', '$', '0']
 
 
+def accumulate_sent(generator):
+    # I've asked "the internet" for a better version of this:
+    # https://stackoverflow.com/questions/42094633/how-to-observe-log-values-sent-to-a-python-generator
+
+    sent_values = []
+    generator_value = generator.send(None)
+
+    while True:
+        sent_value = yield generator_value
+        sent_values.append(sent_value)
+
+        try:
+            generator_value = generator.send(sent_value)
+        except StopIteration as e:
+            return (e.value, sent_values)
+
+
 class Vim(object):
     """
     >>> vim = Vim('some text to edit', 0)
@@ -55,17 +72,31 @@ class Vim(object):
 
 
 def normal_mode_loop(text, cursor_pos):
+    sent_keys = []
+
     while True:
-        text, cursor_pos = yield from normal_mode(text, cursor_pos)
+        one_command = accumulate_sent(normal_mode(text, cursor_pos, sent_keys))
+        (new_text, cursor_pos), new_sent_keys = yield from one_command
+
+        if new_text != text and new_sent_keys != ['.']:
+            # Some command has succesfully executed. (TBH, I think the real Vim does this differently, as evidenced by
+            # e.g. pressing 'i', 'escape', '.'). If we want to reproduce that behavior, we need `normal_mode` to tell us
+            # whether a command was executed (as opposed to movement-only)
+
+            # '.' is ignored; we the last command should never be "repeat last command".
+            sent_keys = new_sent_keys
+
+        text = new_text
 
 
-def normal_mode(text, cursor_pos):
+def normal_mode(text, cursor_pos, sent_keys):
     """
     Performs 1 normal_mode action.
 
     The return type is: (text, cursor_pos). This is a necessary consequence of the requirement to chain operations: i.e.
-    we need a value to pass into the next call.  It is _not_ a necessary consequence of the 'yield interface' (receive
-    keyspresses by yielding the current state), despite being the same.
+    we need a value to pass into the next call. (We don't need to return `sent_keys` ourselves: `normal_mode_loop` logs
+    those for us.  Our return-value is _not_ a necessary consequence of the 'yield interface' (receive keyspresses by
+    yielding the current state), despite being the same.
     """
 
     count = 1
@@ -80,6 +111,13 @@ def normal_mode(text, cursor_pos):
             return text, cursor_pos
 
         cursor_pos, inclusive_ = motion_result
+        return text, cursor_pos
+
+    if key in ['.']:
+        nm = normal_mode(text, cursor_pos, sent_keys)
+        next(nm)
+        for key in sent_keys:
+            text, cursor_pos = nm.send(key)
         return text, cursor_pos
 
     if key in ['i', 'a', 'I', 'A']:
