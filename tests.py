@@ -7,6 +7,7 @@ import spacetime
 import vlq
 import utils
 import s_address
+import vim
 
 from dsn.s_expr import utils as s_expr_utils
 
@@ -20,6 +21,7 @@ def load_tests(loader, tests, ignore):
     tests.addTests(doctest.DocTestSuite(vlq))
     tests.addTests(doctest.DocTestSuite(s_address))
     tests.addTests(doctest.DocTestSuite(s_expr_utils))
+    tests.addTests(doctest.DocTestSuite(vim))
 
     # Some tests in the doctests style are too large to nicely fit into a docstring; better to keep them separate:
     tests.addTests(doctest.DocFileSuite("doctests/construct_x.txt"))

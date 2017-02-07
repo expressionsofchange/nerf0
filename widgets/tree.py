@@ -1,12 +1,10 @@
+from collections import namedtuple
+
 from kivy.clock import Clock
 from kivy.core.text import Label
 from kivy.graphics import Color, Rectangle
 from kivy.uix.widget import Widget
 from kivy.metrics import pt
-from kivy.uix.popup import Popup
-from kivy.uix.textinput import TextInput
-from kivy.uix.button import Button
-from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.behaviors.focus import FocusBehavior
 
 from annotations import Annotation
@@ -20,7 +18,7 @@ from dsn.editor.clef import (
     EDelete,
     InsertNodeChild,
     InsertNodeSibbling,
-    TextInsert,
+    TextInsert,  # TODO, alternatively: change the addressing-space to a single s_address
     TextReplace,
 )
 
@@ -40,6 +38,8 @@ from spacetime import t_address_for_s_address, best_s_address_for_t_address, get
 from dsn.s_expr.structure import SExpr, TreeNode, TreeText
 from dsn.s_expr.construct_x import construct_x
 
+from vim import vim
+
 from widgets.utils import (
     annotate_boxes_with_s_addresses,
     apply_offset,
@@ -58,6 +58,13 @@ from widgets.layout_constants import (
     PADDING,
     PINK,
 )
+
+# TSTTCPW for keeping track of the state of our single-line 'vim editor'
+VimDS = namedtuple('VimDS', (
+    'insert_or_replace',  # "I", "R"
+    's_address',
+    'vim'  # a vim.py object
+    ))
 
 # These are standard Python (and common sense); still... one might occasionally be tempted to think that 'before' is
 # moddeled as -1 rather than 0, which is why I made the correct indexes constants
@@ -142,6 +149,8 @@ class TreeWidget(FocusBehavior, Widget):
         super(TreeWidget, self).__init__(**kwargs)
 
         self.ds = EditStructure(None, [], [], None)
+        self.vim_ds = None
+
         self.notify_children = {}
         self.next_channel_id = 0
 
@@ -251,13 +260,15 @@ class TreeWidget(FocusBehavior, Widget):
         return result
 
     def keyboard_on_key_down(self, window, keycode, text, modifiers):
+        # TODO: check: or should we just return True instead?... I think we should
         result = FocusBehavior.keyboard_on_key_down(self, window, keycode, text, modifiers)
+
         code, textual_code = keycode
 
         also_on_textinput = (
                 [chr(ord('a') + i) for i in range(26)] +  # a-z
                 [chr(ord('0') + i) for i in range(10)] +  # 0-9
-                ['`', '-', '=',  ',', '.', '/', "'", ';', '\\'])
+                ['`', '-', '=',  ',', '.', '/', "'", ';', '\\', 'spacebar', 'tab'])
 
         # these are modifier-keys; we don't independently deal with them, so we ignore them explicitly.
         # on my system, right-alt and right-super are not recognized at present; they show up as '' here;
@@ -265,9 +276,14 @@ class TreeWidget(FocusBehavior, Widget):
         modifiers = ['alt', 'alt-gr', 'lctrl', 'rctrl', 'rshift', 'shift', 'super', '']
 
         if textual_code not in modifiers + also_on_textinput:
-            return self.generalized_key_press(textual_code)
+            self.generalized_key_press(textual_code)
 
         return result
+
+    def keyboard_on_key_up(self, window, keycode):
+        """FocusBehavior automatically defocusses on 'escape'. This is undesirable, so we override without providing any
+        behavior ourselves."""
+        return False
 
     def generalized_key_press(self, textual_code):
         """
@@ -303,6 +319,23 @@ class TreeWidget(FocusBehavior, Widget):
 
         if self.closed:
             # See the remarks in __init__
+            return
+
+        if self.vim_ds is not None:
+            if textual_code == 'enter':
+                # apply the vim_ds, and close it:
+                if self.vim_ds.insert_or_replace == "I":
+                    self._handle_edit_note(
+                        TextInsert(self.vim_ds.s_address[:-1], self.vim_ds.s_address[-1], self.vim_ds.vim.text))
+                else:
+                    self._handle_edit_note(TextReplace(self.vim_ds.s_address, self.vim_ds.vim.text))
+
+                self.vim_ds = None
+
+            else:
+                self.vim_ds.vim.send(textual_code)
+
+            self.invalidate()
             return
 
         if textual_code in ['left', 'h']:
@@ -494,47 +527,22 @@ class TreeWidget(FocusBehavior, Widget):
     def _add_child_text(self):
         cursor_node = node_for_s_address(self.ds.tree, self.ds.s_cursor)
         if not isinstance(cursor_node, TreeNode):
-            self._open_text_popup(cursor_node.unicode_, lambda text: self._handle_edit_note(
-                TextReplace(self.ds.s_cursor, text)
-            ))
+            # edit this text node
+            self.vim_ds = VimDS("R", self.ds.s_cursor, vim(cursor_node.unicode_, 0))
+            self.invalidate()
             return
 
+        # create a child node, and edit that
         index = len(cursor_node.children)
-        self._open_text_popup("", lambda text: self._handle_edit_note(
-            TextInsert(self.ds.s_cursor, index, text)
-        ))
+        self.vim_ds = VimDS("I", self.ds.s_cursor + [index], vim("", 0))
+        self.invalidate()
 
     def _add_sibbling_text(self, direction):
         if self.ds.s_cursor == []:
             return  # adding sibblings to the root is not possible (it would lead to a forest)
 
         # because direction is in [0, 1]... no need to minimize/maximize (PROVE!)
-        self._open_text_popup("", lambda text: self._handle_edit_note(
-            TextInsert(self.ds.s_cursor[:-1], self.ds.s_cursor[-1] + direction, text)
-        ))
-
-    def _open_text_popup(self, current_text, callback):
-        layout = BoxLayout(spacing=10, orientation='vertical')
-        ti = TextInput(text=current_text, size_hint=(1, .9))
-        btn = Button(text='Close and save', size_hint=(1, .1,))
-        layout.add_widget(ti)
-        layout.add_widget(btn)
-
-        popup = Popup(
-            title='Edit text', content=layout
-            )
-
-        def popup_dismiss(*args):
-            # (Tentative):
-            # Because of the Modal nature of the popup, we can take the naive approach here and simply insert the
-            # results of the popup, trigger the recalc etc. etc. as if this were sequential code.
-            callback(ti.text)
-
-        btn.bind(on_press=popup.dismiss)
-        popup.bind(on_dismiss=popup_dismiss)
-
-        popup.open()
-        ti.focus = True
+        self.vim_ds = VimDS("I", self.ds.s_cursor[:-1] + [self.ds.s_cursor[-1] + direction], vim("", 0))
 
     # ## Section for drawing boxes
     def _t_for_text(self, text, box_color):
@@ -562,6 +570,61 @@ class TreeWidget(FocusBehavior, Widget):
 
         return BoxTerminal(instructions, bottom_right)
 
+    def _t_for_vim(self, vim):
+        # Ad hoc copy/pasta of _t_for_text; TODO find commonalities and factor those out
+
+        texts = [
+            vim.text[:vim.cursor_pos],
+            vim.text[vim.cursor_pos:vim.cursor_pos + 1],
+            vim.text[vim.cursor_pos + 1:]]
+
+        if len(vim.text) == vim.cursor_pos:
+            texts[1] = '▨'
+
+        text_textures = [self._texture_for_text(text) for text in texts]
+
+        content_height = max([text_texture.height for text_texture in text_textures])
+        content_width = sum([text_texture.width for text_texture in text_textures])
+
+        top_left = 0, 0
+        bottom_left = (top_left[X], top_left[Y] - PADDING - MARGIN - content_height - MARGIN - PADDING)
+        bottom_right = (bottom_left[X] + PADDING + MARGIN + content_width + MARGIN + PADDING, bottom_left[Y])
+
+        instructions = [
+            Color(0.90, 0.90, 1, 1),
+            Rectangle(
+                pos=(bottom_left[0] + PADDING, bottom_left[1] + PADDING),
+                size=(content_width + 2 * MARGIN, content_height + 2 * MARGIN),
+                ),
+        ]
+
+        offset_x = bottom_left[0] + PADDING + MARGIN
+        offset_y = bottom_left[1] + PADDING + MARGIN
+
+        for i, text_texture in enumerate(text_textures):
+            if i == 1:  # i.e. the cursor
+                instructions.extend([
+                    Color(1, 1, 1, 1),
+                    Rectangle(
+                        pos=(offset_x, offset_y),
+                        size=text_texture.size,
+                        ),
+                ])
+
+            if not (i == 1 and len(vim.text) == vim.cursor_pos):  # don't actually draw any non-existing text (TODO better explain)
+                instructions.extend([
+                    Color(0, 115/255, 230/255, 1),  # Blue
+                    Rectangle(
+                        pos=(offset_x, offset_y),
+                        size=text_texture.size,
+                        texture=text_texture,
+                        ),
+                ])
+
+            offset_x += text_texture.width
+
+        return BoxTerminal(instructions, bottom_right)
+
     def color_for_cursor(self, is_cursor, broken):
         if is_cursor:
             return (0.95, 0.95, 0.95, 1)  # Ad Hoc Grey
@@ -585,10 +648,9 @@ class TreeWidget(FocusBehavior, Widget):
     def _nt_for_iri(self, iri_annotated_node, children_nts, s_address):
         is_cursor = s_address == self.ds.s_cursor
 
-        # PoC of "editing TreeText w/o popping up a dialog box:
-        # if s_address == [1, 0]:
-        #     return BoxNonTerminal([], [no_offset(
-        #         self._t_for_text("This is where you type", (1, 0, 0, 1)))])
+        if self.vim_ds is not None and s_address == self.vim_ds.s_address:
+            # TODO: shift sibblings down (only on "I")
+            return BoxNonTerminal([], [no_offset(self._t_for_vim(self.vim_ds.vim))])
 
         if iri_annotated_node.annotation.multiline_mode == LISPY:
             f = self._nt_for_node_as_lispy_layout

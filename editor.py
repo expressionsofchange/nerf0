@@ -5,6 +5,7 @@ from kivy.app import App
 from kivy.core.text.markup import LabelBase
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.boxlayout import BoxLayout
+from kivy.config import Config
 
 from channel import ClosableChannel
 
@@ -29,6 +30,8 @@ LabelBase.register(name="DejaVuSans",
                    fn_bold="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
                    fn_italic="/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf",
                    fn_bolditalic="/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf",)
+
+Config.set('kivy', 'exit_on_escape', '0')
 
 
 class EditorGUI(App):
