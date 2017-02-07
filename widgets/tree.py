@@ -322,15 +322,7 @@ class TreeWidget(FocusBehavior, Widget):
 
         if self.vim_ds is not None:
             if textual_code == 'enter':
-                # apply the vim_ds, and close it:
-                if self.vim_ds.insert_or_replace == "I":
-                    self._handle_edit_note(
-                        TextInsert(self.vim_ds.s_address[:-1], self.vim_ds.s_address[-1], self.vim_ds.vim.text))
-                else:
-                    self._handle_edit_note(TextReplace(self.vim_ds.s_address, self.vim_ds.vim.text))
-
-                self.vim_ds = None
-
+                self.apply_and_close_vim()
             else:
                 self.vim_ds.vim.send(textual_code)
 
@@ -381,6 +373,16 @@ class TreeWidget(FocusBehavior, Widget):
 
         elif textual_code in ['n']:
             self._create_child_window()
+
+    def apply_and_close_vim(self):
+        """apply the vim_ds, and close it:"""
+        if self.vim_ds.insert_or_replace == "I":
+            self._handle_edit_note(
+                TextInsert(self.vim_ds.s_address[:-1], self.vim_ds.s_address[-1], self.vim_ds.vim.text))
+        else:
+            self._handle_edit_note(TextReplace(self.vim_ds.s_address, self.vim_ds.vim.text))
+
+        self.vim_ds = None
 
     def _change_pp_style(self, pp_note_type):
         t_address = t_address_for_s_address(self.ds.tree, self.ds.s_cursor)
