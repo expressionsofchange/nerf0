@@ -255,13 +255,12 @@ class TreeWidget(FocusBehavior, Widget):
                 notify_child()  # (last_actuality.nout_hash)
 
     def keyboard_on_textinput(self, window, text):
-        result = FocusBehavior.keyboard_on_textinput(self, window, text)
+        FocusBehavior.keyboard_on_textinput(self, window, text)
         self.generalized_key_press(text)
-        return result
+        return True
 
     def keyboard_on_key_down(self, window, keycode, text, modifiers):
-        # TODO: check: or should we just return True instead?... I think we should
-        result = FocusBehavior.keyboard_on_key_down(self, window, keycode, text, modifiers)
+        FocusBehavior.keyboard_on_key_down(self, window, keycode, text, modifiers)
 
         code, textual_code = keycode
 
@@ -278,12 +277,12 @@ class TreeWidget(FocusBehavior, Widget):
         if textual_code not in modifiers + also_on_textinput:
             self.generalized_key_press(textual_code)
 
-        return result
+        return True
 
     def keyboard_on_key_up(self, window, keycode):
         """FocusBehavior automatically defocusses on 'escape'. This is undesirable, so we override without providing any
         behavior ourselves."""
-        return False
+        return True
 
     def generalized_key_press(self, textual_code):
         """
@@ -521,7 +520,7 @@ class TreeWidget(FocusBehavior, Widget):
         if clicked_item is not None:
             self._handle_edit_note(CursorSet(clicked_item.annotation))
 
-        return ret
+        return True
 
     # ## Edit-actions that need further user input (i.e. Text-edits)
     def _add_child_text(self):

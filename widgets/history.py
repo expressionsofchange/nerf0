@@ -185,7 +185,7 @@ class HistoryWidget(FocusBehavior, Widget):
         elif textual_code in ['x', 'del']:
             self._handle_eh_note(EHDelete())
 
-        return result
+        return True
 
     def invalidate(self, *args):
         if not self._invalidated:
@@ -388,4 +388,4 @@ class HistoryWidget(FocusBehavior, Widget):
             self._handle_eh_note(EHCursorSet(clicked_item.annotation))
             self.invalidate()
 
-        return ret
+        return True
