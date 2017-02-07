@@ -571,7 +571,8 @@ class TreeWidget(FocusBehavior, Widget):
         return BoxTerminal(instructions, bottom_right)
 
     def _t_for_vim(self, vim):
-        # Ad hoc copy/pasta of _t_for_text; TODO find commonalities and factor those out
+        # This was created as an ad hoc copy/pasta of _t_for_text. As it stands, it is not an obvious candidate for
+        # factoring out commonalities (there aren't that many) but once the opportunity arises we should take it.
 
         texts = [
             vim.text[:vim.cursor_pos],
@@ -579,6 +580,8 @@ class TreeWidget(FocusBehavior, Widget):
             vim.text[vim.cursor_pos + 1:]]
 
         if len(vim.text) == vim.cursor_pos:
+            # if the cursor-position is to the right of the rightmost character (appending to the line), we need some
+            # 'imaginary' (not actually drawn, but used for measurements) text as a placeholder.
             texts[1] = '▨'
 
         text_textures = [self._texture_for_text(text) for text in texts]
@@ -611,7 +614,10 @@ class TreeWidget(FocusBehavior, Widget):
                         ),
                 ])
 
-            if not (i == 1 and len(vim.text) == vim.cursor_pos):  # don't actually draw any non-existing text (TODO better explain)
+            # if this is the cursor, and the cursor is a fake character, don't actually draw it.
+            is_cursor_eol = (i == 1 and len(vim.text) == vim.cursor_pos)
+
+            if not is_cursor_eol:
                 instructions.extend([
                     Color(0, 115/255, 230/255, 1),  # Blue
                     Rectangle(
