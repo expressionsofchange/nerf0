@@ -33,19 +33,26 @@ current version.
 from copy import copy
 
 
+# Sigma.done enum
+NOT_DONE = 0
+DONE_SAVE = 1
+DONE_CANCEL = 2
+
+
 class Sigma(object):
     """A class encapsulating the state of a single-line vim editor.
     Because we have several similar such classes, I chose the meaningless name "sigma". Once this class grows or shrinks
     a better name will probably emerge.
     """
 
-    def __init__(self, text, cursor_pos, last_ft=None, clipboard=""):
+    def __init__(self, text, cursor_pos, done=NOT_DONE, last_ft=None, clipboard=""):
         # As it stands, the "last typed keys" are not part of the sigma;
         # This is not motivated by an overarching understanding/philosophy of what the sigma should be, but rather by
         # what looked good while creating the first version.
 
         self.text = text
         self.cursor_pos = cursor_pos
+        self.done = done
         self.last_ft = last_ft
         self.clipboard = clipboard
 
@@ -106,6 +113,7 @@ class Vim(object):
         # tree widgets use only (text, cursor_pos); we do not expose the full sigma
         self.text = self.sigma.text
         self.cursor_pos = self.sigma.cursor_pos
+        self.done = self.sigma.done
 
 
 def normal_mode_loop(sigma):
@@ -138,6 +146,15 @@ def normal_mode(sigma, sent_keys):
 
     count = 1
     key = yield sigma
+
+    if key in ['escape', 'enter']:
+        # Note: `normal_mode` and `normal_mode_loop` do not actually stop when they're done; they simply signal the
+        # actual UI element which controls them to do a cleanup, but there is nothing (theoretically) preventing such an
+        # element to say "carry on".
+        return sigma.set(done=DONE_SAVE)
+
+    if key in ['Q']:
+        return sigma.set(done=DONE_CANCEL)
 
     if key.isdigit() and key != '0':
         key, count = yield from numeral(sigma, key)

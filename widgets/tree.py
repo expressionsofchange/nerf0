@@ -38,7 +38,7 @@ from spacetime import t_address_for_s_address, best_s_address_for_t_address, get
 from dsn.s_expr.structure import SExpr, TreeNode, TreeText
 from dsn.s_expr.construct_x import construct_x
 
-from vim import Vim
+from vim import Vim, DONE_SAVE, DONE_CANCEL
 
 from widgets.utils import (
     annotate_boxes_with_s_addresses,
@@ -62,8 +62,6 @@ from colorscheme import (
     AQUA_GREEN,
     BLACK,
     CERISE,
-    LAUREL_GREEN,
-    OLD_LACE,
     WHITE,
 )
 
@@ -329,10 +327,13 @@ class TreeWidget(FocusBehavior, Widget):
             return
 
         if self.vim_ds is not None:
-            if textual_code == 'enter':
+            self.vim_ds.vim.send(textual_code)
+
+            if self.vim_ds.vim.done == DONE_SAVE:
                 self.apply_and_close_vim()
-            else:
-                self.vim_ds.vim.send(textual_code)
+
+            elif self.vim_ds.vim.done == DONE_CANCEL:
+                self.vim_ds = None
 
             self.invalidate()
             return
