@@ -39,7 +39,7 @@ class Sigma(object):
     a better name will probably emerge.
     """
 
-    def __init__(self, text, cursor_pos, last_ft):
+    def __init__(self, text, cursor_pos, last_ft=None, clipboard=""):
         # As it stands, the "last typed keys" are not part of the sigma;
         # This is not motivated by an overarching understanding/philosophy of what the sigma should be, but rather by
         # what looked good while creating the first version.
@@ -47,6 +47,7 @@ class Sigma(object):
         self.text = text
         self.cursor_pos = cursor_pos
         self.last_ft = last_ft
+        self.clipboard = clipboard
 
     def set(self, **kwargs):
         """Creates a copy of the Sigma, with some values (as provided) changed."""
@@ -94,7 +95,7 @@ class Vim(object):
 
     def __init__(self, text, cursor_pos):
         # tree widgets use only (text, cursor_pos); we do not expose the full sigma
-        sigma = Sigma(text, cursor_pos, None)
+        sigma = Sigma(text, cursor_pos)
 
         self.v = normal_mode_loop(sigma)
         self.send(None)
@@ -168,6 +169,22 @@ def normal_mode(sigma, sent_keys):
         sigma = yield from insert_mode(sigma.set(cursor_pos=sigma.cursor_pos))
         return sigma
 
+    if key in ['y']:
+        motion_key = yield sigma
+
+        motion_result = yield from motion(sigma, motion_key, count)
+        if motion_result is None:
+            return sigma
+
+        yank_to_cursor_pos, yank_inclusive, last_ft = motion_result
+
+        yank_to_cursor_pos += (1 if yank_inclusive else 0)
+
+        yanked = ibeam_slice(sigma.text, sigma.cursor_pos, yank_to_cursor_pos)
+        sigma = sigma.set(last_ft=last_ft, clipboard=yanked)
+
+        return sigma
+
     if key in ['d', 'c']:
         motion_key = yield sigma
 
@@ -182,8 +199,9 @@ def normal_mode(sigma, sent_keys):
         # We just have to make sure to do this only for deletions, not regular movement.
         delete_to_cursor_pos += (1 if delete_inclusive else 0)
 
+        yanked = ibeam_slice(sigma.text, sigma.cursor_pos, delete_to_cursor_pos)
         text, cursor_pos = ibeam_delete(sigma.text, sigma.cursor_pos, delete_to_cursor_pos)
-        sigma = sigma.set(text=text, cursor_pos=cursor_pos, last_ft=last_ft)
+        sigma = sigma.set(text=text, cursor_pos=cursor_pos, last_ft=last_ft, clipboard=yanked)
 
         if key == 'c':
             sigma = yield from insert_mode(sigma)
@@ -191,8 +209,9 @@ def normal_mode(sigma, sent_keys):
         return sigma
 
     if key in ['D', 'C']:
+        yanked = ibeam_slice(sigma.text, sigma.cursor_pos, len(sigma.text))
         text, cursor_pos = ibeam_delete(sigma.text, sigma.cursor_pos, len(sigma.text))
-        sigma = sigma.set(text=text, cursor_pos=cursor_pos)
+        sigma = sigma.set(text=text, cursor_pos=cursor_pos, clipboard=yanked)
 
         if key == 'C':
             sigma = yield from insert_mode(sigma)
@@ -204,7 +223,12 @@ def normal_mode(sigma, sent_keys):
         return sigma
 
     if key in ['x']:
+        yanked = ibeam_slice(sigma.text, sigma.cursor_pos, sigma.cursor_pos + count)
         text, cursor_pos = ibeam_delete(sigma.text, sigma.cursor_pos, sigma.cursor_pos + count)
+        return sigma.set(text=text, cursor_pos=cursor_pos, clipboard=yanked)
+
+    if key in ['p', 'P']:
+        text, cursor_pos = ibeam_insert(sigma.text, sigma.cursor_pos + (1 if key == 'p' else 0), sigma.clipboard)
         return sigma.set(text=text, cursor_pos=cursor_pos)
 
     return sigma
@@ -236,8 +260,7 @@ def insert_mode(sigma):
             pass  # some special key that we have no behaviors for
 
         else:
-            text = sigma.text[:sigma.cursor_pos] + key + sigma.text[sigma.cursor_pos:]
-            cursor_pos = sigma.cursor_pos + 1
+            text, cursor_pos = ibeam_insert(sigma.text, sigma.cursor_pos, key)
             sigma = sigma.set(text=text, cursor_pos=cursor_pos)
 
         key = yield sigma
@@ -270,29 +293,29 @@ def motion(sigma, key, count):
     >>> text = 'some text as an example'
 
     h & l return immediately, no further info required
-    >>> g = Generator(motion(Sigma(text, 0, None), 'l', 5))
+    >>> g = Generator(motion(Sigma(text, 0), 'l', 5))
     ('R', (5, False, None))
 
     Findable text
-    >>> g = Generator(motion(Sigma(text, 0, None), 'f', 1))
+    >>> g = Generator(motion(Sigma(text, 0), 'f', 1))
     ('Y', ('some text as an example', 0))
     >>> g.send('e')
     ('R', (3, True, ('f', 'e')))
 
     nth occurence using 'count'
-    >>> g = Generator(motion(Sigma(text, 0, None), 'f', 2))
+    >>> g = Generator(motion(Sigma(text, 0), 'f', 2))
     ('Y', ('some text as an example', 0))
     >>> g.send('e')
     ('R', (6, True, ('f', 'e')))
 
     Unfindable text returns None
-    >>> g = Generator(motion(Sigma(text, 0, None), 'f', 1))
+    >>> g = Generator(motion(Sigma(text, 0), 'f', 1))
     ('Y', ('some text as an example', 0))
     >>> g.send('Q')
     ('R', None)
 
     Not enough occurrences returns None:
-    >>> g = Generator(motion(Sigma(text, 0, None), 'f', 5))
+    >>> g = Generator(motion(Sigma(text, 0), 'f', 5))
     ('Y', ('some text as an example', 0))
     >>> g.send('e')
     ('R', None)
@@ -453,3 +476,18 @@ def ibeam_delete(s, i0, i1):
 
     s = s[0:lo] + s[hi:]
     return s, lo
+
+
+def ibeam_insert(s, cursor_pos, insertion):
+    return s[:cursor_pos] + insertion + s[cursor_pos:], cursor_pos + len(insertion)
+
+
+def ibeam_slice(s, i0, i1):
+    """Returns a slice of between i0 and i1 (either forwards or backwards).
+    Bounds are checked (allows for lazy usage of this function; arguably we should raise an error instead)"""
+
+    lo, hi = tuple(sorted([i0, i1]))
+    lo = max(0, lo)
+    hi = min(len(s), hi)
+
+    return s[lo:hi]
