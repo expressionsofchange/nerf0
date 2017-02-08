@@ -249,6 +249,17 @@ def normal_mode(sigma, sent_keys):
         text, cursor_pos = ibeam_insert(sigma.text, sigma.cursor_pos + (1 if key == 'p' else 0), sigma.clipboard)
         return sigma.set(text=text, cursor_pos=cursor_pos)
 
+    if key in ['~']:
+        text, cursor_pos = sigma.text, sigma.cursor_pos
+        for i in range(count):
+            text = text[:cursor_pos] + text[cursor_pos].swapcase() + text[cursor_pos + 1:]
+            cursor_pos += 1
+            if cursor_pos > len(text) - 1:
+                cursor_pos = len(text) - 1
+                break
+
+        return sigma.set(text=text, cursor_pos=cursor_pos)
+
     return sigma
 
 
