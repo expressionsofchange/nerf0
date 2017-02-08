@@ -10,7 +10,7 @@ class Generator:
     def __init__(self, gen):
         self.gen = gen
         initial_result = self.send(None)
-        print(initial_result)
+        print(repr(initial_result))
 
     def send(self, value):
         try:

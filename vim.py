@@ -30,9 +30,38 @@ callbacks, which hinders understanding. Of course, you do need to understand gen
 current version.
 """
 
+from copy import copy
+
+
+class Sigma(object):
+    """A class encapsulating the state of a single-line vim editor.
+    Because we have several similar such classes, I chose the meaningless name "sigma". Once this class grows or shrinks
+    a better name will probably emerge.
+    """
+
+    def __init__(self, text, cursor_pos, last_ft):
+        # As it stands, the "last typed keys" are not part of the sigma;
+        # This is not motivated by an overarching understanding/philosophy of what the sigma should be, but rather by
+        # what looked good while creating the first version.
+
+        self.text = text
+        self.cursor_pos = cursor_pos
+        self.last_ft = last_ft
+
+    def set(self, **kwargs):
+        """Creates a copy of the Sigma, with some values (as provided) changed."""
+        result = copy(self)
+        for key, value in kwargs.items():
+            setattr(result, key, value)
+        return result
+
+    def __repr__(self):
+        # convenience method; mostly for doctests
+        return str((self.text, self.cursor_pos))
+
 
 MOVE_TO_CHAR_KEYS = ['f', 'F', 't', 'T']
-MOTION_KEYS = MOVE_TO_CHAR_KEYS + ['h', 'l', 'left', 'right', '$', '0']
+MOTION_KEYS = MOVE_TO_CHAR_KEYS + ['h', 'l', 'left', 'right', '$', '0', ';', ',']
 
 
 def accumulate_sent(generator):
@@ -64,21 +93,28 @@ class Vim(object):
     """
 
     def __init__(self, text, cursor_pos):
-        self.v = normal_mode_loop(text, cursor_pos)
+        # tree widgets use only (text, cursor_pos); we do not expose the full sigma
+        sigma = Sigma(text, cursor_pos, None)
+
+        self.v = normal_mode_loop(sigma)
         self.send(None)
 
     def send(self, key):
-        self.text, self.cursor_pos = self.v.send(key)
+        self.sigma = self.v.send(key)
+
+        # tree widgets use only (text, cursor_pos); we do not expose the full sigma
+        self.text = self.sigma.text
+        self.cursor_pos = self.sigma.cursor_pos
 
 
-def normal_mode_loop(text, cursor_pos):
+def normal_mode_loop(sigma):
     sent_keys = []
 
     while True:
-        one_command = accumulate_sent(normal_mode(text, cursor_pos, sent_keys))
-        (new_text, cursor_pos), new_sent_keys = yield from one_command
+        one_command = accumulate_sent(normal_mode(sigma, sent_keys))
+        some_new_state, new_sent_keys = yield from one_command
 
-        if new_text != text and new_sent_keys != ['.']:
+        if some_new_state.text != sigma.text and new_sent_keys != ['.']:
             # Some command has succesfully executed. (TBH, I think the real Vim does this differently, as evidenced by
             # e.g. pressing 'i', 'escape', '.'). If we want to reproduce that behavior, we need `normal_mode` to tell us
             # whether a command was executed (as opposed to movement-only)
@@ -86,94 +122,96 @@ def normal_mode_loop(text, cursor_pos):
             # '.' is ignored; we the last command should never be "repeat last command".
             sent_keys = new_sent_keys
 
-        text = new_text
+        sigma = some_new_state
 
 
-def normal_mode(text, cursor_pos, sent_keys):
+def normal_mode(sigma, sent_keys):
     """
     Performs 1 normal_mode action.
 
-    The return type is: (text, cursor_pos). This is a necessary consequence of the requirement to chain operations: i.e.
-    we need a value to pass into the next call. (We don't need to return `sent_keys` ourselves: `normal_mode_loop` logs
-    those for us.  Our return-value is _not_ a necessary consequence of the 'yield interface' (receive keyspresses by
-    yielding the current state), despite being the same.
+    The return type is: `sigma`. This is a necessary consequence of the requirement to chain operations: i.e.  we need a
+    value to pass into the next call. (We don't need to return `sent_keys` ourselves: `normal_mode_loop` logs those for
+    us.  Our return-value is _not_ a necessary consequence of the 'yield interface' (receive keyspresses by yielding the
+    current state), despite being the same.
     """
 
     count = 1
-    key = yield text, cursor_pos
+    key = yield sigma
 
     if key.isdigit() and key != '0':
-        key, count = yield from numeral(text, cursor_pos, key)
+        key, count = yield from numeral(sigma, key)
 
     if key in MOTION_KEYS:
-        motion_result = yield from motion(text, cursor_pos, key, count)
+        motion_result = yield from motion(sigma, key, count)
         if motion_result is None:
-            return text, cursor_pos
+            return sigma
 
-        cursor_pos, inclusive_ = motion_result
-        return text, cursor_pos
+        cursor_pos, inclusive_, last_ft = motion_result
+        return sigma.set(cursor_pos=cursor_pos, last_ft=last_ft)
 
     if key in ['.']:
-        nm = normal_mode(text, cursor_pos, sent_keys)
+        nm = normal_mode(sigma, sent_keys)
         next(nm)
         for key in sent_keys:
-            text, cursor_pos = nm.send(key)
-        return text, cursor_pos
+            sigma = nm.send(key)
+        return sigma
 
     if key in ['i', 'a', 'I', 'A']:
         if key == 'a':
             # append (but don't but the cursor outside the text)
-            cursor_pos = min(cursor_pos + 1, len(text))
+            cursor_pos = min(cursor_pos + 1, len(sigma.text))
         elif key == 'I':
             cursor_pos = 0
         elif key == 'A':
-            cursor_pos = len(text)
+            cursor_pos = len(sigma.text)
 
-        text, cursor_pos = yield from insert_mode(text, cursor_pos)
-        return text, cursor_pos
+        sigma = yield from insert_mode(sigma.set(cursor_pos=sigma.cursor_pos))
+        return sigma
 
     if key in ['d', 'c']:
-        motion_key = yield text, cursor_pos
+        motion_key = yield sigma
 
-        motion_result = yield from motion(text, cursor_pos, motion_key, count)
+        motion_result = yield from motion(sigma, motion_key, count)
         if motion_result is None:
-            return text, cursor_pos
+            return sigma
 
-        delete_to_cursor_pos, delete_inclusive = motion_result
+        delete_to_cursor_pos, delete_inclusive, last_ft = motion_result
 
         # AFAIU, inclusive=True can be simply translated into ibeam-curosr +=1. (This is slightly surprising for the
         # deletions in leftward direction, because in that case "inclusive" means "don't delete", but it's per spec).
         # We just have to make sure to do this only for deletions, not regular movement.
         delete_to_cursor_pos += (1 if delete_inclusive else 0)
 
-        text, cursor_pos = ibeam_delete(text, cursor_pos, delete_to_cursor_pos)
+        text, cursor_pos = ibeam_delete(sigma.text, sigma.cursor_pos, delete_to_cursor_pos)
+        sigma = sigma.set(text=text, cursor_pos=cursor_pos, last_ft=last_ft)
 
         if key == 'c':
-            text, cursor_pos = yield from insert_mode(text, cursor_pos)
+            sigma = yield from insert_mode(sigma)
 
-        return text, cursor_pos
+        return sigma
 
     if key in ['D', 'C']:
-        text, cursor_pos = ibeam_delete(text, cursor_pos, len(text))
+        text, cursor_pos = ibeam_delete(sigma.text, sigma.cursor_pos, len(sigma.text))
+        sigma = sigma.set(text=text, cursor_pos=cursor_pos)
 
         if key == 'C':
-            text, cursor_pos = yield from insert_mode(text, cursor_pos)
+            sigma = yield from insert_mode(sigma)
         else:
             # meh... this is basically a correction on the missing block_delete() above; better would be to have the +1
             # in the other branch.
-            cursor_pos -= 1
+            sigma = sigma.set(cursor_pos=sigma.cursor_pos - 1)
 
-        return text, cursor_pos
+        return sigma
 
     if key in ['x']:
-        text, cursor_pos = ibeam_delete(text, cursor_pos, cursor_pos + count)
-        return text, cursor_pos
+        text, cursor_pos = ibeam_delete(sigma.text, sigma.cursor_pos, sigma.cursor_pos + count)
+        return sigma.set(text=text, cursor_pos=cursor_pos)
 
-    return text, cursor_pos
+    return sigma
 
 
-def insert_mode(text, cursor_pos):
-    key = yield text, cursor_pos
+def insert_mode(sigma):
+    key = yield sigma
 
     while True:
         if key == 'escape':
@@ -182,106 +220,129 @@ def insert_mode(text, cursor_pos):
             # has the advantage of guaranteeing to put the cursor in-bounds for normal mode (there is 1 more
             # cursor-position available, at the end, in insert-mode). It has the disadvantage of being asymmetric for
             # 'i'/'escape'.
-            return text, max(cursor_pos - 1, 0)
+            return sigma.set(cursor_pos=max(sigma.cursor_pos - 1, 0))
 
         elif key == 'backspace':
-            text, cursor_pos = ibeam_delete(text, cursor_pos, cursor_pos - 1)
+            text, cursor_pos = ibeam_delete(sigma.text, sigma.cursor_pos, sigma.cursor_pos - 1)
+            sigma = sigma.set(text=text, cursor_pos=cursor_pos)
 
         elif key == 'left':
-            cursor_pos = max(cursor_pos - 1, 0)
+            sigma = sigma.set(cursor_pos=max(sigma.cursor_pos - 1, 0))
 
         elif key == 'right':
-            cursor_pos = min(cursor_pos + 1, len(text))
+            sigma = sigma.set(cursor_pos=min(sigma.cursor_pos + 1, len(sigma.text)))
 
         elif len(key) != 1:
             pass  # some special key that we have no behaviors for
 
         else:
-            text = text[:cursor_pos] + key + text[cursor_pos:]
-            cursor_pos += 1
+            text = sigma.text[:sigma.cursor_pos] + key + sigma.text[sigma.cursor_pos:]
+            cursor_pos = sigma.cursor_pos + 1
+            sigma = sigma.set(text=text, cursor_pos=cursor_pos)
 
-        key = yield text, cursor_pos
+        key = yield sigma
 
 
-def numeral(text, cursor_pos, key):
+def numeral(sigma, key):
     """Parses a 'count' value; returns that count and the first unusable key (to be consumed by some place that _does_
     know what to do with it).
 
-    Note that we don't actually need the state (text, cursor_pos) to do such parsing, nor do we have anything new to say
-    about that state. However, in our current `yield` interface we must _always_ yield the current state if we want to
-    get a key; which means we need to know it. A simplification could be: codifying the fact that there is no output
-    information as a possible yieldable value (and dealing with it on the receiving end). Because `numeral` is the only
-    example of this, I have not yet done that.
+    Note that we don't actually need the state (sigma) to do such parsing, nor do we have anything new to say about that
+    state. However, in our current `yield` interface we must _always_ yield the current state if we want to get a key;
+    which means we need to know it. A simplification could be: codifying the fact that there is no output information as
+    a possible yieldable value (and dealing with it on the receiving end). Because `numeral` is the only example of
+    this, I have not yet done that.
     """
 
     count = 0
     while key.isdigit():
         count *= 10
         count += int(key)
-        key = yield text, cursor_pos
+        key = yield sigma
 
     return key, count
 
 
-def motion(text, cursor_pos, key, count):
+def motion(sigma, key, count):
     """
     >>> from test_utils import Generator
     >>>
     >>> text = 'some text as an example'
 
     h & l return immediately, no further info required
-    >>> g = Generator(motion(text, 0, 'l', 5))
-    ('R', (5, False))
+    >>> g = Generator(motion(Sigma(text, 0, None), 'l', 5))
+    ('R', (5, False, None))
 
     Findable text
-    >>> g = Generator(motion(text, 0, 'f', 1))
+    >>> g = Generator(motion(Sigma(text, 0, None), 'f', 1))
     ('Y', ('some text as an example', 0))
     >>> g.send('e')
-    ('R', (3, True))
+    ('R', (3, True, ('f', 'e')))
 
     nth occurence using 'count'
-    >>> g = Generator(motion(text, 0, 'f', 2))
+    >>> g = Generator(motion(Sigma(text, 0, None), 'f', 2))
     ('Y', ('some text as an example', 0))
     >>> g.send('e')
-    ('R', (6, True))
+    ('R', (6, True, ('f', 'e')))
 
     Unfindable text returns None
-    >>> g = Generator(motion(text, 0, 'f', 1))
+    >>> g = Generator(motion(Sigma(text, 0, None), 'f', 1))
     ('Y', ('some text as an example', 0))
     >>> g.send('Q')
     ('R', None)
 
     Not enough occurrences returns None:
-    >>> g = Generator(motion(text, 0, 'f', 5))
+    >>> g = Generator(motion(Sigma(text, 0, None), 'f', 5))
     ('Y', ('some text as an example', 0))
     >>> g.send('e')
     ('R', None)
     """
     if key in ['h', 'left']:
-        return max(cursor_pos - count, 0), False
+        return max(sigma.cursor_pos - count, 0), False, sigma.last_ft
 
     if key in ['l', 'right']:
         # In normal mode there are as many positions as characters, hence `len(text) - 1`
-        return min(cursor_pos + count, len(text) - 1), False
+        return min(sigma.cursor_pos + count, len(sigma.text) - 1), False, sigma.last_ft
 
     if key in ['0']:
-        return 0, False
+        return 0, False, sigma.last_ft
 
     if key in ['$']:
-        return len(text) - 1, True
+        return len(sigma.text) - 1, True, sigma.last_ft
 
-    if key in MOVE_TO_CHAR_KEYS:
-        char = yield text, cursor_pos
-        if len(char) != 1:
-            return None  # i.e. not actually a char; we cannot jump to special keys
+    if key in [',', ';']:
+        if sigma.last_ft is None:
+            return None  # repeat last f/t command, but there is None
 
+        last_key, last_char = sigma.last_ft
+
+        if key == ',':
+            key = last_key.swapcase()
+        else:
+            key = last_key
+
+        cursor_pos = sigma.cursor_pos
         for i in range(count):
-            result = ftFT(key, char, text, cursor_pos)
+            result = ftFT(key, last_char, sigma.text, cursor_pos)
             if result is None:
                 return result
             cursor_pos, inclusive = result
 
-        return cursor_pos, inclusive
+        return cursor_pos, inclusive, sigma.last_ft
+
+    if key in MOVE_TO_CHAR_KEYS:
+        char = yield sigma
+        if len(char) != 1:
+            return None  # i.e. not actually a char; we cannot jump to special keys
+
+        cursor_pos = sigma.cursor_pos
+        for i in range(count):
+            result = ftFT(key, char, sigma.text, cursor_pos)
+            if result is None:
+                return result
+            cursor_pos, inclusive = result
+
+        return cursor_pos, inclusive, (key, char)
 
     return None
 
@@ -313,7 +374,7 @@ def ftFT(key, char, text, cursor_pos):
 
     Find the last char
     >>> check('f', 'e', s, 20)
-    (("?", True), 'e')
+    ((22, True), 'e')
     """
     find = text.find if key in ['f', 't'] else text.rfind  # forwards or backwards
     bounds = (cursor_pos + 1, len(text)) if key in ['f', 't'] else (0, cursor_pos)  # first half or second half
