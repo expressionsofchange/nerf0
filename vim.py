@@ -310,9 +310,13 @@ def ftFT(key, char, text, cursor_pos):
     Back to right after previous 'a'
     >>> check('T', 'a', s, 13)
     ((11, False), 's')
+
+    Find the last char
+    >>> check('f', 'e', s, 20)
+    (("?", True), 'e')
     """
     find = text.find if key in ['f', 't'] else text.rfind  # forwards or backwards
-    bounds = (cursor_pos + 1, len(text) - 1) if key in ['f', 't'] else (0, cursor_pos)  # first half or second half
+    bounds = (cursor_pos + 1, len(text)) if key in ['f', 't'] else (0, cursor_pos)  # first half or second half
     correction = {
         'f': 0,
         'F': 0,
