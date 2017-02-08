@@ -158,6 +158,7 @@ def normal_mode(sigma, sent_keys):
         return sigma
 
     if key in ['i', 'a', 'I', 'A']:
+        cursor_pos = sigma.cursor_pos
         if key == 'a':
             # append (but don't but the cursor outside the text)
             cursor_pos = min(cursor_pos + 1, len(sigma.text))
@@ -166,7 +167,7 @@ def normal_mode(sigma, sent_keys):
         elif key == 'A':
             cursor_pos = len(sigma.text)
 
-        sigma = yield from insert_mode(sigma.set(cursor_pos=sigma.cursor_pos))
+        sigma = yield from insert_mode(sigma.set(cursor_pos=cursor_pos))
         return sigma
 
     if key in ['y']:
