@@ -46,14 +46,16 @@ from widgets.utils import (
     X,
     Y,
 )
+from colorscheme import (
+    BLACK,
+    CERISE,
+    CUTTY_SARK,
+    GUARDSMAN_RED,
+    WHITE,
+)
 from widgets.layout_constants import (
-    DARK_GREY,
-    GREY,
-    LIGHT_YELLOW,
     MARGIN,
     PADDING,
-    PINK,
-    RED,
 )
 
 
@@ -161,7 +163,7 @@ class HistoryWidget(FocusBehavior, Widget):
         return liveness_annotated_hashes
 
     def keyboard_on_key_down(self, window, keycode, text, modifiers):
-        result = FocusBehavior.keyboard_on_key_down(self, window, keycode, text, modifiers)
+        FocusBehavior.keyboard_on_key_down(self, window, keycode, text, modifiers)
 
         code, textual_code = keycode
 
@@ -205,7 +207,7 @@ class HistoryWidget(FocusBehavior, Widget):
 
         with apply_offset(self.canvas, self.offset):
             offset_nonterminals = self.draw_past_from_present(
-                    self.ds.annotated_hashes, ColWidths(150, 150, 30, 100))
+                    self.ds.annotated_hashes, ColWidths(0, 0, 30, 100))
 
             self.box_structure = annotate_boxes_with_s_addresses(BoxNonTerminal(offset_nonterminals, []), [])
 
@@ -232,19 +234,19 @@ class HistoryWidget(FocusBehavior, Widget):
 
         for i, (nout_hash, dissonant, aliveness, rhi) in enumerate(steps_with_aliveness):
             if aliveness == DELETED:
-                box_color = RED
+                fg, bg = (WHITE, GUARDSMAN_RED)
             elif aliveness == DEAD:
-                box_color = DARK_GREY
+                fg, bg = (WHITE, CUTTY_SARK)
             elif dissonant:
                 # I now understand that aliveness & being in dissonant state are orthogonal concerns. We _could_ express
                 # that by using another UI element than a color (e.g. strike-through). For now, we'l just stick with
                 # pink (with lower priority than RED/GREY)
-                box_color = PINK
+                fg, bg = (BLACK, CERISE)
             else:
-                box_color = LIGHT_YELLOW
+                fg, bg = (BLACK, WHITE)
 
-            if False:  # temporarily broken, because we've lost access to `s_path`
-                box_color = GREY
+            if False:  # (if is_cursor) temporarily broken, because we've lost access to `s_path`
+                fg, bg = (WHITE, BLACK)
 
             nout = self.stores.note_nout.get(nout_hash)
 
@@ -269,7 +271,7 @@ class HistoryWidget(FocusBehavior, Widget):
 
             for col_text, col_width in cols:
                 if col_width > 0:
-                    terminals.append(OffsetBox((offset_x, 0), self._t_for_text(col_text, box_color, col_width)))
+                    terminals.append(OffsetBox((offset_x, 0), self._t_for_text(col_text, (fg, bg), col_width)))
                     offset_x += col_width
 
             if rhi.t_address is not None:
@@ -297,10 +299,11 @@ class HistoryWidget(FocusBehavior, Widget):
             with apply_offset(self.canvas, o):
                 self._render_box(nt)
 
-    def _t_for_text(self, text, box_color, max_width):
+    def _t_for_text(self, text, colors, max_width):
         # copy/pasta with adaptations; we'll factor out the commonalities once they're' known
         # max_width is defined as "max inner width" (arbitrarily; we'll see how that works out; alternatives are
         # outer_width or between margin & padding
+        fg, bg = colors
 
         text_texture = self._texture_for_text(text)
         content_height = text_texture.height
@@ -323,12 +326,12 @@ class HistoryWidget(FocusBehavior, Widget):
         bottom_right = (bottom_left[X] + PADDING + MARGIN + content_width + MARGIN + PADDING, bottom_left[Y])
 
         instructions = [
-            Color(*box_color),
+            Color(*bg),
             Rectangle(
                 pos=(bottom_left[0] + PADDING, bottom_left[1] + PADDING),
                 size=(content_width + 2 * MARGIN, content_height + 2 * MARGIN),
                 ),
-            Color(0, 115/255, 230/255, 1),  # Blue
+            Color(*fg),
 
             Rectangle(
                 pos=(bottom_left[0] + PADDING + MARGIN, bottom_left[1] + PADDING + MARGIN),
@@ -345,9 +348,9 @@ class HistoryWidget(FocusBehavior, Widget):
             return self.m.texture_for_text[text]
 
         kw = {
-            'font_size': pt(13),
-            'font_name': 'DejaVuSans',
-            'bold': True,
+            'font_size': pt(14),
+            'font_name': 'Oxygen',
+            'bold': False,
             'anchor_x': 'left',
             'anchor_y': 'top',
             'padding_x': 0,

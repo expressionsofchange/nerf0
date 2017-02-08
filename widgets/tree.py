@@ -56,7 +56,15 @@ from widgets.utils import (
 from widgets.layout_constants import (
     MARGIN,
     PADDING,
-    PINK,
+)
+
+from colorscheme import (
+    AQUA_GREEN,
+    BLACK,
+    CERISE,
+    LAUREL_GREEN,
+    OLD_LACE,
+    WHITE,
 )
 
 # TSTTCPW for keeping track of the state of our single-line 'vim editor'
@@ -546,7 +554,8 @@ class TreeWidget(FocusBehavior, Widget):
         self.vim_ds = VimDS("I", self.ds.s_cursor[:-1] + [self.ds.s_cursor[-1] + direction], Vim("", 0))
 
     # ## Section for drawing boxes
-    def _t_for_text(self, text, box_color):
+    def _t_for_text(self, text, colors):
+        fg, bg = colors
         text_texture = self._texture_for_text(text)
         content_height = text_texture.height
         content_width = text_texture.width
@@ -556,12 +565,12 @@ class TreeWidget(FocusBehavior, Widget):
         bottom_right = (bottom_left[X] + PADDING + MARGIN + content_width + MARGIN + PADDING, bottom_left[Y])
 
         instructions = [
-            Color(*box_color),
+            Color(*bg),
             Rectangle(
                 pos=(bottom_left[0] + PADDING, bottom_left[1] + PADDING),
                 size=(content_width + 2 * MARGIN, content_height + 2 * MARGIN),
                 ),
-            Color(0, 115/255, 230/255, 1),  # Blue
+            Color(*fg),
             Rectangle(
                 pos=(bottom_left[0] + PADDING + MARGIN, bottom_left[1] + PADDING + MARGIN),
                 size=text_texture.size,
@@ -595,7 +604,7 @@ class TreeWidget(FocusBehavior, Widget):
         bottom_right = (bottom_left[X] + PADDING + MARGIN + content_width + MARGIN + PADDING, bottom_left[Y])
 
         instructions = [
-            Color(0.90, 0.90, 1, 1),
+            Color(*AQUA_GREEN),
             Rectangle(
                 pos=(bottom_left[0] + PADDING, bottom_left[1] + PADDING),
                 size=(content_width + 2 * MARGIN, content_height + 2 * MARGIN),
@@ -608,7 +617,7 @@ class TreeWidget(FocusBehavior, Widget):
         for i, text_texture in enumerate(text_textures):
             if i == 1:  # i.e. the cursor
                 instructions.extend([
-                    Color(1, 1, 1, 1),
+                    Color(*WHITE),
                     Rectangle(
                         pos=(offset_x, offset_y),
                         size=text_texture.size,
@@ -620,7 +629,7 @@ class TreeWidget(FocusBehavior, Widget):
 
             if not is_cursor_eol:
                 instructions.extend([
-                    Color(0, 115/255, 230/255, 1),  # Blue
+                    Color(*(BLACK if i == 1 else WHITE)),
                     Rectangle(
                         pos=(offset_x, offset_y),
                         size=text_texture.size,
@@ -632,12 +641,13 @@ class TreeWidget(FocusBehavior, Widget):
 
         return BoxTerminal(instructions, bottom_right)
 
-    def color_for_cursor(self, is_cursor, broken):
+    def colors_for_cursor(self, is_cursor, broken):
         if is_cursor:
-            return (0.95, 0.95, 0.95, 1)  # Ad Hoc Grey
+            return WHITE, BLACK
         if broken:
-            return PINK
-        return (1, 1, 0.97, 1)  # Ad Hoc Light Yellow
+            return BLACK, CERISE
+
+        return BLACK, WHITE
 
     def _nts_for_pp_annotated_node(self, pp_annotated_node):
         iri_annotated_node = construct_lispy_iri_top_down(
@@ -672,9 +682,9 @@ class TreeWidget(FocusBehavior, Widget):
 
         if isinstance(node, TreeText):
             return BoxNonTerminal([], [no_offset(
-                self._t_for_text(node.unicode_, self.color_for_cursor(is_cursor, broken)))])
+                self._t_for_text(node.unicode_, self.colors_for_cursor(is_cursor, broken)))])
 
-        t = self._t_for_text("(", self.color_for_cursor(is_cursor, broken))
+        t = self._t_for_text("(", self.colors_for_cursor(is_cursor, broken))
         offset_terminals = [
             no_offset(t),
         ]
@@ -687,7 +697,7 @@ class TreeWidget(FocusBehavior, Widget):
             offset_nonterminals.append(OffsetBox((offset_right, offset_down), nt))
             offset_right += nt.outer_dimensions[X]
 
-        t = self._t_for_text(")", self.color_for_cursor(is_cursor, broken))
+        t = self._t_for_text(")", self.colors_for_cursor(is_cursor, broken))
         offset_terminals.append(OffsetBox((offset_right, offset_down), t))
 
         return BoxNonTerminal(offset_nonterminals, offset_terminals)
@@ -700,11 +710,11 @@ class TreeWidget(FocusBehavior, Widget):
 
         if isinstance(node, TreeText):
             return BoxNonTerminal([], [no_offset(self._t_for_text(
-                node.unicode_, self.color_for_cursor(is_cursor, broken)))])
+                node.unicode_, self.colors_for_cursor(is_cursor, broken)))])
 
         if len(children_nts) == 0:
             return BoxNonTerminal([], [no_offset(self._t_for_text(
-                "(...)", self.color_for_cursor(is_cursor, broken)))])
+                "(...)", self.colors_for_cursor(is_cursor, broken)))])
 
         # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that we
         # are robust for (we render it as flat text); but it's not the expected use-case.
@@ -732,9 +742,9 @@ class TreeWidget(FocusBehavior, Widget):
 
         if isinstance(node, TreeText):
             return BoxNonTerminal([], [no_offset(self._t_for_text(
-                node.unicode_, self.color_for_cursor(is_cursor, broken)))])
+                node.unicode_, self.colors_for_cursor(is_cursor, broken)))])
 
-        t = self._t_for_text("(", self.color_for_cursor(is_cursor, broken))
+        t = self._t_for_text("(", self.colors_for_cursor(is_cursor, broken))
         offset_right = t.outer_dimensions[X]
         offset_down = 0
 
@@ -766,7 +776,7 @@ class TreeWidget(FocusBehavior, Widget):
         else:
             offset_right = t.outer_dimensions[X]
 
-        t = self._t_for_text(")", self.color_for_cursor(is_cursor, broken))
+        t = self._t_for_text(")", self.colors_for_cursor(is_cursor, broken))
         offset_terminals.append(OffsetBox((offset_right, offset_down), t))
 
         return BoxNonTerminal(offset_nonterminals, offset_terminals)
@@ -786,9 +796,9 @@ class TreeWidget(FocusBehavior, Widget):
             return self.m.texture_for_text[text]
 
         kw = {
-            'font_size': pt(13),
-            'font_name': 'DejaVuSans',
-            'bold': True,
+            'font_size': pt(14),
+            'font_name': 'Oxygen',
+            'bold': False,
             'anchor_x': 'left',
             'anchor_y': 'top',
             'padding_x': 0,

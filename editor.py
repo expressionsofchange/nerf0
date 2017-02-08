@@ -2,7 +2,6 @@ from sys import argv
 from os.path import isfile
 
 from kivy.app import App
-from kivy.core.text.markup import LabelBase
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.config import Config
@@ -24,12 +23,7 @@ from dsn.historiography.legato import HistoriographyNoteNoutHash, Historiography
 from hashstore import NoutHashStore
 from memoization import Memoization, Stores
 
-# How to tell Kivy about font locations; should be generalized
-LabelBase.register(name="DejaVuSans",
-                   fn_regular="/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                   fn_bold="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-                   fn_italic="/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf",
-                   fn_bolditalic="/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf",)
+import fonts  # NOQA: import with the side-effect of configuring all fonts
 
 Config.set('kivy', 'exit_on_escape', '0')
 

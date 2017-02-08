@@ -12,21 +12,20 @@ def rgba(s, *args):
     if isinstance(s, string_types):
         return get_color_from_hex(s)
     elif isinstance(s, (list, tuple)):
-        s = map(lambda x: x / 255., s)
+        s = list(map(lambda x: x / 255., s))
         return s
     elif isinstance(s, (int, float)):
-        s = map(lambda x: x / 255., [s] + list(args))
+        s = list(map(lambda x: x / 255., [s] + list(args)))
         return s
     raise Exception('Invalid value (not a string / list / tuple)')
 
 
-background = rgba(255, 255, 255, 255)
-color0 = rgba(0, 0, 0, 255)
-color1 = rgba(153, 0, 0, 255)
-color2 = rgba(115, 0, 230, 255)
-color3 = rgba(0, 0, 179, 255)
-color4 = rgba(0, 115, 230, 255)
-color5 = rgba(79, 153, 0, 255)
-color6 = rgba(0, 179, 179, 255)
-color7 = rgba(255, 255, 255, 255)
-foreground = rgba(0, 0, 0, 255)
+WHITE = rgba(255, 255, 255, 255)
+GUARDSMAN_RED = rgba(211, 1, 2, 255)
+CERISE = rgba(211, 54, 130, 255)
+CUTTY_SARK = rgba(88, 110, 117, 255)
+CURIOUS_BLUE = rgba(38, 141, 210, 255)
+LAUREL_GREEN = rgba(10, 130, 0, 255)
+AQUA_GREEN = rgba(42, 161, 152, 255)
+OLD_LACE = rgba(253, 246, 229, 255)
+BLACK = rgba(0, 0, 0, 255)
