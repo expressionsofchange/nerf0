@@ -77,16 +77,17 @@ def accumulate_sent(generator):
     # https://stackoverflow.com/questions/42094633/how-to-observe-log-values-sent-to-a-python-generator
 
     sent_values = []
-    generator_value = generator.send(None)
 
-    while True:
-        sent_value = yield generator_value
-        sent_values.append(sent_value)
+    try:
+        generator_value = generator.send(None)
 
-        try:
+        while True:
+            sent_value = yield generator_value
+            sent_values.append(sent_value)
             generator_value = generator.send(sent_value)
-        except StopIteration as e:
-            return (e.value, sent_values)
+
+    except StopIteration as e:
+        return (e.value, sent_values)
 
 
 class Vim(object):
@@ -117,24 +118,70 @@ class Vim(object):
 
 
 def normal_mode_loop(sigma):
-    sent_keys = []
+    prev_sent_keys = []
+
+    # For un/re-doing, we remember (state, cursor_before, cursor_after) for each unique text. When we undo for a state
+    # n, we go back to state n-1, and put the cursor where it was right before state n got created.
+    # When redoing state n, we go to that state and put the cursor where it was right after the state was created.
+    TEXT, CURSOR_BEFORE, CURSOR_AFTER = 0, 1, 2
+    states = [(sigma.text, 0, sigma.cursor_pos)]
+    undo_top = 0
 
     while True:
-        one_command = accumulate_sent(normal_mode(sigma, sent_keys))
-        some_new_state, new_sent_keys = yield from one_command
+        key = yield sigma
 
-        if some_new_state.text != sigma.text and new_sent_keys != ['.']:
-            # Some command has succesfully executed. (TBH, I think the real Vim does this differently, as evidenced by
-            # e.g. pressing 'i', 'escape', '.'). If we want to reproduce that behavior, we need `normal_mode` to tell us
-            # whether a command was executed (as opposed to movement-only)
+        if key == 'u':
+            if undo_top == 0:
+                continue
 
-            # '.' is ignored; we the last command should never be "repeat last command".
-            sent_keys = new_sent_keys
+            undo_to_text = states[undo_top - 1][TEXT]
+            undo_to_cursor_pos = states[undo_top][CURSOR_BEFORE]
 
-        sigma = some_new_state
+            # Note: We don't go fully back in time; only the text and cursor_pos are restored
+            sigma = sigma.set(text=undo_to_text, cursor_pos=undo_to_cursor_pos)
+
+            undo_top -= 1
+            continue
+
+        if key == 'r':
+            if undo_top >= len(states) - 1:
+                continue
+
+            undo_top += 1
+
+            redo_to_text = states[undo_top][TEXT]
+            redo_to_cursor_pos = states[undo_top][CURSOR_AFTER]
+
+            sigma = sigma.set(text=redo_to_text, cursor_pos=redo_to_cursor_pos)
+
+            continue
+
+        one_command = accumulate_sent(normal_mode(key, sigma, prev_sent_keys))
+
+        new_sigma, further_sent_keys = yield from one_command
+        sent_keys = [key] + further_sent_keys
+
+        if new_sigma.text != sigma.text:
+            if undo_top < len(states) - 1:
+                # do-after-undo truncates history
+                states = states[:undo_top + 1]
+
+            # We take text-change to mean: something can be undone.
+            states.append((new_sigma.text, sigma.cursor_pos, new_sigma.cursor_pos))
+            undo_top = len(states) - 1
+
+            if sent_keys != ['.']:
+                # We take text-change to mean: Some command has succesfully executed. (TBH, I think the real Vim does
+                # this differently, as evidenced by e.g. pressing 'i', 'escape', '.'). If we want to reproduce that
+                # behavior, we need `normal_mode` to tell us whether a command was executed.
+
+                # '.' is ignored; we the last command should never be "repeat last command".
+                prev_sent_keys = sent_keys
+
+        sigma = new_sigma
 
 
-def normal_mode(sigma, sent_keys):
+def normal_mode(key, sigma, sent_keys):
     """
     Performs 1 normal_mode action.
 
@@ -145,7 +192,6 @@ def normal_mode(sigma, sent_keys):
     """
 
     count = 1
-    key = yield sigma
 
     if key in ['escape', 'enter']:
         # Note: `normal_mode` and `normal_mode_loop` do not actually stop when they're done; they simply signal the
@@ -168,9 +214,9 @@ def normal_mode(sigma, sent_keys):
         return sigma.set(cursor_pos=cursor_pos, last_ft=last_ft)
 
     if key in ['.']:
-        nm = normal_mode(sigma, sent_keys)
+        nm = normal_mode(sent_keys[0], sigma, sent_keys)
         next(nm)
-        for key in sent_keys:
+        for key in sent_keys[1:]:
             sigma = nm.send(key)
         return sigma
 
