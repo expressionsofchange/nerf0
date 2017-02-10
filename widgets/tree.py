@@ -553,6 +553,7 @@ class TreeWidget(FocusBehavior, Widget):
 
         # because direction is in [0, 1]... no need to minimize/maximize (PROVE!)
         self.vim_ds = VimDS("I", self.ds.s_cursor[:-1] + [self.ds.s_cursor[-1] + direction], Vim("", 0))
+        self.invalidate()
 
     # ## Section for drawing boxes
     def _t_for_text(self, text, colors):
@@ -657,7 +658,33 @@ class TreeWidget(FocusBehavior, Widget):
             # We start LISPY (but if the first PP node is annotated non-lispy, the result will still be a single line)
             InheritedRenderingInformation(LISPY),
         )
+
+        if self.vim_ds is not None:
+            vim_nt = BoxNonTerminal([], [no_offset(self._t_for_vim(self.vim_ds.vim))])
+            exception = (self.vim_ds.s_address, self.vim_ds.insert_or_replace, vim_nt)
+            return self.bottom_up_construct_with_exception(self._nt_for_iri, exception, iri_annotated_node, [])
+
         return self.bottom_up_construct(self._nt_for_iri, iri_annotated_node, [])
+
+    def bottom_up_construct_with_exception(self, f, exception, node, s_address):
+        exception_s_address, exception_type, exception_value = exception
+
+        # If we're not on the exception's branch, we proceed as usual.
+        if exception_s_address[len(s_address):] == s_address:
+            return self.bottom_up_construct(f, node, s_address)
+
+        constructed_children = []
+        for i, child in enumerate(node.children):
+            constructed_children.append(self.bottom_up_construct_with_exception(f, exception, child, s_address + [i]))
+
+        if exception_s_address[:-1] == s_address:
+            constructed_child = exception_value
+            if exception_type == 'R':
+                constructed_children[exception_s_address[-1]] = constructed_child
+            else:
+                constructed_children.insert(exception_s_address[-1], constructed_child)
+
+        return f(node, constructed_children, s_address)
 
     def bottom_up_construct(self, f, node, s_address):
         children = [self.bottom_up_construct(f, child, s_address + [i]) for i, child in enumerate(node.children)]
@@ -665,10 +692,6 @@ class TreeWidget(FocusBehavior, Widget):
 
     def _nt_for_iri(self, iri_annotated_node, children_nts, s_address):
         is_cursor = s_address == self.ds.s_cursor
-
-        if self.vim_ds is not None and s_address == self.vim_ds.s_address:
-            # TODO: shift sibblings down (only on "I")
-            return BoxNonTerminal([], [no_offset(self._t_for_vim(self.vim_ds.vim))])
 
         if iri_annotated_node.annotation.multiline_mode == LISPY:
             f = self._nt_for_node_as_lispy_layout
