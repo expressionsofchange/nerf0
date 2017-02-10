@@ -288,7 +288,7 @@ def normal_mode(key, sigma, sent_keys):
 
     if key in ['x']:
         yanked = ibeam_slice(sigma.text, sigma.cursor_pos, sigma.cursor_pos + count)
-        text, cursor_pos = ibeam_delete(sigma.text, sigma.cursor_pos, sigma.cursor_pos + count)
+        text, cursor_pos = block_delete(sigma.text, sigma.cursor_pos, sigma.cursor_pos + count - 1)
         return sigma.set(text=text, cursor_pos=cursor_pos, clipboard=yanked)
 
     if key in ['p', 'P']:
@@ -566,3 +566,40 @@ def ibeam_slice(s, i0, i1):
     hi = min(len(s), hi)
 
     return s[lo:hi]
+
+
+def block_delete(s, i0, i1):
+    """
+    Returns:
+
+    A] a string `s` with the bit between i0 and i1 deleted, treating both indices as 'block cursors', i.e. indices in a
+    string, which are part of the deletion.
+
+    B] The single index i´ representing a block cursor, sitting at the same place Vim would put it:
+    * leftmost pre-deletion character
+    * but not outside the string
+    * unless the string is 0-length, in which case you must put it outside the string (at pos 0)
+    (I wish the above definition was simpler; to me it's a hint that "block cursor are a bit funny", but I'm going for
+    compatability, not elegance, in this particular part)
+
+    Single block deletes one char:
+    >>> block_delete('abcdefg', 5, 5)
+    ('abcdeg', 5)
+
+    >>> block_delete('abcdefg', 1, 3)
+    ('aefg', 1)
+
+    Order of the cursors does not matter:
+    >>> block_delete('abcdefg', 6, 1)
+    ('a', 1)
+
+    Bounds are checked (allows for lazy usage of this function; arguably we should raise an error instead)
+    >>> block_delete('abcdefg', -1, 99)
+    ('', 0)
+    """
+    lo, hi = tuple(sorted([i0, i1]))
+    lo = max(0, lo)
+    hi = max(0, min(len(s), hi + 1))
+
+    s = s[0:lo] + s[hi:]
+    return s, max(0, min(lo, len(s) - 1))
