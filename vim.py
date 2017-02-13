@@ -193,7 +193,7 @@ def normal_mode(key, sigma, sent_keys):
 
     count = 1
 
-    if key in ['escape', 'enter']:
+    if key in ['escape', 'enter', 'numpadenter']:
         # Note: `normal_mode` and `normal_mode_loop` do not actually stop when they're done; they simply signal the
         # actual UI element which controls them to do a cleanup, but there is nothing (theoretically) preventing such an
         # element to say "carry on".
