@@ -351,7 +351,17 @@ class TreeWidget(FocusBehavior, Widget):
         elif textual_code in ['down', 'j']:
             self._handle_edit_note(CursorDFS(1))
 
-        elif textual_code in ['q']:
+        elif textual_code in ['n']:
+            self._create_child_window()
+
+        cursor_node = node_for_s_address(self.ds.tree, self.ds.s_cursor)
+        if cursor_node.broken:
+            # key-presses below create changes; they are protected by the "if not broken" guard above (i.e. you may not
+            # further change something that's already in a broken state). Cursor-movement is not protected like that,
+            # because it would mean "you cannot navigate away from the broken parts".
+            return
+
+        if textual_code in ['q']:
             self._add_sibbling_text(INSERT_BEFORE)
 
         elif textual_code in ['w']:
@@ -380,9 +390,6 @@ class TreeWidget(FocusBehavior, Widget):
             }
             pp_note_type = pp_map[textual_code]
             self._change_pp_style(pp_note_type)
-
-        elif textual_code in ['n']:
-            self._create_child_window()
 
     def on_focus_change(self, widget, focus):
         if not focus and self.vim_ds is not None:
