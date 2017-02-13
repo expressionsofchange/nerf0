@@ -18,7 +18,7 @@ from dsn.editor.clef import (
     EDelete,
     InsertNodeChild,
     InsertNodeSibbling,
-    TextInsert,  # TODO, alternatively: change the addressing-space to a single s_address
+    TextInsert,
     TextReplace,
 )
 
@@ -386,6 +386,10 @@ class TreeWidget(FocusBehavior, Widget):
     def apply_and_close_vim(self):
         """apply the vim_ds, and close it:"""
         if self.vim_ds.insert_or_replace == "I":
+            # At present, the editor's clef's TextInsert has an interface very similar to the s_expression's clef's
+            # TextBecome, namely: (address, index, text). This means we're doing a split of the vim_ds.s_address at the
+            # present point. Alternatively, we could change TextInsert to have a single s_address and apply the split at
+            # the point of construction.
             self._handle_edit_note(
                 TextInsert(self.vim_ds.s_address[:-1], self.vim_ds.s_address[-1], self.vim_ds.vim.text))
         else:
@@ -691,6 +695,9 @@ class TreeWidget(FocusBehavior, Widget):
         return f(node, children, s_address)
 
     def _nt_for_iri(self, iri_annotated_node, children_nts, s_address):
+        # in some future version, rendering of `is_cursor` in a different color should not be part of the main drawing
+        # mechanism, but as some separate "layer". The idea is: things that are likely to change should be drawn on top
+        # of things that are very stable (and can therefore be cached).
         is_cursor = s_address == self.ds.s_cursor
 
         if iri_annotated_node.annotation.multiline_mode == LISPY:
