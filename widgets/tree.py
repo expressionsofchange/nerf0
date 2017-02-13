@@ -739,10 +739,15 @@ class TreeWidget(FocusBehavior, Widget):
         # of things that are very stable (and can therefore be cached).
         is_cursor = s_address == self.ds.s_cursor
 
-        if iri_annotated_node.annotation.multiline_mode == LISPY:
-            f = self._nt_for_node_as_lispy_layout
-        else:  # SINGLE_LINE
-            f = self._nt_for_node_single_line
+        # The lispy stuff is commented out in favor of the` _nt_for_node_as_todo_list`. This was the fastest route to
+        # starting to use the editor myself. It also means that all the IRI annotations are ignored. Obviously: not a
+        # permanent solution.
+
+        f = self._nt_for_node_as_todo_list
+        # if iri_annotated_node.annotation.multiline_mode == LISPY:
+        #     f = self._nt_for_node_as_lispy_layout
+        # else:  # SINGLE_LINE
+        #     f = self._nt_for_node_single_line
 
         return f(iri_annotated_node, children_nts, is_cursor)
 
@@ -773,7 +778,6 @@ class TreeWidget(FocusBehavior, Widget):
         return BoxNonTerminal(offset_nonterminals, offset_terminals)
 
     def _nt_for_node_as_todo_list(self, iri_annotated_node, children_nts, is_cursor):
-        raise Exception("Not updated for the introduction of PP-annotations")
         broken = iri_annotated_node.underlying_node.broken
 
         node = iri_annotated_node.underlying_node
@@ -784,16 +788,15 @@ class TreeWidget(FocusBehavior, Widget):
 
         if len(children_nts) == 0:
             return BoxNonTerminal([], [no_offset(self._t_for_text(
-                "(...)", self.colors_for_cursor(is_cursor, broken)))])
+                "* ...", self.colors_for_cursor(is_cursor, broken)))])
 
-        # The fact that the first child may in fact _not_ be simply text, but any arbitrary tree, is a scenario that we
-        # are robust for (we render it as flat text); but it's not the expected use-case.
+        t = self._t_for_text("*", self.colors_for_cursor(is_cursor, broken))
 
-        # WHEN_RESTORING: "first child is single line" should be pushed into the "top down" functionality
         nt = children_nts[0]
         offset_nonterminals = [
-            no_offset(nt)
+            OffsetBox((20, 0), nt)
         ]
+
         offset_down = nt.outer_dimensions[Y]
         offset_right = 50  # Magic number for indentation
 
@@ -801,7 +804,7 @@ class TreeWidget(FocusBehavior, Widget):
             offset_nonterminals.append(OffsetBox((offset_right, offset_down), nt))
             offset_down += nt.outer_dimensions[Y]
 
-        return BoxNonTerminal(offset_nonterminals, [])
+        return BoxNonTerminal(offset_nonterminals, [no_offset(t)])
 
     def _nt_for_node_as_lispy_layout(self, iri_annotated_node, children_nts, is_cursor):
         # "Lisp Style indentation, i.e. xxx yyy
