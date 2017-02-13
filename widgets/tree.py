@@ -166,6 +166,7 @@ class TreeWidget(FocusBehavior, Widget):
 
         self.bind(pos=self.invalidate)
         self.bind(size=self.invalidate)
+        self.bind(focus=self.on_focus_change)
 
     # ## Section for channel-communication
     def receive_from_channel(self, data):
@@ -383,6 +384,33 @@ class TreeWidget(FocusBehavior, Widget):
         elif textual_code in ['n']:
             self._create_child_window()
 
+    def on_focus_change(self, widget, focus):
+        if not focus and self.vim_ds is not None:
+            # When defocussing, we close the current Vim mode (if any). The reasoning is as such: while in vim-mode we
+            # are "in between states"; i.e. we're not in any state represented in the s_expr clef.
+
+            # When we defocus (and go to a different "window"), such a window may produce new notes through its channel,
+            # which we must then handle. It not immediately clear how to do that from the intermediate state. Also: from
+            # the UX perspective it "feels natural" (i.e. is a common pattern) that a switch-away removes some aspects
+            # of the cursor. I.e. compare how Text inputs stop blinking their carret when they're not in focus.
+
+            # This solution may in fact not be a permanent one: it relies on the assumption that being in focus is
+            # directly related to being the only source of new notes. Such an assumption may break when implementing a
+            # "distributed editor", in which case such notes may come in at any given time.
+
+            # Thoughts about problems & solutions for such situations, once they would occur:
+            # Problems:
+
+            # * Some notes may change the text that's also currently being edited by the vim mode.
+            # * Some notes may affect where the cursor is (e.g. an insert in the parent with a lower index than yours)
+
+            # Potential solutions:
+            # * fully block while in this funnny mode
+            # *  Using t-addresses to denote where vim-mode is. (this is harder for insertions, because they don't have
+            #       a t-address yet; a solution to that could be: insertions are alway immedeate, followed by an edit)
+
+            self.apply_and_close_vim()
+
     def apply_and_close_vim(self):
         """apply the vim_ds, and close it:"""
         if self.vim_ds.insert_or_replace == "I":
@@ -533,6 +561,10 @@ class TreeWidget(FocusBehavior, Widget):
         clicked_item = from_point(self.box_structure, bring_into_offset(self.offset, (touch.x, touch.y)))
 
         if clicked_item is not None:
+            if self.vim_ds and clicked_item.annotation != self.vim_ds.s_address:
+                # Clicking on another node closes vim; we do this before cursor-set avoid undoing the cursor-set.
+                self.apply_and_close_vim()
+
             self._handle_edit_note(CursorSet(clicked_item.annotation))
 
         return True
