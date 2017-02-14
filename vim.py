@@ -591,7 +591,7 @@ def block_delete(s, i0, i1):
 
     Order of the cursors does not matter:
     >>> block_delete('abcdefg', 6, 1)
-    ('a', 1)
+    ('a', 0)
 
     Bounds are checked (allows for lazy usage of this function; arguably we should raise an error instead)
     >>> block_delete('abcdefg', -1, 99)
