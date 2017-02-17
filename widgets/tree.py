@@ -65,6 +65,10 @@ from colorscheme import (
     WHITE,
 )
 
+from dsn.viewports.structure import ViewportStructure, VRTC, ViewportContext
+from dsn.viewports.construct import play_viewport_note
+from dsn.viewports.clef import ViewportContextChange, ScrollToFraction, MoveViewportRelativeToCursor
+
 # TSTTCPW for keeping track of the state of our single-line 'vim editor'
 VimDS = namedtuple('VimDS', (
     'insert_or_replace',  # "I", "R"
@@ -81,6 +85,35 @@ INSERT_AFTER = 1
 # Multiline modes:
 LISPY = 0
 SINGLE_LINE = 1
+
+
+def cursor_dimensions(annotated_box_structure, s_address, y_offset=0):
+    """given a box_structure and a s_address to lookup return the looked up items' y_offset & height.
+    This function is used in the context of "following the cursor".
+
+    This is a bit of a kludge as it stands; I don't want to clean it up now though, because we're likely to rewrite the
+    drawing of cursors at some point in the future (i.e.: have the cursors be a separate layer), at which point we can
+    use that new functionality
+
+    (One observation about the kludgy nature of the present solution: we already know where the cursor is at the moment
+    of drawing; but we re-lookup that information at the present point).
+
+    Furhter ad hoc solutions are documented below.
+    """
+
+    if s_address == []:
+        # The cursor's height is (as of yet) just returned as a constant. Another attempt at a solution is commented
+        # out. It's wrong, because it returns the height of the whole subtree under consideration, rather than the
+        # height of the higlighted element.
+        # How this plays out in e.g. a lispy layout, I'm not sure yet (we may have to tie in the solution with the idea
+        # that in such a layout we visit the nodes twice (once for the opening bracket, once for the closing bracket)).
+        return y_offset, -40
+        # return y_offset, annotated_box_structure.underlying_node.outer_dimensions
+
+    o, nt = annotated_box_structure.underlying_node.offset_nonterminals[s_address[0]]
+    child = annotated_box_structure.children[s_address[0]]
+
+    return cursor_dimensions(child, s_address[1:], y_offset + o[Y])
 
 
 class InheritedRenderingInformation(object):
@@ -154,8 +187,16 @@ class TreeWidget(FocusBehavior, Widget):
 
         super(TreeWidget, self).__init__(**kwargs)
 
+        # There is no (proper) initial EditStructure, e.g. there is no initial tree. This lack of structure is assumed
+        # to be filled "immediately" after __init__, by some notes flowing in over the connected channels.
+        # As an implication of this, some of the tree-dependent datastructures are in an initally-uninitialized state
+        # too, e.g. viewport_ds has meaningful ViewportContext, because we don't know it yet
         self.ds = EditStructure(None, [], [], None)
         self.vim_ds = None
+        self.viewport_ds = ViewportStructure(
+            ViewportContext(0, 0, 0, 0),
+            VRTC(0),  # The viewport starts out with the cursor on top.
+        )
 
         self.notify_children = {}
         self.next_channel_id = 0
@@ -165,7 +206,7 @@ class TreeWidget(FocusBehavior, Widget):
         self.send_to_channel, _ = self.history_channel.connect(self.receive_from_channel, self.channel_closed)
 
         self.bind(pos=self.invalidate)
-        self.bind(size=self.invalidate)
+        self.bind(size=self.size_change)
         self.bind(focus=self.on_focus_change)
 
     # ## Section for channel-communication
@@ -174,6 +215,7 @@ class TreeWidget(FocusBehavior, Widget):
         # there is no else branch: Possibility only travels _to_ the channel;
         if isinstance(data, Actuality):
             t_cursor = t_address_for_s_address(self.ds.tree, self.ds.s_cursor)
+
             tree = construct_x(self.m, self.stores, data.nout_hash)
 
             s_cursor = best_s_address_for_t_address(tree, t_cursor)
@@ -185,6 +227,8 @@ class TreeWidget(FocusBehavior, Widget):
             # selected t_cursor is no longer valid)
             self.broadcast_cursor_update(t_address_for_s_address(self.ds.tree, self.ds.s_cursor))
 
+            self._construct_box_structure()
+            self._update_viewport_for_change(user_moved_cursor=False)
             self.invalidate()
 
             for notify_child in self.notify_children.values():
@@ -192,6 +236,8 @@ class TreeWidget(FocusBehavior, Widget):
 
     def channel_closed(self):
         self.closed = True
+        self._construct_box_structure()
+        self._update_viewport_for_change(user_moved_cursor=False)
         self.invalidate()
 
     def broadcast_cursor_update(self, t_address):
@@ -228,9 +274,9 @@ class TreeWidget(FocusBehavior, Widget):
 
     def _handle_edit_note(self, edit_note):
         new_s_cursor, posacts, error = edit_note_play(self.ds, edit_note)
-        self._update_internal_state_for_posacts(posacts, new_s_cursor)
+        self._update_internal_state_for_posacts(posacts, new_s_cursor, user_moved_cursor=True)
 
-    def _update_internal_state_for_posacts(self, posacts, new_s_cursor):
+    def _update_internal_state_for_posacts(self, posacts, new_s_cursor, user_moved_cursor):
         last_actuality = None
 
         for posact in posacts:
@@ -254,6 +300,9 @@ class TreeWidget(FocusBehavior, Widget):
 
         # TODO we only really need to broadcast the new t_cursor if it has changed.
         self.broadcast_cursor_update(t_address_for_s_address(self.ds.tree, self.ds.s_cursor))
+
+        self._construct_box_structure()
+        self._update_viewport_for_change(user_moved_cursor=user_moved_cursor)
 
         self.invalidate()
 
@@ -336,8 +385,22 @@ class TreeWidget(FocusBehavior, Widget):
             elif self.vim_ds.vim.done == DONE_CANCEL:
                 self.vim_ds = None
 
+            self._construct_box_structure()
+            self._update_viewport_for_change(user_moved_cursor=True)
             self.invalidate()
             return
+
+        # TODO The keycodes to demonstrate the PoC of scrolling are insanely bad; we must pick proper ones.
+        if textual_code in [str(i) for i in range(5)]:
+            note = MoveViewportRelativeToCursor(int(textual_code))
+            self.viewport_ds = play_viewport_note(note, self.viewport_ds)
+            self.invalidate()
+
+        if textual_code in [str(i) for i in range(5, 10)]:
+            note = ScrollToFraction((int(textual_code) + 1) / 10)
+            self.viewport_ds = play_viewport_note(note, self.viewport_ds)
+            self.invalidate()
+        # END OF TODO
 
         if textual_code in ['left', 'h']:
             self._handle_edit_note(CursorParent())
@@ -448,6 +511,11 @@ class TreeWidget(FocusBehavior, Widget):
             pp_tree,
         )
 
+        self._construct_box_structure()
+
+        # user_moved_cursor=False: [1] that's just factually not what happened; [2] this matches with the desirable
+        # behavior: you want the cursor to stay in place, and revolve the layout-changes around it.
+        self._update_viewport_for_change(user_moved_cursor=False)
         self.invalidate()
 
     def _child_channel_for_t_address(self, t_address):
@@ -475,7 +543,7 @@ class TreeWidget(FocusBehavior, Widget):
                 # then setting the new s_cursor based on the t_cursor and the new tree; this is made more
                 # complicated because of the current choices in methods (s_cursor-setting integrated w/
                 # tree-creation)
-                self._update_internal_state_for_posacts(posacts, self.ds.s_cursor)
+                self._update_internal_state_for_posacts(posacts, self.ds.s_cursor, user_moved_cursor=False)
 
         def receive_close_from_child():
             del self.notify_children[channel_id]
@@ -532,11 +600,33 @@ class TreeWidget(FocusBehavior, Widget):
             Clock.schedule_once(self.refresh, -1)
             self._invalidated = True
 
-    def refresh(self, *args):
-        """refresh means: redraw (I suppose we could rename, but I believe it's "canonical Kivy" to use 'refresh'"""
-        self.canvas.clear()
+    def _update_viewport_for_change(self, user_moved_cursor):
+        cursor_position, cursor_size = cursor_dimensions(self.box_structure, self.ds.s_cursor)
 
-        self.offset = (self.pos[X], self.pos[Y] + self.size[Y])  # default offset: start on top_left
+        # In the below, all sizes and positions are brought into the positive integers; there is a mirroring `+` in the
+        # offset calculation when we actually apply the viewport.
+        context = ViewportContext(
+            document_size=self.box_structure.underlying_node.outer_dimensions[Y] * -1,
+            viewport_size=self.size[Y],
+            cursor_size=cursor_size * -1,
+            cursor_position=cursor_position * -1)
+
+        note = ViewportContextChange(
+            context=context,
+            user_moved_cursor=user_moved_cursor,
+        )
+        self.viewport_ds = play_viewport_note(note, self.viewport_ds)
+
+    def size_change(self, *args):
+        self._update_viewport_for_change(user_moved_cursor=False)
+        self.invalidate()
+
+    def _construct_box_structure(self):
+        self.box_structure = annotate_boxes_with_s_addresses(self._nts_for_pp_annotated_node(self.ds.pp_tree), [])
+
+    def refresh(self, *args):
+        """refresh means: redraw (I suppose we could rename, but I believe it's "canonical Kivy" to use 'refresh')"""
+        self.canvas.clear()
 
         with self.canvas:
             if self.closed:
@@ -546,8 +636,9 @@ class TreeWidget(FocusBehavior, Widget):
 
             Rectangle(pos=self.pos, size=self.size,)
 
+        self.offset = (self.pos[X], self.pos[Y] + self.size[Y] + self.viewport_ds.get_position())
+
         with apply_offset(self.canvas, self.offset):
-            self.box_structure = annotate_boxes_with_s_addresses(self._nts_for_pp_annotated_node(self.ds.pp_tree), [])
             self._render_box(self.box_structure.underlying_node)
 
         self._invalidated = False
@@ -582,12 +673,14 @@ class TreeWidget(FocusBehavior, Widget):
         if not isinstance(cursor_node, TreeNode):
             # edit this text node
             self.vim_ds = VimDS("R", self.ds.s_cursor, Vim(cursor_node.unicode_, 0))
+            self._construct_box_structure()
             self.invalidate()
             return
 
         # create a child node, and edit that
         index = len(cursor_node.children)
         self.vim_ds = VimDS("I", self.ds.s_cursor + [index], Vim("", 0))
+        self._construct_box_structure()
         self.invalidate()
 
     def _add_sibbling_text(self, direction):
@@ -596,6 +689,7 @@ class TreeWidget(FocusBehavior, Widget):
 
         # because direction is in [0, 1]... no need to minimize/maximize (PROVE!)
         self.vim_ds = VimDS("I", self.ds.s_cursor[:-1] + [self.ds.s_cursor[-1] + direction], Vim("", 0))
+        self._construct_box_structure()
         self.invalidate()
 
     # ## Section for drawing boxes
