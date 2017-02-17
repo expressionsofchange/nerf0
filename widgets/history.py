@@ -207,7 +207,7 @@ class HistoryWidget(FocusBehavior, Widget):
 
         with apply_offset(self.canvas, self.offset):
             offset_nonterminals = self.draw_past_from_present(
-                    self.ds.annotated_hashes, ColWidths(0, 0, 30, 100))
+                    self.ds.annotated_hashes, ColWidths(0, 0, 30, 100), [])
 
             self.box_structure = annotate_boxes_with_s_addresses(BoxNonTerminal(offset_nonterminals, []), [])
 
@@ -223,16 +223,13 @@ class HistoryWidget(FocusBehavior, Widget):
         Delete: 'D',
     }
 
-    def draw_past_from_present(self, steps_with_aliveness, col_widths):
-        """
-        s_path is an s_path at the level of the _history_
-        t_path is a t_path on the underlying structure (tree)
-        """
-
+    def draw_past_from_present(self, steps_with_aliveness, col_widths, s_path):
         per_step_offset_non_terminals = []
         offset_y = 0
 
         for i, (nout_hash, dissonant, aliveness, rhi) in enumerate(steps_with_aliveness):
+            this_s_path = s_path + [i]
+
             if aliveness == DELETED:
                 fg, bg = (WHITE, GUARDSMAN_RED)
             elif aliveness == DEAD:
@@ -245,7 +242,7 @@ class HistoryWidget(FocusBehavior, Widget):
             else:
                 fg, bg = (BLACK, WHITE)
 
-            if False:  # (if is_cursor) temporarily broken, because we've lost access to `s_path`
+            if this_s_path == self.ds.s_cursor:
                 fg, bg = (WHITE, BLACK)
 
             nout = self.stores.note_nout.get(nout_hash)
@@ -275,7 +272,7 @@ class HistoryWidget(FocusBehavior, Widget):
                     offset_x += col_width
 
             if rhi.t_address is not None:
-                recursive_result = self.draw_past_from_present(rhi.children_steps, col_widths)
+                recursive_result = self.draw_past_from_present(rhi.children_steps, col_widths, this_s_path)
                 non_terminals = [OffsetBox((offset_x, o[Y]), nt) for (o, nt) in recursive_result]
             else:
                 non_terminals = []
