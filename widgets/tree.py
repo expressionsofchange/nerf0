@@ -69,7 +69,6 @@ from dsn.viewports.structure import ViewportStructure, VRTC, ViewportContext
 from dsn.viewports.construct import play_viewport_note
 from dsn.viewports.clef import (
     ViewportContextChange,
-    ScrollToFraction,
     MoveViewportRelativeToCursor,
     CURSOR_TO_BOTTOM,
     CURSOR_TO_CENTER,
@@ -421,13 +420,6 @@ class TreeWidget(FocusBehavior, Widget):
                 note = MoveViewportRelativeToCursor(lookup[textual_code])
                 self.viewport_ds = play_viewport_note(note, self.viewport_ds)
                 self.invalidate()
-
-        # TODO The keycodes to demonstrate the PoC of scrolling are insanely bad; we must pick proper ones.
-        if textual_code in [str(i) for i in range(5, 10)]:
-            note = ScrollToFraction((int(textual_code) + 1) / 10)
-            self.viewport_ds = play_viewport_note(note, self.viewport_ds)
-            self.invalidate()
-        # END OF TODO
 
         if textual_code in ['z']:
             self.z_pressed = True
