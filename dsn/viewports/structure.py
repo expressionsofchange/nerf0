@@ -51,11 +51,6 @@ class ViewportStructure(object):
 
         # else implied: VRTC
 
-        viewport_position = viewport_position_for_vrtc_and_cursor_position(
+        return viewport_position_for_vrtc_and_cursor_position(
             self.internal_mode.viewport_offset,
             self.context.cursor_position)
-
-        return bounded_viewport(
-            self.context.document_size,
-            self.context.viewport_size,
-            viewport_position)

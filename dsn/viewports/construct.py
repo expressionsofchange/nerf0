@@ -11,13 +11,15 @@ from dsn.viewports.clef import (
 
 from dsn.viewports.structure import DocumentFraction, VRTC, ViewportStructure
 from dsn.viewports.utils import (
+    bounded_viewport,
     follow_cursor,
+    viewport_line_down,
+    viewport_line_up,
+    viewport_position_for_vrtc_and_cursor_position,
+    vrtc_bottom,
+    vrtc_center,
     vrtc_for_viewport_position_and_cursor_position,
     vrtc_top,
-    vrtc_center,
-    vrtc_bottom,
-    viewport_line_up,
-    viewport_line_down,
 )
 
 
@@ -76,9 +78,21 @@ def play_viewport_note(note, structure):
         else:
             raise Exception("Unknown type of relative move (programming error): %s" % note.relative_move)
 
+        # We bound the vrtc before storing it, to ensure there is no over- or underscrolling
+        unbounded_viewport_position = viewport_position_for_vrtc_and_cursor_position(
+            vrtc, structure.context.cursor_position)
+
+        bounded_viewport_position = bounded_viewport(
+                structure.context.document_size,
+                structure.context.viewport_size,
+                unbounded_viewport_position)
+
+        bounded_vrtc = vrtc_for_viewport_position_and_cursor_position(
+            bounded_viewport_position, structure.context.cursor_position)
+
         return ViewportStructure(
             context=structure.context,  # i.e. unchanged
-            internal_mode=VRTC(vrtc))
+            internal_mode=VRTC(bounded_vrtc))
 
     elif isinstance(note, ScrollToFraction):
         return ViewportStructure(
