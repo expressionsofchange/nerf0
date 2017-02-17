@@ -67,7 +67,16 @@ from colorscheme import (
 
 from dsn.viewports.structure import ViewportStructure, VRTC, ViewportContext
 from dsn.viewports.construct import play_viewport_note
-from dsn.viewports.clef import ViewportContextChange, ScrollToFraction, MoveViewportRelativeToCursor
+from dsn.viewports.clef import (
+    ViewportContextChange,
+    ScrollToFraction,
+    MoveViewportRelativeToCursor,
+    CURSOR_TO_BOTTOM,
+    CURSOR_TO_CENTER,
+    CURSOR_TO_TOP,
+    VIEWPORT_LINE_DOWN,
+    VIEWPORT_LINE_UP,
+)
 
 # TSTTCPW for keeping track of the state of our single-line 'vim editor'
 VimDS = namedtuple('VimDS', (
@@ -193,6 +202,9 @@ class TreeWidget(FocusBehavior, Widget):
         # too, e.g. viewport_ds has meaningful ViewportContext, because we don't know it yet
         self.ds = EditStructure(None, [], [], None)
         self.vim_ds = None
+
+        # at some point, we should generalize over "next keypress handlers" such as vim_ds & z_pressed
+        self.z_pressed = False
         self.viewport_ds = ViewportStructure(
             ViewportContext(0, 0, 0, 0),
             VRTC(0),  # The viewport starts out with the cursor on top.
@@ -320,6 +332,14 @@ class TreeWidget(FocusBehavior, Widget):
 
         code, textual_code = keycode
 
+        if modifiers == ['ctrl'] and textual_code in ['e', 'y']:
+            # For now, these are the only ctrl-key keys we handle; once we get more of those, they should get a better
+            # home.
+            note = MoveViewportRelativeToCursor({'e': VIEWPORT_LINE_UP, 'y': VIEWPORT_LINE_DOWN}[textual_code])
+            self.viewport_ds = play_viewport_note(note, self.viewport_ds)
+            self.invalidate()
+            return True
+
         also_on_textinput = (
                 [chr(ord('a') + i) for i in range(26)] +  # a-z
                 [chr(ord('0') + i) for i in range(10)] +  # 0-9
@@ -328,9 +348,9 @@ class TreeWidget(FocusBehavior, Widget):
         # these are modifier-keys; we don't independently deal with them, so we ignore them explicitly.
         # on my system, right-alt and right-super are not recognized at present; they show up as '' here;
         # (their keycodes are respectively 1073741925 and 1073742055)
-        modifiers = ['alt', 'alt-gr', 'lctrl', 'rctrl', 'rshift', 'shift', 'super', '']
+        modifier_keys = ['alt', 'alt-gr', 'lctrl', 'rctrl', 'rshift', 'shift', 'super', '']
 
-        if textual_code not in modifiers + also_on_textinput:
+        if textual_code not in modifier_keys + also_on_textinput:
             self.generalized_key_press(textual_code)
 
         return True
@@ -390,19 +410,29 @@ class TreeWidget(FocusBehavior, Widget):
             self.invalidate()
             return
 
-        # TODO The keycodes to demonstrate the PoC of scrolling are insanely bad; we must pick proper ones.
-        if textual_code in [str(i) for i in range(5)]:
-            note = MoveViewportRelativeToCursor(int(textual_code))
-            self.viewport_ds = play_viewport_note(note, self.viewport_ds)
-            self.invalidate()
+        if self.z_pressed:
+            self.z_pressed = False
+            if textual_code in ['z', 'b', 't']:
+                lookup = {
+                    'z': CURSOR_TO_CENTER,
+                    'b': CURSOR_TO_BOTTOM,
+                    't': CURSOR_TO_TOP,
+                }
+                note = MoveViewportRelativeToCursor(lookup[textual_code])
+                self.viewport_ds = play_viewport_note(note, self.viewport_ds)
+                self.invalidate()
 
+        # TODO The keycodes to demonstrate the PoC of scrolling are insanely bad; we must pick proper ones.
         if textual_code in [str(i) for i in range(5, 10)]:
             note = ScrollToFraction((int(textual_code) + 1) / 10)
             self.viewport_ds = play_viewport_note(note, self.viewport_ds)
             self.invalidate()
         # END OF TODO
 
-        if textual_code in ['left', 'h']:
+        if textual_code in ['z']:
+            self.z_pressed = True
+
+        elif textual_code in ['left', 'h']:
             self._handle_edit_note(CursorParent())
 
         elif textual_code in ['right', 'l']:
