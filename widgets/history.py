@@ -41,6 +41,7 @@ from widgets.utils import (
     BoxNonTerminal,
     BoxTerminal,
     bring_into_offset,
+    cursor_dimensions,
     from_point,
     OffsetBox,
     X,
@@ -58,8 +59,42 @@ from widgets.layout_constants import (
     PADDING,
 )
 
+from dsn.viewports.structure import ViewportStructure, VRTC, ViewportContext
+from dsn.viewports.construct import play_viewport_note
+from dsn.viewports.clef import (
+    ViewportContextChange,
+    MoveViewportRelativeToCursor,
+    CURSOR_TO_BOTTOM,
+    CURSOR_TO_CENTER,
+    CURSOR_TO_TOP,
+    VIEWPORT_LINE_DOWN,
+    VIEWPORT_LINE_UP,
+)
 
 ColWidths = namedtuple('ColWidths', ('my_hash', 'prev_hash', 'note', 'payload'))
+
+
+# steps: annotated hash w/ ...
+
+def get_annotated_hash_for_s_address(annotated_hashses, s_address, default=None):
+    # Copy/pasta of get_node_for_s_address; but adapted for the "annotated_hashses" interface
+    # A similar Ad Hoc function (which returns a list)
+
+    if len(s_address) == 0:
+        return default
+
+    i = s_address[0]
+
+    if i >= len(annotated_hashses) - 1:
+        return default
+
+    if len(s_address) == 1:
+        return annotated_hashses[i]
+
+    return get_annotated_hash_for_s_address(
+        annotated_hashses[i].recursive_information.children_steps,
+        s_address[1:],
+        default)
 
 
 class HistoryWidget(FocusBehavior, Widget):
@@ -87,6 +122,12 @@ class HistoryWidget(FocusBehavior, Widget):
 
         self.ds = EHStructure([], [0])
 
+        self.z_pressed = False
+        self.viewport_ds = ViewportStructure(
+            ViewportContext(0, 0, 0, 0),
+            VRTC(0),  # The viewport starts out with the cursor on top.
+        )
+
         self.bind(pos=self.invalidate)
         self.bind(size=self.invalidate)
 
@@ -99,6 +140,12 @@ class HistoryWidget(FocusBehavior, Widget):
         self.data_channel, do_kickoff = do_create()
         self.send_to_channel, self.close_channel = self.data_channel.connect(self.receive_from_parent)
 
+        # If we're bound to a different s_cursor in the parent tree, we unconditionally reset our own cursor:
+        self.ds = EHStructure(
+            self.ds.annotated_hashes,
+            [0],
+        )
+
         do_kickoff()
 
     def receive_from_parent(self, data):
@@ -110,13 +157,21 @@ class HistoryWidget(FocusBehavior, Widget):
     def update_nout_hash(self, nout_hash):
         new_annotated_hashes = self._trees(nout_hash)
 
-        # TODO here we can implement cursor_safe-guarding behaviors.
+        s_cursor = self.ds.s_cursor
+        if get_annotated_hash_for_s_address(new_annotated_hashes, s_cursor) is None:
+            # If the cursor is now out of bounds; fall back to the beginning
+            s_cursor = [0]
 
         self.ds = EHStructure(
             new_annotated_hashes,
-            self.ds.s_cursor,
+            s_cursor,
         )
 
+        self._construct_box_structure()
+
+        # If nout_hash update results in a cursor-reset, the desirable behavior is: follow the cursor; if the cursor
+        # remains the same, the value of user_moved_cursor doesn't matter. Hence: user_moved_cursor=True
+        self._update_viewport_for_change(user_moved_cursor=True)
         self.invalidate()
 
     def _handle_eh_note(self, eh_note):
@@ -145,6 +200,8 @@ class HistoryWidget(FocusBehavior, Widget):
             new_s_cursor,
         )
 
+        self._construct_box_structure()
+        self._update_viewport_for_change(user_moved_cursor=True)
         self.invalidate()
 
     def _trees(self, nout_hash):
@@ -167,7 +224,29 @@ class HistoryWidget(FocusBehavior, Widget):
 
         code, textual_code = keycode
 
-        if textual_code in ['left', 'h']:
+        if modifiers == ['ctrl'] and textual_code in ['e', 'y']:
+            # For now, these are the only ctrl-key keys we handle; once we get more of those, they should get a better
+            # home.
+            note = MoveViewportRelativeToCursor({'e': VIEWPORT_LINE_UP, 'y': VIEWPORT_LINE_DOWN}[textual_code])
+            self.viewport_ds = play_viewport_note(note, self.viewport_ds)
+            self.invalidate()
+
+        elif self.z_pressed:
+            self.z_pressed = False
+            if textual_code in ['z', 'b', 't']:
+                lookup = {
+                    'z': CURSOR_TO_CENTER,
+                    'b': CURSOR_TO_BOTTOM,
+                    't': CURSOR_TO_TOP,
+                }
+                note = MoveViewportRelativeToCursor(lookup[textual_code])
+                self.viewport_ds = play_viewport_note(note, self.viewport_ds)
+                self.invalidate()
+
+        elif textual_code in ['z']:
+            self.z_pressed = True
+
+        elif textual_code in ['left', 'h']:
             self._handle_eh_note(EHCursorParent())
 
         elif textual_code in ['right', 'l']:
@@ -182,6 +261,7 @@ class HistoryWidget(FocusBehavior, Widget):
         elif textual_code in ['t', 's']:
             # For now I've decided not to put these actions into the EH clef, because they are display-only.
             self.display_mode = textual_code
+            self._construct_box_structure()
             self.invalidate()
 
         elif textual_code in ['x', 'del']:
@@ -194,23 +274,40 @@ class HistoryWidget(FocusBehavior, Widget):
             Clock.schedule_once(self.refresh, -1)
             self._invalidated = True
 
+    def _update_viewport_for_change(self, user_moved_cursor):
+        # As it stands: _PURE_ copy-pasta from TreeWidget;
+        cursor_position, cursor_size = cursor_dimensions(self.box_structure, self.ds.s_cursor)
+
+        # In the below, all sizes and positions are brought into the positive integers; there is a mirroring `+` in the
+        # offset calculation when we actually apply the viewport.
+        context = ViewportContext(
+            document_size=self.box_structure.underlying_node.outer_dimensions[Y] * -1,
+            viewport_size=self.size[Y],
+            cursor_size=cursor_size * -1,
+            cursor_position=cursor_position * -1)
+
+        note = ViewportContextChange(
+            context=context,
+            user_moved_cursor=user_moved_cursor,
+        )
+        self.viewport_ds = play_viewport_note(note, self.viewport_ds)
+
+    def _construct_box_structure(self):
+        offset_nonterminals = self.draw_past_from_present(self.ds.annotated_hashes, ColWidths(0, 0, 30, 100), [])
+        self.box_structure = annotate_boxes_with_s_addresses(BoxNonTerminal(offset_nonterminals, []), [])
+
     def refresh(self, *args):
         # As it stands: _PURE_ copy-pasta from TreeWidget;
         """refresh means: redraw (I suppose we could rename, but I believe it's "canonical Kivy" to use 'refresh'"""
         self.canvas.clear()
 
-        self.offset = (self.pos[X], self.pos[Y] + self.size[Y])  # default offset: start on top_left
+        self.offset = (self.pos[X], self.pos[Y] + self.size[Y] + self.viewport_ds.get_position())
 
         with self.canvas:
             Color(1, 1, 1, 1)
             Rectangle(pos=self.pos, size=self.size,)
 
         with apply_offset(self.canvas, self.offset):
-            offset_nonterminals = self.draw_past_from_present(
-                    self.ds.annotated_hashes, ColWidths(0, 0, 30, 100), [])
-
-            self.box_structure = annotate_boxes_with_s_addresses(BoxNonTerminal(offset_nonterminals, []), [])
-
             self._render_box(self.box_structure.underlying_node)
 
         self._invalidated = False
@@ -386,6 +483,5 @@ class HistoryWidget(FocusBehavior, Widget):
         if clicked_item is not None:
             # THIS IS THE ONLY DIFFERENCE WHILE COPY/PASTING
             self._handle_eh_note(EHCursorSet(clicked_item.annotation))
-            self.invalidate()
 
         return True

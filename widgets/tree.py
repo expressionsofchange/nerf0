@@ -43,6 +43,7 @@ from vim import Vim, DONE_SAVE, DONE_CANCEL
 from widgets.utils import (
     annotate_boxes_with_s_addresses,
     apply_offset,
+    cursor_dimensions,
     from_point,
     no_offset,
     BoxNonTerminal,
@@ -93,35 +94,6 @@ INSERT_AFTER = 1
 # Multiline modes:
 LISPY = 0
 SINGLE_LINE = 1
-
-
-def cursor_dimensions(annotated_box_structure, s_address, y_offset=0):
-    """given a box_structure and a s_address to lookup return the looked up items' y_offset & height.
-    This function is used in the context of "following the cursor".
-
-    This is a bit of a kludge as it stands; I don't want to clean it up now though, because we're likely to rewrite the
-    drawing of cursors at some point in the future (i.e.: have the cursors be a separate layer), at which point we can
-    use that new functionality
-
-    (One observation about the kludgy nature of the present solution: we already know where the cursor is at the moment
-    of drawing; but we re-lookup that information at the present point).
-
-    Furhter ad hoc solutions are documented below.
-    """
-
-    if s_address == []:
-        # The cursor's height is (as of yet) just returned as a constant. Another attempt at a solution is commented
-        # out. It's wrong, because it returns the height of the whole subtree under consideration, rather than the
-        # height of the higlighted element.
-        # How this plays out in e.g. a lispy layout, I'm not sure yet (we may have to tie in the solution with the idea
-        # that in such a layout we visit the nodes twice (once for the opening bracket, once for the closing bracket)).
-        return y_offset, -40
-        # return y_offset, annotated_box_structure.underlying_node.outer_dimensions
-
-    o, nt = annotated_box_structure.underlying_node.offset_nonterminals[s_address[0]]
-    child = annotated_box_structure.children[s_address[0]]
-
-    return cursor_dimensions(child, s_address[1:], y_offset + o[Y])
 
 
 class InheritedRenderingInformation(object):
@@ -421,7 +393,7 @@ class TreeWidget(FocusBehavior, Widget):
                 self.viewport_ds = play_viewport_note(note, self.viewport_ds)
                 self.invalidate()
 
-        if textual_code in ['z']:
+        elif textual_code in ['z']:
             self.z_pressed = True
 
         elif textual_code in ['left', 'h']:

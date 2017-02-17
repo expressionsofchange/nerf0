@@ -1,5 +1,4 @@
 from dsn.viewports.utils import (
-    bounded_viewport,
     viewport_position_for_document_fraction,
     viewport_position_for_vrtc_and_cursor_position,
 )
