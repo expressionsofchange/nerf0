@@ -291,7 +291,7 @@ class HistoryWidget(FocusBehavior, Widget):
         self.viewport_ds = play_viewport_note(note, self.viewport_ds)
 
     def _construct_box_structure(self):
-        offset_nonterminals = self.draw_past_from_present(self.ds.annotated_hashes, ColWidths(0, 0, 30, 100), [])
+        offset_nonterminals = self.draw_past_from_present(self.ds.annotated_hashes, ColWidths(0, 0, 30, 250), [])
         self.box_structure = annotate_boxes_with_s_addresses(BoxNonTerminal(offset_nonterminals, []), [])
 
     def refresh(self, *args):

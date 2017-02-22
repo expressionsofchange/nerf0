@@ -363,10 +363,6 @@ class TreeWidget(FocusBehavior, Widget):
         least build on that.
         """
 
-        if self.closed:
-            # See the remarks in __init__
-            return
-
         if self.vim_ds is not None:
             self.vim_ds.vim.send(textual_code)
 
@@ -408,8 +404,9 @@ class TreeWidget(FocusBehavior, Widget):
         elif textual_code in ['down', 'j']:
             self._handle_edit_note(CursorDFS(1))
 
-        elif textual_code in ['n']:
-            self._create_child_window()
+        if self.closed:
+            # See the remarks in __init__
+            return
 
         cursor_node = node_for_s_address(self.ds.tree, self.ds.s_cursor)
         if cursor_node.broken:
@@ -418,7 +415,10 @@ class TreeWidget(FocusBehavior, Widget):
             # because it would mean "you cannot navigate away from the broken parts".
             return
 
-        if textual_code in ['q']:
+        if textual_code in ['n']:
+            self._create_child_window()
+
+        elif textual_code in ['q']:
             self._add_sibbling_text(INSERT_BEFORE)
 
         elif textual_code in ['w']:
