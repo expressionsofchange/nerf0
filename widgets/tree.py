@@ -314,7 +314,7 @@ class TreeWidget(FocusBehavior, Widget):
         also_on_textinput = (
                 [chr(ord('a') + i) for i in range(26)] +  # a-z
                 [chr(ord('0') + i) for i in range(10)] +  # 0-9
-                ['`', '-', '=',  ',', '.', '?', '/', "'", ';', '\\', 'spacebar', 'tab', ']', '['])
+                ['`', '-', '=',  ',', '.', '?', '/', "'", ':', ';', '\\', 'spacebar', 'tab', ']', '['])
 
         # these are modifier-keys; we don't independently deal with them, so we ignore them explicitly.
         # on my system, right-alt and right-super are not recognized at present; they show up as '' here;
