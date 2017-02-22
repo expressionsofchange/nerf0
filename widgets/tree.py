@@ -812,7 +812,7 @@ class TreeWidget(FocusBehavior, Widget):
         exception_s_address, exception_type, exception_value = exception
 
         # If we're not on the exception's branch, we proceed as usual.
-        if exception_s_address[len(s_address):] == s_address:
+        if exception_s_address[:len(s_address)] != s_address:
             return self.bottom_up_construct(f, node, s_address)
 
         constructed_children = []
