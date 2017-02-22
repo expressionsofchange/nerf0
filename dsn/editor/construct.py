@@ -10,7 +10,7 @@ from dsn.s_expr.utils import (
     replace_text_at,
 )
 
-from dsn.s_expr.clef import Delete
+from dsn.s_expr.clef import Delete, Insert
 
 from dsn.s_expr.structure import TreeNode
 
@@ -22,6 +22,7 @@ from dsn.editor.clef import (
     EDelete,
     InsertNodeChild,
     InsertNodeSibbling,
+    SwapSibbling,
     TextInsert,
     TextReplace,
 )
@@ -87,6 +88,31 @@ def edit_note_play(structure, edit_note):
 
         return new_s_cursor, posacts, False
 
+    if isinstance(edit_note, SwapSibbling):
+        if structure.s_cursor == []:
+            return an_error()  # root has no sibblings
+
+        parent = node_for_s_address(structure.tree, structure.s_cursor[:-1])
+        index = structure.s_cursor[-1] + edit_note.direction
+
+        if not (0 <= index <= len(parent.children) - 1):
+            return an_error()
+
+        # For now, SwapSibbling is simply implemented as a "delete and insert"; if (or when) we'll introduce "Move" into
+        # the Clef, we should note the move here.
+
+        parent_s_address = structure.s_cursor[:-1]
+        delete_at_index = structure.s_cursor[-1]
+        delete_from_hash = node_for_s_address(structure.tree, parent_s_address).metadata.nout_hash
+        reinsert_later_hash = node_for_s_address(structure.tree, structure.s_cursor).metadata.nout_hash
+
+        p0, hash_after_deletion = calc_possibility(NoteSlur(Delete(delete_at_index), delete_from_hash))
+        p1, hash_after_insertion = calc_possibility(NoteSlur(Insert(index, reinsert_later_hash), hash_after_deletion))
+
+        new_cursor = structure.s_cursor[:-1] + [index]
+        posacts = [p0, p1] + bubble_history_up(hash_after_insertion, structure.tree, parent_s_address)
+        return new_cursor, posacts, False
+
     def move_cursor(new_cursor):
         return new_cursor, [], False
 
@@ -100,10 +126,10 @@ def edit_note_play(structure, edit_note):
     """At some point I had "regular sibbling" (as opposed to DFS sibbling) in the edit_clef. It looks like this:
 
         if structure.s_cursor == []:
-            return an_error() # root has no sibblings
+            return an_error()  # root has no sibblings
 
         parent = node_for_s_address(structure.tree, s_cursor[:-1])
-        index = s_cursor[-1] + direction
+        index = s_cursor[-1] + edit_node.direction
 
         if not (0 <= index <= len(parent.children) - 1):
             return an_error()

@@ -20,6 +20,7 @@ from dsn.editor.clef import (
     InsertNodeSibbling,
     TextInsert,
     TextReplace,
+    SwapSibbling,
 )
 
 from dsn.editor.construct import edit_note_play, bubble_history_up
@@ -447,6 +448,12 @@ class TreeWidget(FocusBehavior, Widget):
             }
             pp_note_type = pp_map[textual_code]
             self._change_pp_style(pp_note_type)
+
+        elif textual_code in ['K']:
+            self._handle_edit_note(SwapSibbling(-1))
+
+        elif textual_code in ['J']:
+            self._handle_edit_note(SwapSibbling(1))
 
     def on_focus_change(self, widget, focus):
         if not focus and self.vim_ds is not None:

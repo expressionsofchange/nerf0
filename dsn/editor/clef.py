@@ -36,6 +36,11 @@ class TextInsert(EditNote):
         self.text = text
 
 
+class SwapSibbling(EditNote):
+    def __init__(self, direction):
+        self.direction = direction
+
+
 class EDelete(EditNote):
     pass
 
