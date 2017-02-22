@@ -45,6 +45,10 @@ class LeaveChildrenBehind(EditNote):
     pass
 
 
+class EncloseWithParent(EditNote):
+    pass
+
+
 class EDelete(EditNote):
     pass
 

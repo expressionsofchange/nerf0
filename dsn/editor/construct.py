@@ -1,6 +1,6 @@
 from s_address import node_for_s_address, s_dfs
 
-from dsn.s_expr.legato import NoteSlur
+from dsn.s_expr.legato import NoteSlur, NoteCapo
 
 from dsn.s_expr.utils import (
     bubble_history_up,
@@ -10,7 +10,7 @@ from dsn.s_expr.utils import (
     replace_text_at,
 )
 
-from dsn.s_expr.clef import Delete, Insert
+from dsn.s_expr.clef import Delete, Insert, Replace, BecomeNode
 
 from dsn.s_expr.structure import TreeNode
 
@@ -20,6 +20,7 @@ from dsn.editor.clef import (
     CursorParent,
     CursorSet,
     EDelete,
+    EncloseWithParent,
     InsertNodeChild,
     InsertNodeSibbling,
     LeaveChildrenBehind,
@@ -152,6 +153,40 @@ def edit_note_play(structure, edit_note):
                     new_cursor[len(new_cursor) - 1])
 
         posacts += bubble_history_up(hash_, structure.tree, parent_s_address)
+
+        return new_cursor, posacts, False
+
+    if isinstance(edit_note, EncloseWithParent):
+        cursor_node = node_for_s_address(structure.tree, structure.s_cursor)
+
+        if structure.s_cursor == []:
+            # I am not sure about this one yet: should we have the option to create a new root? I don't see any direct
+            # objections (by which I mean: it's possible in terms of the math), but I still have a sense that it may
+            # create some asymmetries. For now I'm disallowing it; we'll see whether a use case arises.
+            return an_error()
+
+        # For now, EncloseWithParent is simply implemented as a "replace with the parent"; if (or when) we'll introduce
+        # "Move" (in particular: the MoveReplace) into the Clef, we should note the move here.
+
+        parent_s_address = structure.s_cursor[:-1]
+        replace_at_index = structure.s_cursor[-1]
+        replace_on_hash = node_for_s_address(structure.tree, parent_s_address).metadata.nout_hash
+
+        reinsert_later_hash = node_for_s_address(structure.tree, structure.s_cursor).metadata.nout_hash
+
+        p_capo, hash_capo = calc_possibility(NoteCapo())
+        p_create, hash_create = calc_possibility(NoteSlur(BecomeNode(), hash_capo))
+
+        p_enclosure, hash_enclosure = calc_possibility(NoteSlur(Insert(0, reinsert_later_hash), hash_create))
+
+        p_replace, hash_replace = calc_possibility(
+            NoteSlur(Replace(replace_at_index, hash_enclosure), replace_on_hash))
+
+        posacts = [p_capo, p_create, p_enclosure, p_replace] + bubble_history_up(
+                hash_replace, structure.tree, parent_s_address)
+
+        # We jump the cursor to the newly enclosed location:
+        new_cursor = structure.s_cursor + [0]
 
         return new_cursor, posacts, False
 
