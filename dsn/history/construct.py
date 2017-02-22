@@ -92,9 +92,10 @@ def eh_note_play(possible_timelines, structure, edit_note):
 
         posacts.append(Actuality(last_hash))
 
-        # TODO Here we also need to update the cursor if we so desire. (At least: keep it inside the newly created
-        # bounds)
-        return structure.s_cursor, posacts, False
+        s_cursor = structure.s_cursor
+        if s_cursor[0] > len(structure.annotated_hashes) - 1 - 1:  # len-1 idiom and -1 for deletion
+            s_cursor = [len(structure.annotated_hashes) - 1 - 1]
+        return s_cursor, posacts, False
 
     # It seems a good idea to push for factoring out the commonalities between cursor movement in the HistoryWidget and
     # the TreeWidget.
