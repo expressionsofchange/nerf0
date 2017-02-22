@@ -125,7 +125,7 @@ class HistoryWidget(FocusBehavior, Widget):
         self.z_pressed = False
         self.viewport_ds = ViewportStructure(
             ViewportContext(0, 0, 0, 0),
-            VRTC(0),  # The viewport starts out with the cursor on top.
+            VRTC(0),
         )
 
         self.bind(pos=self.invalidate)
@@ -157,10 +157,8 @@ class HistoryWidget(FocusBehavior, Widget):
     def update_nout_hash(self, nout_hash):
         new_annotated_hashes = self._trees(nout_hash)
 
-        s_cursor = self.ds.s_cursor
-        if get_annotated_hash_for_s_address(new_annotated_hashes, s_cursor) is None:
-            # If the cursor is now out of bounds; fall back to the beginning
-            s_cursor = [0]
+        # For each "tree cursor" change, we reset our own cursor to the end (most recent item)
+        s_cursor = [len(new_annotated_hashes) - 1]
 
         self.ds = EHStructure(
             new_annotated_hashes,
