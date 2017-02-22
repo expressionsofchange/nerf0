@@ -664,8 +664,11 @@ class TreeWidget(FocusBehavior, Widget):
         clicked_item = from_point(self.box_structure, bring_into_offset(self.offset, (touch.x, touch.y)))
 
         if clicked_item is not None:
-            if self.vim_ds and clicked_item.annotation != self.vim_ds.s_address:
-                # Clicking on another node closes vim; we do this before cursor-set avoid undoing the cursor-set.
+            if self.vim_ds:
+                # Clicking on any node closes vim; we do this before cursor-set avoid undoing the cursor-set.
+                # (We don't have a conditional here "only if another node was clicked"; this is because in "Insert" mode
+                # vimd_ds messes up our addressing. (The real solution is likely: remove the special case for Insert
+                # mode)
                 self.apply_and_close_vim()
 
             self._handle_edit_note(CursorSet(clicked_item.annotation))
