@@ -158,6 +158,10 @@ class HistoryWidget(FocusBehavior, Widget):
         new_annotated_hashes = self._trees(nout_hash)
 
         # For each "tree cursor" change, we reset our own cursor to the end (most recent item)
+        # (because the final item may actually contain subitems, this does not necessarily put the viewport at the
+        # lowest possible position; this is something to be aware of because it might cause some confusion). At some
+        # point this may be automatically solved, e.g. if we change the behavior of cursor-following to be "follow the
+        # cursor, making sure it is in-view including the recursive subparts).
         s_cursor = [len(new_annotated_hashes) - 1]
 
         self.ds = EHStructure(
