@@ -18,6 +18,7 @@ from dsn.editor.clef import (
     EDelete,
     InsertNodeChild,
     InsertNodeSibbling,
+    LeaveChildrenBehind,
     TextInsert,
     TextReplace,
     SwapSibbling,
@@ -454,6 +455,9 @@ class TreeWidget(FocusBehavior, Widget):
 
         elif textual_code in ['J']:
             self._handle_edit_note(SwapSibbling(1))
+
+        elif textual_code in ['<']:
+            self._handle_edit_note(LeaveChildrenBehind())
 
     def on_focus_change(self, widget, focus):
         if not focus and self.vim_ds is not None:

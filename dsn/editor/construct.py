@@ -22,6 +22,7 @@ from dsn.editor.clef import (
     EDelete,
     InsertNodeChild,
     InsertNodeSibbling,
+    LeaveChildrenBehind,
     SwapSibbling,
     TextInsert,
     TextReplace,
@@ -111,6 +112,47 @@ def edit_note_play(structure, edit_note):
 
         new_cursor = structure.s_cursor[:-1] + [index]
         posacts = [p0, p1] + bubble_history_up(hash_after_insertion, structure.tree, parent_s_address)
+        return new_cursor, posacts, False
+
+    if isinstance(edit_note, LeaveChildrenBehind):
+        cursor_node = node_for_s_address(structure.tree, structure.s_cursor)
+        if not hasattr(cursor_node, 'children'):
+            return an_error()  # Leave _children_ behind presupposes the existance of children
+
+        if structure.s_cursor == []:
+            return an_error()  # Root cannot die
+
+        # For now, LeaveChildrenBehind is simply implemented as a "delete and insert"; if (or when) we'll introduce
+        # "Move" into the Clef, we should note the move here.
+
+        parent_s_address = structure.s_cursor[:-1]
+        delete_at_index = structure.s_cursor[-1]
+        delete_from_hash = node_for_s_address(structure.tree, parent_s_address).metadata.nout_hash
+
+        p, hash_ = calc_possibility(NoteSlur(Delete(delete_at_index), delete_from_hash))
+        posacts = [p]
+
+        removed_node = node_for_s_address(structure.tree, structure.s_cursor)
+        for i, child in enumerate(removed_node.children):
+            p, hash_ = calc_possibility(NoteSlur(Insert(structure.s_cursor[-1] + i, child.metadata.nout_hash), hash_))
+            posacts.append(p)
+
+        # In general, leaving the cursor at the same s_address will be great: post-deletion you'll be in the right spot
+        new_cursor = structure.s_cursor
+        if len(removed_node.children) == 0:
+            # ... however, if there are no children to leave behind... this "right spot" may be illegal
+            parent_node = node_for_s_address(structure.tree, parent_s_address)
+            if len(parent_node.children) == 1:
+                # if the deleted node was the only node: fall back to the parent
+                new_cursor = parent_s_address
+            else:
+                # otherwise, make sure to stay in bounds.
+                new_cursor[len(new_cursor) - 1] = min(
+                    len(parent_node.children) - 1 - 1,  # len - 1 idiom; -1 for deletion.
+                    new_cursor[len(new_cursor) - 1])
+
+        posacts += bubble_history_up(hash_, structure.tree, parent_s_address)
+
         return new_cursor, posacts, False
 
     def move_cursor(new_cursor):

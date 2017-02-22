@@ -41,6 +41,10 @@ class SwapSibbling(EditNote):
         self.direction = direction
 
 
+class LeaveChildrenBehind(EditNote):
+    pass
+
+
 class EDelete(EditNote):
     pass
 
