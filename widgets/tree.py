@@ -66,6 +66,7 @@ from colorscheme import (
     AQUA_GREEN,
     BLACK,
     CERISE,
+    LAUREL_GREEN,
     WHITE,
 )
 
@@ -80,6 +81,10 @@ from dsn.viewports.clef import (
     VIEWPORT_LINE_DOWN,
     VIEWPORT_LINE_UP,
 )
+
+from dsn.selection.clef import AttachDetach, SwitchToOtherEnd, ClearSelection, SelectionContextChange
+from dsn.selection.construct import selection_note_play
+from dsn.selection.structure import Selection
 
 # TSTTCPW for keeping track of the state of our single-line 'vim editor'
 VimDS = namedtuple('VimDS', (
@@ -183,6 +188,13 @@ class TreeWidget(FocusBehavior, Widget):
             ViewportContext(0, 0, 0, 0),
             VRTC(0),  # The viewport starts out with the cursor on top.
         )
+        self.selection_ds = Selection(
+            context=self.ds,
+            exists=False,  # no initial selection
+            attached_to=None,
+            edge_0=None,
+            edge_1=None,
+        )
 
         self.notify_children = {}
         self.next_channel_id = 0
@@ -213,6 +225,10 @@ class TreeWidget(FocusBehavior, Widget):
             # selected t_cursor is no longer valid)
             self.broadcast_cursor_update(t_address_for_s_address(self.ds.tree, self.ds.s_cursor))
 
+            # Note: in general the playing of SelectionNotes may affect the main structure too... but
+            # SelectionContextChange is guaranteed not to have that option (which makes it easier to think about the
+            # dataflow, because it's always unidirectional _per case_)
+            self.selection_ds = selection_note_play(SelectionContextChange(self.ds), self.selection_ds)
             self._construct_box_structure()
             self._update_viewport_for_change(user_moved_cursor=False)
             self.invalidate()
@@ -262,6 +278,17 @@ class TreeWidget(FocusBehavior, Widget):
         new_s_cursor, posacts, error = edit_note_play(self.ds, edit_note)
         self._update_internal_state_for_posacts(posacts, new_s_cursor, user_moved_cursor=True)
 
+    def _handle_selection_note(self, selection_note):
+        self.selection_ds = selection_note_play(selection_note, self.selection_ds)
+
+        # Selection changes may affect the main structure (i.e. if the selection changes the cursor_position). This
+        # information flows back into the main structure here (which is also why user_moved_cursor=True)
+        self.ds = self.selection_ds.context
+        self._construct_box_structure()
+
+        self._update_viewport_for_change(user_moved_cursor=True)
+        self.invalidate()
+
     def _update_internal_state_for_posacts(self, posacts, new_s_cursor, user_moved_cursor):
         last_actuality = None
 
@@ -283,6 +310,11 @@ class TreeWidget(FocusBehavior, Widget):
             self.ds.pp_annotations[:],
             construct_pp_tree(new_tree, self.ds.pp_annotations)
         )
+
+        # Note: in general the playing of SelectionNotes may affect the main structure too... but SelectionContextChange
+        # is guaranteed not to have that option (which makes it easier to think about the dataflow, because it's always
+        # unidirectional _per case_)
+        self.selection_ds = selection_note_play(SelectionContextChange(self.ds), self.selection_ds)
 
         # TODO we only really need to broadcast the new t_cursor if it has changed.
         self.broadcast_cursor_update(t_address_for_s_address(self.ds.tree, self.ds.s_cursor))
@@ -442,7 +474,9 @@ class TreeWidget(FocusBehavior, Widget):
         elif textual_code in ['x', 'del']:
             self._handle_edit_note(EDelete())
 
-        elif textual_code in ['u', 'i', 'o']:  # out of all the arbitrary keys, these are the most arbitrary :-)
+        # All the keys I've picked so far are quite arbitrary, and will at some point become configurable. Admittedly,
+        # the 3 keys below are the worst choices so far.
+        elif textual_code in ['u', 'i', 'o']:
             pp_map = {
                 'u': PPUnset,
                 'i': PPSetSingleLine,
@@ -462,6 +496,15 @@ class TreeWidget(FocusBehavior, Widget):
 
         elif textual_code in ['>']:
             self._handle_edit_note(EncloseWithParent())
+
+        elif textual_code in ['v']:
+            self._handle_selection_note(AttachDetach())
+
+        elif textual_code in ['V']:
+            self._handle_selection_note(SwitchToOtherEnd())
+
+        elif textual_code in ['b']:
+            self._handle_selection_note(ClearSelection())
 
     def on_focus_change(self, widget, focus):
         if not focus and self.vim_ds is not None:
@@ -520,6 +563,10 @@ class TreeWidget(FocusBehavior, Widget):
             pp_tree,
         )
 
+        # Note: in general the playing of SelectionNotes may affect the main structure too... but SelectionContextChange
+        # is guaranteed not to have that option (which makes it easier to think about the dataflow, because it's always
+        # unidirectional _per case_)
+        self.selection_ds = selection_note_play(SelectionContextChange(self.ds), self.selection_ds)
         self._construct_box_structure()
 
         # user_moved_cursor=False: [1] that's just factually not what happened; [2] this matches with the desirable
@@ -792,9 +839,13 @@ class TreeWidget(FocusBehavior, Widget):
 
         return BoxTerminal(instructions, bottom_right)
 
-    def colors_for_cursor(self, is_cursor, broken):
+    def colors_for_cursor(self, is_cursor, is_selection, broken):
         if is_cursor:
             return WHITE, BLACK
+
+        if is_selection:
+            return WHITE, LAUREL_GREEN
+
         if broken:
             return BLACK, CERISE
 
@@ -845,6 +896,13 @@ class TreeWidget(FocusBehavior, Widget):
         # of things that are very stable (and can therefore be cached).
         is_cursor = s_address == self.ds.s_cursor
 
+        # For now, we'll display only the selection's begin & end. Thinking about "what does this mean for the nodes
+        # lying 'in between'" is not quite trivial, because we're talking about a tree-structure. One possible answer
+        # _could be_: the "in between in the DFS / alfabetical ordering", but it's not quite clear that this is always
+        # the right answer. One argument in favor is: this is the way you're navigating. I'll postpone the decision once
+        # we get some more cases of "how is the selection actually used?"
+        is_selection = s_address in [self.selection_ds.edge_0, self.selection_ds.edge_1]
+
         # The lispy stuff is commented out in favor of the` _nt_for_node_as_todo_list`. This was the fastest route to
         # starting to use the editor myself. It also means that all the IRI annotations are ignored. Obviously: not a
         # permanent solution.
@@ -855,17 +913,17 @@ class TreeWidget(FocusBehavior, Widget):
         # else:  # SINGLE_LINE
         #     f = self._nt_for_node_single_line
 
-        return f(iri_annotated_node, children_nts, is_cursor)
+        return f(iri_annotated_node, children_nts, is_cursor, is_selection)
 
-    def _nt_for_node_single_line(self, iri_annotated_node, children_nts, is_cursor):
+    def _nt_for_node_single_line(self, iri_annotated_node, children_nts, is_cursor, is_selection):
         broken = iri_annotated_node.underlying_node.broken
         node = iri_annotated_node.underlying_node
 
         if isinstance(node, TreeText):
             return BoxNonTerminal([], [no_offset(
-                self._t_for_text(node.unicode_, self.colors_for_cursor(is_cursor, broken)))])
+                self._t_for_text(node.unicode_, self.colors_for_cursor(is_cursor, is_selection, broken)))])
 
-        t = self._t_for_text("(", self.colors_for_cursor(is_cursor, broken))
+        t = self._t_for_text("(", self.colors_for_cursor(is_cursor, is_selection, broken))
         offset_terminals = [
             no_offset(t),
         ]
@@ -878,25 +936,25 @@ class TreeWidget(FocusBehavior, Widget):
             offset_nonterminals.append(OffsetBox((offset_right, offset_down), nt))
             offset_right += nt.outer_dimensions[X]
 
-        t = self._t_for_text(")", self.colors_for_cursor(is_cursor, broken))
+        t = self._t_for_text(")", self.colors_for_cursor(is_cursor, is_selection, broken))
         offset_terminals.append(OffsetBox((offset_right, offset_down), t))
 
         return BoxNonTerminal(offset_nonterminals, offset_terminals)
 
-    def _nt_for_node_as_todo_list(self, iri_annotated_node, children_nts, is_cursor):
+    def _nt_for_node_as_todo_list(self, iri_annotated_node, children_nts, is_cursor, is_selection):
         broken = iri_annotated_node.underlying_node.broken
 
         node = iri_annotated_node.underlying_node
 
         if isinstance(node, TreeText):
             return BoxNonTerminal([], [no_offset(self._t_for_text(
-                node.unicode_, self.colors_for_cursor(is_cursor, broken)))])
+                node.unicode_, self.colors_for_cursor(is_cursor, is_selection, broken)))])
 
         if len(children_nts) == 0:
             return BoxNonTerminal([], [no_offset(self._t_for_text(
-                "* ...", self.colors_for_cursor(is_cursor, broken)))])
+                "* ...", self.colors_for_cursor(is_cursor, is_selection, broken)))])
 
-        t = self._t_for_text("*", self.colors_for_cursor(is_cursor, broken))
+        t = self._t_for_text("*", self.colors_for_cursor(is_cursor, is_selection, broken))
 
         nt = children_nts[0]
         offset_nonterminals = [
@@ -912,7 +970,7 @@ class TreeWidget(FocusBehavior, Widget):
 
         return BoxNonTerminal(offset_nonterminals, [no_offset(t)])
 
-    def _nt_for_node_as_lispy_layout(self, iri_annotated_node, children_nts, is_cursor):
+    def _nt_for_node_as_lispy_layout(self, iri_annotated_node, children_nts, is_cursor, is_selection):
         # "Lisp Style indentation, i.e. xxx yyy
         #                                   zzz
         broken = iri_annotated_node.underlying_node.broken
@@ -921,9 +979,9 @@ class TreeWidget(FocusBehavior, Widget):
 
         if isinstance(node, TreeText):
             return BoxNonTerminal([], [no_offset(self._t_for_text(
-                node.unicode_, self.colors_for_cursor(is_cursor, broken)))])
+                node.unicode_, self.colors_for_cursor(is_cursor, is_selection, broken)))])
 
-        t = self._t_for_text("(", self.colors_for_cursor(is_cursor, broken))
+        t = self._t_for_text("(", self.colors_for_cursor(is_cursor, is_selection, broken))
         offset_right = t.outer_dimensions[X]
         offset_down = 0
 
@@ -955,7 +1013,7 @@ class TreeWidget(FocusBehavior, Widget):
         else:
             offset_right = t.outer_dimensions[X]
 
-        t = self._t_for_text(")", self.colors_for_cursor(is_cursor, broken))
+        t = self._t_for_text(")", self.colors_for_cursor(is_cursor, is_selection, broken))
         offset_terminals.append(OffsetBox((offset_right, offset_down), t))
 
         return BoxNonTerminal(offset_nonterminals, offset_terminals)

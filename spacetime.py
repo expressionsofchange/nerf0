@@ -116,3 +116,8 @@ def _best_lookup(node, do_lookup, collect, lookup_value, _collected=None):
 
     child = node.children[s_index]
     return _best_lookup(child, do_lookup, collect, lookup_value[1:], _collected)
+
+
+def best_stable_s_over_time(tree_0, s_address, tree_1):
+    t_cursor = t_address_for_s_address(tree_0, s_address)
+    return best_s_address_for_t_address(tree_1, t_cursor)
