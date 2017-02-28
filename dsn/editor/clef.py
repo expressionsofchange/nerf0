@@ -53,6 +53,23 @@ class EDelete(EditNote):
     pass
 
 
+class MoveSelectionSibbling(EditNote):
+    # NOTE: both types of Move need access to the location of the selection, which is why we have those accessible as an
+    # attribute of those notes. It might also point at "maybe keeping selections outside of the main structure was a
+    # mistake"... if that turns out to be the case we can always refactor.
+
+    def __init__(self, selection_edge_0, selection_edge_1, direction):
+        self.selection_edge_0 = selection_edge_0
+        self.selection_edge_1 = selection_edge_1
+        self.direction = direction
+
+
+class MoveSelectionChild(EditNote):
+    def __init__(self, selection_edge_0, selection_edge_1):
+        self.selection_edge_0 = selection_edge_0
+        self.selection_edge_1 = selection_edge_1
+
+
 class CursorSet(EditNote):
     def __init__(self, s_address):
         self.s_address = s_address

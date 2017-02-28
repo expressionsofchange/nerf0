@@ -1,3 +1,10 @@
+"""
+Tools to "play notes for the editor clef", which may be thought of as "executing editor commands".
+
+NOTE: in the below, we often connect notes together "manually", i.e. using NoteSlur(..., previous_hash). As an
+alternative, we could consider `nouts_for_notes`.
+"""
+
 from s_address import node_for_s_address, s_dfs
 
 from dsn.s_expr.legato import NoteSlur, NoteCapo
@@ -8,6 +15,7 @@ from dsn.s_expr.utils import (
     insert_text_at,
     insert_node_at,
     replace_text_at,
+    weave_disjoint_replaces,
 )
 
 from dsn.s_expr.clef import Delete, Insert, Replace, BecomeNode
@@ -23,6 +31,8 @@ from dsn.editor.clef import (
     EncloseWithParent,
     InsertNodeChild,
     InsertNodeSibbling,
+    MoveSelectionChild,
+    MoveSelectionSibbling,
     LeaveChildrenBehind,
     SwapSibbling,
     TextInsert,
@@ -48,8 +58,10 @@ def edit_note_play(structure, edit_note):
         if structure.s_cursor == []:
             return an_error()  # adding sibblings to the root is not possible (it would lead to a forest)
 
-        # because direction is in [0, 1]... no need to minimize/maximize (PROVE!)
-        # (Of course, that _does_ depend on the direction being in the 0, 1 range :-P )
+        # There is no need to check that the new index is a valid one. (Assuming: the cursor is valid, and direction is
+        # in the range [0, 1]; such assumptions fit with the general idea of "we only check that the user's command can
+        # be executed at this point, we do not check for arbitrary programming errors here). The proof flows directly
+        # from the idea that, for lists of length n, insertions at [0, n] are valid (insertion at n being an append).
         index = structure.s_cursor[-1] + edit_note.direction
 
         posacts = insert_node_at(structure.tree, structure.s_cursor[:-1], index)
@@ -114,6 +126,22 @@ def edit_note_play(structure, edit_note):
         new_cursor = structure.s_cursor[:-1] + [index]
         posacts = [p0, p1] + bubble_history_up(hash_after_insertion, structure.tree, parent_s_address)
         return new_cursor, posacts, False
+
+    if isinstance(edit_note, MoveSelectionChild):
+        cursor_node = node_for_s_address(structure.tree, structure.s_cursor)
+
+        if not hasattr(cursor_node, 'children'):
+            return an_error()  # The target must be a node to be able to add as a child
+
+        return do_move(structure, edit_note, structure.s_cursor, len(cursor_node.children))
+
+    if isinstance(edit_note, MoveSelectionSibbling):
+        if len(structure.s_cursor) == 0:
+            return an_error()  # there is no sibbling of the root node
+
+        # edit_note.direction points to a valid insertion point for the same reasons detailed in the comment on
+        # InsertNodeSibbling
+        return do_move(structure, edit_note, structure.s_cursor[:-1], structure.s_cursor[-1] + edit_note.direction)
 
     if isinstance(edit_note, LeaveChildrenBehind):
         cursor_node = node_for_s_address(structure.tree, structure.s_cursor)
@@ -227,3 +255,123 @@ def edit_note_play(structure, edit_note):
         return move_cursor(structure.s_cursor + [0])
 
     raise Exception("Unknown Note")
+
+
+def do_move(structure, edit_note, target_parent_path, target_index):
+    selection_edge_0 = edit_note.selection_edge_0
+    selection_edge_1 = edit_note.selection_edge_1
+
+    def an_error():
+        return structure.s_cursor, [], True
+
+    if selection_edge_0[:-1] != selection_edge_1[:-1]:
+        # i.e. if not same-parent: this is an error. This may very well be too restrictive, but I'd rather move in the
+        # direction of "relax constraints later" than in the other directions. One particular reason I'm so restrictive
+        # for now: if I ever want to express a note "move" using a target_node, a source node and to indices in the
+        # source node, such a single-parent restriction is indeed a necessity.
+
+        # Note that "single parent" implies "same depth", but not vice versa. One possible relaxation is: make the
+        # restriction on "same depth" instead.
+
+        # Generally, the paths towards relaxation are to either [a] "be smart about the meaning of the selection's
+        # edges", i.e. find the first common ancestor and the relevant children of that ancestor or [b] to not care so
+        # much about single-parent.
+
+        return an_error()
+
+    if selection_edge_0 <= (target_parent_path + [target_index])[:len(selection_edge_0)] <= selection_edge_1:
+        # If the full target location, truncated to the length of the sources, is (inclusively) in the source's range,
+        # you're trying to move to [a descendant of] yourself. This is illegal. Moving something to a child of itself:
+        # I simply don't know what it would mean. Moving something to the same location (single source item, target path
+        # identical to the source path) could at least be understood to mean the no-op, so it's slightly less
+        # meaningless, but here I don't find that enough, so I'm just calling both scenarios error-scenarios.
+
+        # This implies protection against moving the root node around (because everything descends from the root node)
+        return an_error()
+
+    source_parent_path = selection_edge_0[:-1]
+    source_parent = node_for_s_address(structure.tree, source_parent_path)
+
+    target_parent = node_for_s_address(structure.tree, target_parent_path)
+
+    # For now, the "edit move" operations are simply implemented as a "insert and delete"; if (or when) we'll introduce
+    # "Move" into the Clef, we should note the move here.
+
+    posacts = []
+
+    source_index_lo, source_index_hi = sorted([selection_edge_0[-1], selection_edge_1[-1]])
+
+    hash_ = target_parent.metadata.nout_hash
+
+    for target_offset, source_index in enumerate(range(source_index_lo, source_index_hi + 1)):  # edge-inclusive range
+        insert_hash = node_for_s_address(structure.tree, source_parent_path + [source_index]).metadata.nout_hash
+        p, hash_ = calc_possibility(NoteSlur(Insert(target_index + target_offset, insert_hash), hash_))
+
+        posacts.append(p)
+
+    weave_correction = 0
+    cursor_correction = 0
+
+    # TODO this part is still broken:
+
+    # Not only if the parents are exactly the same, but also if one parent is a prefix of the other (said differently:
+    # the longest_common_prefix of both parents matches one of them).
+
+    # In that case, we need to somehow connect the parents....
+
+    # (For the case of "parents match exactly", I did this using the idea "just don't reset hash_"... which works,
+    # because it allows you to continue operating on the the same "future". But in the case of shared prefix, this won't
+    # work.
+    if source_parent_path != target_parent_path:
+        wdr_hash = hash_
+        hash_ = source_parent.metadata.nout_hash
+
+    else:
+        if target_index < source_index_lo:
+            # We insert before we delete. If we do this on the same parent, and the insertions happen at lower indices
+            # than the deletions, they will affect the locations where the deletions must take place, by precisely the
+            # number of insertions that happened. (If we reverse the order of operations, we have the opposite problem)
+
+            # The reason we have this problem at all, is because we implement something that is atomic from the user's
+            # point of view in a non-atomic way in the clef. The problem may auto-disappear if we add "Move" to the
+            # clef.
+
+            # Another way we could handle the problem is once we have some tools to "realinearize while preserving
+            # meaning". I.e. we have deletions, we have insertions: at one point (e.g. once we build the cooperative
+            # editor) we should be able to express "weave those together, rewriting indices as required".
+
+            # In the if-statement above, we could pick either lo/hi for the comparison; source_index_lo and
+            # source_index_hi will never straddle target_index, because of the child-of-yourself checks at the top.
+
+            weave_correction = source_index_hi - source_index_lo + 1
+        else:
+            cursor_correction = source_index_hi - source_index_lo + 1
+
+        # we do _not_ fetch hash_ here, the idea being: it's the hash we just created.
+        # nor do we bubble up (yet); we can do a single bubble-up
+
+    for source_index in range(source_index_lo, source_index_hi + 1):  # edge-inclusive range
+        # Note: we just Delete n times at the "lo" index (everything shifting to the left after each deletion)
+        p, hash_ = calc_possibility(NoteSlur(Delete(source_index_lo + weave_correction), hash_))
+        posacts.append(p)
+
+    if source_parent_path != target_parent_path:
+        posacts = posacts + weave_disjoint_replaces(
+            structure.tree,
+            target_parent_path, wdr_hash,
+            source_parent_path, hash_)
+
+    else:
+        posacts = posacts + bubble_history_up(hash_, structure.tree, source_parent_path)
+
+    # The current solution for "where to put the cursor after the move" is "at the end". This "seems intuitive" (but
+    # that may just be habituation). In any case, it's wat e.g. LibreOffice does when cut/pasting. (However, for a
+    # mouse-drag initiated move in LibreOffice, the selection is preserved).
+
+    # As it stands: the selection disappears automatically, because it points at a no-longer existing location.  If we
+    # want to make the selection appear at the target-location, we need to change the interface of edit_note_play to
+    # include the resulting selection.
+
+    new_cursor = target_parent_path + [target_index + target_offset - cursor_correction]
+
+    return new_cursor, posacts, False

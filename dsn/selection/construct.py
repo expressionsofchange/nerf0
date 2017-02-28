@@ -1,4 +1,4 @@
-from spacetime import best_stable_s_over_time
+from spacetime import get_stable_s_over_time
 
 from dsn.selection.clef import AttachDetach, SwitchToOtherEnd, ClearSelection, SelectionContextChange
 from dsn.selection.structure import Selection
@@ -13,17 +13,24 @@ def selection_note_play(note, structure):
         if not structure.exists:
             return Selection(note.context, False, None, None, None)
 
-        # We map bost edges (if the cursor is attached that takes preference using the overrides below) to be stable
-        # over time. An alternative might be: when mapping over time isn't possible (e.g. deletion): cancel the whole
-        # selection.
-        edge_0 = best_stable_s_over_time(structure.context.tree, structure.edge_0, note.context.tree)
-        edge_1 = best_stable_s_over_time(structure.context.tree, structure.edge_1, note.context.tree)
+        edge_0 = get_stable_s_over_time(structure.context.tree, structure.edge_0, note.context.tree)
+        edge_1 = get_stable_s_over_time(structure.context.tree, structure.edge_1, note.context.tree)
 
         if structure.attached_to == 0:
             edge_0 = note.context.s_cursor
 
         if structure.attached_to == 1:
             edge_1 = note.context.s_cursor
+
+        if edge_0 is None or edge_1 is None:
+            # if either of the edges no longer exists in the new context: remove the selection
+            return Selection(
+                context=note.context,
+                exists=False,
+                attached_to=None,
+                edge_0=None,
+                edge_1=None,
+                )
 
         return Selection(
             context=note.context,

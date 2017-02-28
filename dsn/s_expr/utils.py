@@ -12,7 +12,7 @@ nouts_for_notes:
 
 from hashstore import NoutAndHash
 from posacts import Possibility, Actuality
-from s_address import node_for_s_address
+from s_address import node_for_s_address, longest_common_prefix
 
 from dsn.s_expr.legato import NoteCapo, NoteSlur, NoteNoutHash
 from dsn.s_expr.clef import (
@@ -99,6 +99,16 @@ def some_more_cut_paste(possible_timelines, edge_nout_hash, cut_nout_hash, paste
 def bubble_history_up(hash_to_bubble, tree, s_address):
     """Recursively replace history to reflect a change (hash_to_bubble) at a lower level (s_address)"""
 
+    posacts, final_hash = _bubble_history_up(hash_to_bubble, tree, s_address)
+
+    # The root node (s_address=[]) itself cannot be replaced, its replacement is represented as "Actuality updated"
+    posacts.append(calc_actuality(final_hash))
+    return posacts
+
+
+def _bubble_history_up(hash_to_bubble, tree, s_address):
+    """Like bubble_history_up; but keeping the "final actuality's hash" separate in the return-type"""
+
     posacts = []
     for i in reversed(range(len(s_address))):
         # We slide a window of size 2 over the s_address from right to left, like so:
@@ -118,9 +128,39 @@ def bubble_history_up(hash_to_bubble, tree, s_address):
 
         posacts.append(p)
 
-    # The root node (s_address=[]) itself cannot be replaced, its replacement is represented as "Actuality updated"
-    posacts.append(calc_actuality(hash_to_bubble))
-    return posacts
+    return posacts, hash_to_bubble
+
+
+def weave_disjoint_replaces(tree, s_address_0, hash_0, s_address_1, hash_1):
+    """If multiple in-place replaces are made at disjoint locations in the tree, these can be joint without them
+    interfering with one another. Disjoint means: none of the provided paths is a prefix of any of the others.
+
+    """
+
+    assert s_address_0[:len(s_address_1)] != s_address_1
+    assert s_address_1[:len(s_address_0)] != s_address_0
+
+    join_point_address = longest_common_prefix(s_address_0, s_address_1)
+
+    tree_0 = node_for_s_address(tree, s_address_0[:len(join_point_address) + 1])
+    tree_1 = node_for_s_address(tree, s_address_1[:len(join_point_address) + 1])
+
+    posacts_0, actuality_hash_0 = _bubble_history_up(hash_0, tree_0, s_address_0[len(join_point_address) + 1:])
+    posacts_1, actuality_hash_1 = _bubble_history_up(hash_1, tree_1, s_address_1[len(join_point_address) + 1:])
+
+    join_point_node = node_for_s_address(tree, s_address_0[:len(join_point_address)])
+
+    p0, hash_0 = calc_possibility(
+        NoteSlur(Replace(s_address_0[len(join_point_address)], actuality_hash_0), join_point_node.metadata.nout_hash))
+
+    p1, hash_1 = calc_possibility(
+        NoteSlur(Replace(s_address_1[len(join_point_address)], actuality_hash_1), hash_0))
+
+    # ... if you stop the function here here... (returning posacts so far, hash_1, join_point_address), you could
+    # generalize into n-weave
+    posacts_joint, joint_actuality_hash = _bubble_history_up(hash_1, tree, join_point_address)
+
+    return posacts_0 + posacts_1 + [p0] + [p1] + posacts_joint + [calc_actuality(joint_actuality_hash)]
 
 
 # TODO: insert_xxx_at: I see a pattern here!

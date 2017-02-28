@@ -19,6 +19,8 @@ from dsn.editor.clef import (
     EncloseWithParent,
     InsertNodeChild,
     InsertNodeSibbling,
+    MoveSelectionChild,
+    MoveSelectionSibbling,
     LeaveChildrenBehind,
     TextInsert,
     TextReplace,
@@ -470,6 +472,22 @@ class TreeWidget(FocusBehavior, Widget):
 
         elif textual_code in ['d']:
             self._handle_edit_note(InsertNodeSibbling(INSERT_AFTER))
+
+        elif textual_code in ['A', 'S', 'D']:
+            if not self.selection_ds.exists:
+                return
+
+            if textual_code in ['A']:
+                self._handle_edit_note(
+                    MoveSelectionSibbling(self.selection_ds.edge_0, self.selection_ds.edge_1, INSERT_BEFORE))
+
+            elif textual_code in ['S']:
+                self._handle_edit_note(
+                    MoveSelectionChild(self.selection_ds.edge_0, self.selection_ds.edge_1))
+
+            elif textual_code in ['D']:
+                self._handle_edit_note(MoveSelectionSibbling(
+                    self.selection_ds.edge_0, self.selection_ds.edge_1, INSERT_AFTER))
 
         elif textual_code in ['x', 'del']:
             self._handle_edit_note(EDelete())

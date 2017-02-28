@@ -59,3 +59,12 @@ def s_dfs(node, s_address):
             result.extend(s_dfs(child, s_address + [i]))
 
     return result
+
+
+def longest_common_prefix(s_address_0, s_address_1):
+    result = []
+    for i0, i1 in zip(s_address_0, s_address_1):
+        if i0 != i1:
+            break
+        result.append(i0)
+    return result
