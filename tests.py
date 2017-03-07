@@ -29,6 +29,7 @@ def load_tests(loader, tests, ignore):
     tests.addTests(doctest.DocFileSuite("doctests/construct_x.txt"))
     tests.addTests(doctest.DocFileSuite("doctests/construct_y.txt"))
     tests.addTests(doctest.DocFileSuite("doctests/h_utils.txt"))
+    tests.addTests(doctest.DocFileSuite("doctests/unambiguous_weaving.txt"))
 
     return tests
 
