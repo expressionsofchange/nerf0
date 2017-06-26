@@ -8,22 +8,38 @@ from collections import namedtuple
 from itertools import takewhile
 
 from dsn.s_expr.construct_x import construct_x
-from dsn.s_expr.clef import Insert, Delete, Replace
+from dsn.s_expr.clef import Insert, Delete, Replace, BecomeNode, TextBecome
 from dsn.s_expr.legato import NoteSlur
 from dsn.s_expr.utils import calc_possibility
 
 
 RelevantTAddresses = namedtuple('RelevantTAddresses', (
+    'beginnings',
     'insertion_edges',
     'deletions',
     'replacements',
     ))
 
 
+def nout_hashes_are_chronlogical(possible_timelines, list_of_nout_hashes):
+    # NOTE: performance charactaristics for the case False potentially horrible (check of the full history)
+
+    pointer = len(list_of_nout_hashes) - 1
+
+    for nh_tup in possible_timelines.all_nhtups_for_nout_hash(list_of_nout_hashes[-1]):
+        if nh_tup.nout_hash == list_of_nout_hashes[pointer]:
+            pointer -= 1
+            if pointer == -1:
+                return True
+
+    return False
+
+
 def collect_t_addresses(m, stores, tree, note_nout_hashes):
+    beginnings = False
     insertion_edges = []
     deletions = []
-    replacements = []
+    replacements = {}
 
     for note_nout_hash in note_nout_hashes:
         note = stores.note_nout.get(note_nout_hash).note
@@ -39,19 +55,24 @@ def collect_t_addresses(m, stores, tree, note_nout_hashes):
             deletions.append(tree.s2t[note.index])
 
         elif isinstance(note, Replace):
-            replacements.append(tree.s2t[note.index])
+            t_address = tree.s2t[note.index]
+            if t_address not in replacements:
+                replacements[t_address] = [tree.children[note.index].metadata.nout_hash]
 
+            replacements[t_address].append(note.nout_hash)
+
+        elif isinstance(note, BecomeNode) or isinstance(note, TextBecome):
+            # Any kind of becomming is unmergeable: encountering it while looking at one of the branches of history
+            # implies that there is no shared history.
+            beginnings = True
         else:
-            # Note: "Become*" is not to be expected: you can only become once at the beginning, which means that
-            # Becoming cannot happen in divergent histories.
-            # TODO: check whether this is still the case once we implement the recursive version w/ Replace
             raise Exception("Unexpected note: %s" % type(note))
 
         # we look at the pre-note_play tree for our addressess (in particular required to be able to deal with Delete);
         # hence we fetch tree at the end of the loop.
         tree = construct_x(m, stores, note_nout_hash)
 
-    return RelevantTAddresses(insertion_edges, deletions, replacements)
+    return RelevantTAddresses(beginnings, insertion_edges, deletions, replacements)
 
 
 def hashes_between(stores, new_hash, older_hash_not_included):
@@ -78,6 +99,46 @@ def is_valid_double_edge(m, stores, pod, nout_hash_0, nout_hash_1):
     c1 = collect_t_addresses(m, stores, tree_at_pod, timeline_1)
 
     for one, other in [(c0, c1), (c1, c0)]:
+        if one.beginnings:
+            problems.add("Beginning a new history implies merging is impossible.")
+
+        for i in one.deletions:
+            # TODO max_t_at_pod must be considered.
+
+            if i in other.deletions:
+                problems.add("Deletion w/ t_address=%s was deleted in both histories" % i)
+
+            if i in other.replacements.keys():
+                problems.add("Deletion w/ t_address=%s was replaced in the other history" % i)
+
+        for t_address, hashes in one.replacements.items():
+            # TODO max_t_at_pod must be considered.
+
+            if t_address in other.replacements:
+                these_hashes = one.replacements[t_address]
+                other_hashes = other.replacements[t_address]
+
+                # The pre-first-replace hash is put into replacements on the first replacement, a fact that we use twice
+                # here:
+                # * we check that the first replacement is a chronological extension of the pre-replacecement situation
+                # * (below) we use these_hashes[0] to know what the POD is.
+
+                if (not nout_hashes_are_chronlogical(stores.note_nout, these_hashes) or
+                        not nout_hashes_are_chronlogical(stores.note_nout, other_hashes)):
+
+                    problems.add("""When merging Replace, both timelines must only operate in extend-only """
+                                 """(chronological) mode, (%s)""" % t_address)
+                    continue
+
+                recursive_ok, recursive_problems = is_valid_double_edge(
+                    m, stores, these_hashes[0], these_hashes[-1], other_hashes[-1])
+
+                if not recursive_ok:
+                    # NOTE: The error-message below might grow very large, we may have to come up with a cunning plan
+                    # to display it in a readable manner.
+                    problems.add(
+                        "The replacements at %s cannot be merged, because %s" % (t_address, recursive_problems))
+
         for left, right in one.insertion_edges:
             if left in ['begin', 'end'] or left <= max_t_at_pod:
                 if left in other.deletions:
@@ -211,7 +272,8 @@ def uw_double_edge(m, stores, pod, nout_hash_0, nout_hash_1, ordering_mechanism)
             joint_note = Delete(joint_tree.t2s[t_in_joint_history[tree.s2t[note.index]]])
 
         elif isinstance(note, Replace):
-            raise NotImplemented()  # TODO
+            # Apply the same address mapping as for deletes
+            joint_note = Replace(joint_tree.t2s[t_in_joint_history[tree.s2t[note.index]]], note.nout_hash)
 
         # Advance the relevant tree with the loop.
         if which_timeline == 0:

@@ -5,7 +5,7 @@
 >>> from dsn.s_expr.construct_x import construct_x
 >>> from dsn.s_expr.clef import BecomeNode, TextBecome, Delete
 >>> from dsn.s_expr.legato import NoteNout, NoteCapo, NoteNoutHash
->>> from dsn.s_expr.test_utils import iinsert
+>>> from dsn.s_expr.test_utils import iinsert, rreplace
 >>> from dsn.s_expr.utils import nouts_for_notes, nouts_for_notes_da_capo
 >>> from dsn.historiography.legato import HistoriographyNoteNoutHash, HistoriographyNoteNout, HistoriographyNoteCapo
 >>> 
@@ -79,7 +79,7 @@ history_0: Insert a new element _before_ the only already existing element
 f79c552925af
 >>> nout_hash_0 = nh.nout_hash
 >>> 
->>> # history_0: Insert a new element _after_ the only already existing element
+>>> # history_1: Insert a new element _after_ the only already existing element
 ... history_1 = nouts_for_notes([
 ...     iinsert(p, 1, [TextBecome("after")]),
 ...     ], last_shared_hash)
@@ -103,6 +103,62 @@ Result 15b1b99141b2
 (before reference after)
 >>> 
 >>> 
+
+history_1: Replace the only already existing element
+
+>>> history_1 = nouts_for_notes([
+...     rreplace(p, 0, [TextBecome("replaced")]),
+...     ], last_shared_hash)
+>>> 
+>>> for nh in history_1:
+...     p.add(nh.nout)
+... 
+9024fe2a206b
+>>> nout_hash_1 = nh.nout_hash
+>>> 
+>>> for posact in uw_double_edge(m, stores, last_shared_hash, nout_hash_0, nout_hash_1, [0, 1]):
+...     if isinstance(posact, Possibility):
+...         p.add(posact.nout)
+...     if isinstance(posact, Actuality):
+...         print("Result", posact.nout_hash)
+... 
+f79c552925af
+f1fc2d0a3c54
+Result f1fc2d0a3c54
+>>> print(construct_x(m, stores, posact.nout_hash))
+(before replaced)
+
+if history_0 is a deletion, replacing in history_1 is illegal
+
+>>> history_0 = nouts_for_notes([Delete(0)], last_shared_hash)
+>>> 
+>>> for nh in history_0:
+...     p.add(nh.nout)
+... 
+3434657dd879
+>>> nout_hash_0 = nh.nout_hash
+>>> 
+>>> is_valid_double_edge(m, stores, last_shared_hash, nout_hash_0, nout_hash_1)
+(False, 'Deletion w/ t_address=0 was replaced in the other history')
+
+The history-less nature of (the current choice for) TextBecome means it can never be merged: a new replace is always
+non-chronological with the existing history (it present a fully new history, starting with a new "Become")
+(We use TextBecome as an arbitrary example of non-chronological merges of replaces, but the same applies to any
+non-chronological replace)
+
+>>> history_0 = nouts_for_notes([
+...     rreplace(p, 0, [TextBecome("replaced differently")]),
+...     ], last_shared_hash)
+>>> 
+>>> for nh in history_0:
+...     p.add(nh.nout)
+... 
+f3ae92534ae6
+>>> nout_hash_0 = nh.nout_hash
+>>> 
+>>> is_valid_double_edge(m, stores, last_shared_hash, nout_hash_0, nout_hash_1)
+(False, 'When merging Replace, both timelines must only operate in extend-only (chronological) mode, (0)')
+
 
 ## Shared History: a multiple children
 
@@ -195,4 +251,8 @@ f1831aba68dc
 Result f1831aba68dc
 >>> print(construct_x(m, stores, posact.nout_hash))
 (1 inserted 2 4)
+
+
+Blah....
+
 
