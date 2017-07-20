@@ -72,22 +72,24 @@ class Form(object):
 
 class MalformedForm(Form):
     # Potentially: also add various _specific_ malformednesses, like "Lambda with non-3 params", or "Lambda of which the
-    # first parameter is not a list of symbols"
+    # parameter list is not a list of symbols.
 
     # For now, the only actual malformed s-expression I can think of is: the empty list. One could also say: that's
     # simply a case of an application without either a procedure nor any arguments. I.e. a non-3-lambda.
     pass
 
 
-class SymbolForm(Form):
+class ReferenceForm(Form):
+    # A.K.A. Variable, A.K.A. VariableUsage
+
     def __init__(self, symbol):
-        # Type: TBD (any of: underlying 's-expr' text atom or something more close to the actual value)
-        self.symbol = symbol
+        self.symbol = symbol  # :: Symbol
 
 
 class ValueForm(Form):
     def __init__(self, value):
-        # Type: TBD (any of: underlying 's-expr' text atom or something more close to the actual value)
+        # Type: TBD (any of: underlying 's-expr' text atom or something more close to the actual value. Whether we
+        # attempt to already make the step from pieces of text to e.g. numbers is TBD (probably not))
         self.value = value
 
 
@@ -104,6 +106,13 @@ class IfForm(Form):
         self.alternative = alternative  # :: Form
 
 
+class DefineForm(Form):
+
+    def __init__(self, variable, definition):
+        self.variable = variable  # :: Symbol
+        self.definition = definition  # :: Form
+
+
 class LambdaForm(Form):
     def __init__(self, parameters, body):
         self.parameters = parameters  # :: [Symbol]
@@ -112,5 +121,27 @@ class LambdaForm(Form):
 
 class ApplicationForm(Form):
     def __init__(self, procedure, arguments):
-        self.procedure = procedure  # is this the correct name?
-        self.arguments = arguments  # or: [formal] parameters?
+        self.procedure = procedure  # :: Form
+        self.arguments = arguments  # :: FormList
+
+
+# Below this line: _not_ Form, but used as a part of a Form. May still have its own independent history.
+class FormList(object):
+    def __init__(self):
+        # pass the list? Probably!
+        pass
+
+
+class Symbol(object):
+    # A single symbol,
+
+    def __init__(self, symbol):
+        # Type: TBD (any of: underlying 's-expr' text atom or something more close to the actual value)
+        # In the end it doesn't matter much what we choose here.
+        self.symbol = symbol
+
+
+class SymbolList(object):
+    def __init__(self):
+        # pass the list? Probably!
+        pass
