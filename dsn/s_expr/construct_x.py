@@ -11,10 +11,10 @@ def x_note_play(note, structure, recurse, metadata):
     :: .... => tree
 
     Note an assymmetry between the *Become* notes and the others; the former requiring nothingness to precede them,
-    the latter requiring an existing structure to further manipulate.
+    the latter requiring an existing structure to further manipulate. At some point we might harmonize.
 
-    Note on an asymmetry with y_note_play: here we have included it as an attribute of the treenodes, in y_note_play we
-    pass around is_dissonent as an explicit paratemer/result-element,
+    Note on an asymmetry with y_note_play: here we have included `is_dissonent` as an attribute of the treenodes, in
+    y_note_play we pass it around as an explicit paratemer/result-element. At some point we might harmonize.
     """
     if structure is not None and structure.broken:
         # alternatively: don't pass broken structures in here; deal with it in construct_x
