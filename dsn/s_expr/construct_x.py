@@ -62,33 +62,24 @@ def x_note_play(note, structure, recurse, metadata):
 
 
 def construct_x(m, stores, edge_nout_hash):
-    """Constructs a TreeNode with the appropriate metadata. The fact that I'm not really sure what's appropriate yet (I
-    just refactored it) is reflected in the `_x` part of this procedure's name.
+    """Constructs a TreeNode by playing the full history represented by edge_nout_hash. The resulting TreeNode and any
+    descendants have their own nout_hash as metadata.
 
-    What do I mean by 'metadata'?
-    By that I mean that for any single defined structure (until now there's only one) multiple choices may be made about
-    whch attributes need to be available for the rest of the program.
+    The idea of storing metadata on TreeNodes, i.e. any data that is not just the structure of the tree, is tentative:
+    Pros & Cons of storing the NoutHash on the TreeNode itself are:
 
-    The prime example of this is the fact that I just added the node's own Nout Hash as an attribute on any node. This
-    is useful if you want to see a tree as "a tree of histories" and in fact expresses such trees more elegantly than
-    the previous solution (which has a special-case attribute `histories` to deal with that scenario)
+    * Pro: quite useful in any case where you want to reason about a TreeNode in its historical context.
+    * Con: quite bothersome in all other cases, specifically
+        * when reasoning about equality of identical TreeNodes with non-identical histories
+        * when deduplicating (which is an instance of reasoning about equality)
 
-    The alternative case is where you're _not_ interested in the history of the node (e.g. when you want to display the
-    node you may want to ignore the history). And in general I'm not so charmed by a TreeNode having to know what it's
-    point in NoutHistory is (also because many different points in NoutHistory may map to a single treenode)
+    Reasons for having a separate, general metadata attribute, with a YourOwnHash implementation:
 
-    As an alternative solution I considered to pass the n (in this case 2: for TreeNode and TreeText) mechanisms of
-    construction to `play`, rather than just some metadata.
+    * Opens the way for another method construct_x_2 which creates your-own-hash-less TreeNodes.
+    * (YAGNI?) useful when storing something else than the node's own nout_hash
 
-    One more reason I came up with the idea of 'metadata' is: the name 'nout_hash' is bound to become quite overloaded;
-    better to reflect which nout_hash we're talking about.
-
-    (I may be overthinking this, I'm too sleepy today, but I want it documented at least somewhere)
-
-    The points where this is reflected are:
-    * metadata as an attribute on TreeNode and TreeText
-    * YourOwnHash as a class
-    * the `_x` in the present method's name
+    The fact that this whole idea of Metadata is still somewhat tentative is reflected in the `_x` in the present
+    method's name, rather than something more explicit.
     """
     def recurse(nout_hash):
         # This is used for by `play` to construct Trees for nouts, i.e. for Replace & Insert.
