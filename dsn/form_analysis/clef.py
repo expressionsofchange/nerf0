@@ -47,8 +47,8 @@ class BecomeMalformed(FormNote):
     pass
 
 
-# Reference:
-class BecomeReference(FormNote):
+# Variable:
+class BecomeVariable(FormNote):
     def __init__(self, symbol):
         self.symbol = symbol
 

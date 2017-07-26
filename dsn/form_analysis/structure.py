@@ -79,8 +79,7 @@ class MalformedForm(Form):
     pass
 
 
-class ReferenceForm(Form):
-    # A.K.A. Variable, A.K.A. VariableUsage
+class VariableForm(Form):
 
     def __init__(self, symbol):
         self.symbol = symbol  # :: Symbol
