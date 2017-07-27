@@ -35,6 +35,17 @@ In the design of this Clef, the usual questions re-emerge. This time with a veng
     Parsers: CST vs. AST. Grammars are also able to express such things as "There may only be a single Become in this
     history (at the beginning)"
 
+
+Thoughts on 27/07/2017 about BecomeNotes, and their parameters:
+The most recent idea is: let's have the Become* notes take, for all fields of the Structure to become, a full history.
+This is contrasted with the alternative of having Become* notes take no parameters at all, and always building up the
+actual structures' contents only after creation.
+
+The reason I'm (currently) settling on this approach of "create with history" is that it enables to express the scenario
+of becoming a certain form only after the contents already exist, e.g. by correcting (laambda (x) x) to (lambda (x) x)
+In such a scenario it's nice to be able to express that on the moment of creation of lambda the body & parameters
+already existed (which would not be possible when you don't have 'create with history') but also what their histories
+were on that moment of becoming lambda.
 """
 
 
@@ -42,157 +53,192 @@ class FormNote(object):
     pass
 
 
+class FormChangeNote(FormNote):
+    """Abstract base class for Notes that represent, for some Form under consideration the change of a single subfield
+    which is also of type Form. Hence, the subfield's change is represented as the replacing of that field with a full
+    history of a replacement Form (hence: form_nout_hash)."""
+
+    def __init__(self, form_nout_hash):
+        self.form_nout_hash = form_nout_hash
+
+
 # Malformed: Become only (to be Malformed is not to have any meaningful mechanisms for further change)
 class BecomeMalformed(FormNote):
     pass
 
 
-# Variable:
+# VariableForm:
 class BecomeVariable(FormNote):
     def __init__(self, symbol):
-        self.symbol = symbol
+        # Note: BecomeVariable (and BecomeValue) are not expressed using a symbol_nout_hash as their parameter, but
+        # instead take a single `atom`.
+
+        # This is in contrast with all other notes; e.g. DefineChangeSymbol takes a full history for symbol, similarly
+        # ApplicationChangeParameters (although in that case the operation is on a _list_ of symbols). The reason for
+        # this apparent inconsistancy is that the present Form is nothing other than its only field, whereas the other
+        # examples are all multi-field forms. It is therefore not useful to have a separate history for the form and its
+        # only field. (Insert joke about "splitting the atom" here).
+        self.symbol = symbol  # :: unicode
 
 
-# Value:
+# ValueForm:
 class BecomeValue(FormNote):
     def __init__(self, value):
-        self.value = value
+        self.value = value  # :: unicode
 
 
-# Quote:
+# QuoteForm:
 class BecomeQuote(FormNote):
-    def __init__(self, data):
-        # Design: we intentionally allow for Become to have a whole s-expr as given: at any point an s-expression could
-        # be turned into a quote expression, giving rise to a payload of quoted data "ex machina" (from the perspective
-        # of the Quote Form at least)
-
-        # (TBH, the above basically applies symmetrically for all types of notes: whenever they become, underlying notes
-        # may be arbitrary complex structures already)
-
-        self.data = data  # :: SExpr
+    pass
 
 
-class QuoteChange(FormNote):
-    # Changes to quoted data are expressed precisely so: as changes to their underlying s-expr.
-
-    def __init__(self, sexpr_note):
-        self.sexpr_note = sexpr_note
+class ChangeQuote(FormNote):
+    def __init__(self, s_expr_nout_hash):
+        self.s_expr_nout_hash = s_expr_nout_hash
 
 
-# If
+# IfForm
 class BecomeIf(FormNote):
-
     def __init__(self, predicate, consequent, alternative):
-        self.predicate = predicate  # :: Form
-        self.consequent = consequent  # :: Form
-        self.alternative = alternative  # :: Form
+        # All parameters are of type: form_nout_hash
+        self.predicate = predicate
+        self.consequent = consequent
+        self.alternative = alternative
 
-# Changes to either of the 3 parts: how to model?
-# thoughts:
-# Either as 3 special classes, or as 1 class that takes as a parameter the (predicate, consequent, alterative)
-# Or even more radically: just a single class across all notes, (meh)
-# The best way to discover what a proper model is is to create the current analysis, and any further static analyses,
-# first and then see which models are a good fit.
+
+class ChangeIfPredicate(FormChangeNote):
+    pass
+
+
+class ChangeIfConsequent(FormChangeNote):
+    pass
+
+
+class ChangeIfAlternative(FormChangeNote):
+    pass
 
 
 # Define:
 class BecomeDefine(FormNote):
-
     def __init__(self, symbol, definition):
-        self.symbol = symbol
-        self.definition = definition
+        self.symbol = symbol  # :: symbol_nout_hash
+        self.definition = definition  # :: form_nout_hash
 
 
 class DefineChangeSymbol(FormNote):
     def __init__(self, symbol):
-        # TBD: or, via a separate symbol history
-        self.symbol = symbol
+        self.symbol = symbol  # :: symbol_nout_hash
 
 
-class DefineChangeDefinition(FormNote):
-    def __init__(self, note):
-        self.note = note  # :: FormNote
+class DefineChangeDefinition(FormChangeNote):
+    pass
 
 
 # Lambda:
 class BecomeLambda(FormNote):
-
     def __init__(self, parameters, body):
         self.parameters = parameters
         self.body = body
 
 
-class LambdaChangeBody(FormNote):
-    def __init__(self, note):
-        self.note = note  # :: FormNote
+class LambdaChangeBody(FormChangeNote):
+    pass
 
 
 class LambdaChangeParameters(FormNote):
-    def __init__(self, note):
-        self.note = note  # :: SymbolListNote
+    def __init__(self, parameters):
+        self.parameters = parameters  # :: atom_list_nout_hash
 
 
 # Application
-class ApplicationBecome(FormNote):
+class BecomeApplication(FormNote):
 
     def __init__(self, procedure, arguments):
         self.procedure_note = procedure
         self.arguments = arguments
 
 
-class ApplicationChangeProcedure(FormNote):
-    def __init__(self, note):
-        self.note = note  # :: FormNote
-
-
-class ApplicationChangeParameters(FormNote):
-    def __init__(self, note):
-        self.note = note  # FormListNote
-
-
-# Below this line: Notes that describe changes to _parts_ of the Forms (in particular: symbols and lists thereof):
-"""To be done still
-Manipulation of FormList.
-
-Insert. Delete. Replace.
-
-Open question: model as single-note; or as "full history"?
-... if we stay symmetric with the approach for s-expressions, the answer is "nout hash (i.e. full history)"
-
-In either case, the notes passed are FormNotes
-
-More modelling choices are:
-We could even say: FormList manipulation is not a separate concern; the notes are simply on Application directly (since
-application is the only type of Form that takes a list of Forms). Potato Potahto, we'll see.
-
-"""
-
-
-class SymbolBecome(object):
-    def __init__(self, symbol):
-        self.symbol = symbol
-
-    # arguably SymbolBecome is also superfluous; we could just say at the level of "Define" we can change the symbol
-
-
-# SymbolListBecome: I think that's superfluous; symbol-list manipulation only happens in contexts where the fact that
-# we're dealing with a symbollist is implied, so it needs not be made further explicit.
-
-
-class SymbolListNote(object):
+class ApplicationChangeProcedure(FormChangeNote):
     pass
 
 
-class SymbolInsert(SymbolListNote):
-    def __init__(self, index, symbol):
+class ApplicationChangeParameters(FormNote):
+    def __init__(self, formlist_nout_hash):
+        self.formlist_nout_hash = formlist_nout_hash
+
+
+class ApplicationParameterInsert(FormNote):
+    def __init__(self, index, form_nout_hash):
         self.index = index
-        self.symbol = symbol
+        self.form_nout_hash = form_nout_hash
 
 
-class SymbolDelete(SymbolListNote):
+class ApplicationParameterDelete(FormNote):
     def __init__(self, index):
         self.index = index
 
 
-# How to model SymbolReplace? Recursively using the Symbol class? Or just directly? We'll see what's a good description;
-# no need to go overboard in any case.
+class ApplicationParameterReplace(FormNote):
+    def __init__(self, index, form_nout_hash):
+        self.index = index
+        self.form_nout_hash = form_nout_hash
+
+
+# Sequence
+class BecomeSequence(FormNote):
+    pass
+
+
+class SequenceInsert(FormNote):
+    def __init__(self, index, form_nout_hash):
+        self.index = index
+        self.form_nout_hash = form_nout_hash
+
+
+class SequenceDelete(FormNote):
+    def __init__(self, index):
+        self.index = index
+
+
+class SequenceReplace(FormNote):
+    def __init__(self, index, form_nout_hash):
+        self.index = index
+        self.form_nout_hash = form_nout_hash
+
+
+# Below this line: Notes that describe changes to _parts_ of the Forms (in particular: symbols and lists thereof):
+
+
+
+# Not present here: FormListNote, because we have ApplicationParameter* and Sequence* instead. (Application parameters
+# and Sequence's sequence are the 2 examples of [Form]. I've chosen (for now) to express manipulations of those directly
+# as Form notes.
+
+class SetAtomNote(object):
+
+    def __init__(self, unicode_):
+        self.unicode_ = unicode_
+
+
+# Not present here: BecomeAtomList, because it is superfluous; the only actually AtomList is the param-list; when we
+# have that, it can be nothing else than a list of atoms.
+
+class AtomListNote(object):
+    pass
+
+
+class AtomInsert(AtomListNote):
+    def __init__(self, index, atom_nout_hash):
+        self.index = index
+        self.atom_nout_hash = atom_nout_hash
+
+
+class AtomDelete(AtomListNote):
+    def __init__(self, index):
+        self.index = index
+
+
+class AtomReplace(AtomListNote):
+    def __init__(self, index, atom_nout_hash):
+        self.index = index
+        self.atom_nout_hash = atom_nout_hash

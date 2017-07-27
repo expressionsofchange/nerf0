@@ -124,6 +124,10 @@ class ApplicationForm(Form):
         self.arguments = arguments  # :: FormList
 
 
+class SequenceForm(Form):
+    pass
+
+
 # Below this line: _not_ Form, but used as a part of a Form. May still have its own independent history.
 class FormList(object):
     def __init__(self):
