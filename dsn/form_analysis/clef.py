@@ -46,6 +46,10 @@ of becoming a certain form only after the contents already exist, e.g. by correc
 In such a scenario it's nice to be able to express that on the moment of creation of lambda the body & parameters
 already existed (which would not be possible when you don't have 'create with history') but also what their histories
 were on that moment of becoming lambda.
+
+This choice also has an implication on how we deal with FormLists (such as: the list of actual parameters of procedure
+application and the list of elements of a sequence). Namely: those are a structure of their own, with their own clef, so
+that we may express things such as "this sequence comes into being with the following history of its elements".
 """
 
 
@@ -167,62 +171,46 @@ class ApplicationChangeParameters(FormNote):
         self.formlist_nout_hash = formlist_nout_hash
 
 
-class ApplicationParameterInsert(FormNote):
-    def __init__(self, index, form_nout_hash):
-        self.index = index
-        self.form_nout_hash = form_nout_hash
-
-
-class ApplicationParameterDelete(FormNote):
-    def __init__(self, index):
-        self.index = index
-
-
-class ApplicationParameterReplace(FormNote):
-    def __init__(self, index, form_nout_hash):
-        self.index = index
-        self.form_nout_hash = form_nout_hash
-
-
 # Sequence
 class BecomeSequence(FormNote):
-    pass
+    def __init__(self, sequence):
+        self.sequence = sequence  # :: form_list_nout_hash
 
 
-class SequenceInsert(FormNote):
-    def __init__(self, index, form_nout_hash):
-        self.index = index
-        self.form_nout_hash = form_nout_hash
-
-
-class SequenceDelete(FormNote):
-    def __init__(self, index):
-        self.index = index
-
-
-class SequenceReplace(FormNote):
-    def __init__(self, index, form_nout_hash):
-        self.index = index
-        self.form_nout_hash = form_nout_hash
+class ChangeSequence(FormNote):
+    def __init__(self, sequence):
+        self.sequence = sequence  # :: form_list_nout_hash
 
 
 # Below this line: Notes that describe changes to _parts_ of the Forms (in particular: symbols and lists thereof):
+class FormListNote(object):
+    pass
 
 
+class FormListInsert(FormListNote):
+    def __init__(self, index, form_nout_hash):
+        self.index = index
+        self.form_nout_hash = form_nout_hash
 
-# Not present here: FormListNote, because we have ApplicationParameter* and Sequence* instead. (Application parameters
-# and Sequence's sequence are the 2 examples of [Form]. I've chosen (for now) to express manipulations of those directly
-# as Form notes.
+
+class FormListDelete(FormListNote):
+    def __init__(self, index):
+        self.index = index
+
+
+class FormListReplace(FormListNote):
+    def __init__(self, index, form_nout_hash):
+        self.index = index
+        self.form_nout_hash = form_nout_hash
+
 
 class SetAtomNote(object):
-
     def __init__(self, unicode_):
         self.unicode_ = unicode_
 
 
 # Not present here: BecomeAtomList, because it is superfluous; the only actually AtomList is the param-list; when we
 # have that, it can be nothing else than a list of atoms.
-
 class AtomListNote(object):
     pass
 
