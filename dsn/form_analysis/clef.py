@@ -230,18 +230,18 @@ class AtomListNote(object):
     pass
 
 
-class AtomInsert(AtomListNote):
+class AtomListInsert(AtomListNote):
     def __init__(self, index, atom_nout_hash):
         self.index = index
         self.atom_nout_hash = atom_nout_hash
 
 
-class AtomDelete(AtomListNote):
+class AtomListDelete(AtomListNote):
     def __init__(self, index):
         self.index = index
 
 
-class AtomReplace(AtomListNote):
+class AtomListReplace(AtomListNote):
     def __init__(self, index, atom_nout_hash):
         self.index = index
         self.atom_nout_hash = atom_nout_hash

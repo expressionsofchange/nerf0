@@ -32,6 +32,7 @@ class Stores(object):
     def __init__(self, note_nout, historiography_note_nout):
         self.note_nout = note_nout
         self.historiography_note_nout = historiography_note_nout
+        # TODO MORE STUFF
 
 
 class Memoization(object):
