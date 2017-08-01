@@ -48,7 +48,7 @@ class EditorGUI(App):
 
     def setup_channels(self):
         # This is the main channel of PosActs for our application.
-        self.history_channel = ClosableChannel()  # Pun not intended
+        self.history_channel = ClosableChannel()  # No relation with the T.V. channel of the same name
         self.possible_timelines = HashStoreChannelListener(self.history_channel).possible_timelines
         self.lnh = LatestActualityListener(self.history_channel)
 

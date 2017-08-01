@@ -2,12 +2,14 @@
 In the design of this Clef, the usual questions re-emerge. This time with a vengeneance though. Some highlights:
 
 * Should we distinguish between BecomeX and SetX if X is a single-valued thing?
-    TBD how this plays out; we'll start with TSTTCPW
+    TBD how this plays out; we'll start with TSTTCPW, which is to have only Become.
 
-    * Pros: These are very different beasts. E.g. doing so allows us to express "this variable changed in name, but was
+    Regarding an approach with both Become & Set, we can remark the following:
+
+    * Pro: These are very different beasts. E.g. doing so allows us to express "this variable changed in name, but was
         present before that moment".
 
-    * Cons: More notes.
+    * Cons: More types of notes.
 
     * Cons: If changing the value generally has the meaning "re-analyse this thing completely" anyway, distinguishing is
         meaningless anyway.
@@ -93,7 +95,8 @@ class BecomeValue(FormNote):
 
 # QuoteForm:
 class BecomeQuote(FormNote):
-    pass
+    def __init__(self, s_expr_nout_hash):
+        self.s_expr_nout_hash = s_expr_nout_hash
 
 
 class ChangeQuote(FormNote):
@@ -146,7 +149,8 @@ class BecomeLambda(FormNote):
 
 
 class LambdaChangeBody(FormChangeNote):
-    pass
+    def __init__(self, formlist_nout_hash):
+        self.formlist_nout_hash = formlist_nout_hash
 
 
 class LambdaChangeParameters(FormNote):
@@ -187,6 +191,9 @@ class FormListNote(object):
     pass
 
 
+# Not present here: BecomeFormList, because it is superfluous; whenever a FormList is used it is the only option for
+# that field.
+
 class FormListInsert(FormListNote):
     def __init__(self, index, form_nout_hash):
         self.index = index
@@ -204,9 +211,17 @@ class FormListReplace(FormListNote):
         self.form_nout_hash = form_nout_hash
 
 
-class SetAtomNote(object):
+class AtomNote(object):
+    pass
+
+
+class BecomeAtom(AtomNote):
     def __init__(self, unicode_):
         self.unicode_ = unicode_
+
+
+class BecomeMalformedAtom(AtomNote):
+    pass
 
 
 # Not present here: BecomeAtomList, because it is superfluous; the only actually AtomList is the param-list; when we

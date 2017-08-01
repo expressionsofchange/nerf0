@@ -19,7 +19,7 @@ about the relevant algorithms yourself. Of course, because we are still in an ex
 the correct choice!
 
 And finally, the following observation: many (but not all) of the structures we build have a small incremental
-(sometimes constant) cost per Note (unit of time). This means that memoization using the timely component (hash) is ver
+(sometimes constant) cost per Note (unit of time). This means that memoization using the timely component (hash) is very
 useful for those functions: it allows new steps to be made in O(1) time (basically: using dynamic programming). However,
 we are not yet explicit about which functions rely on this fact for decent performance.
 
