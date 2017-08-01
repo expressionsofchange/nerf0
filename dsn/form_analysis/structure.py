@@ -125,7 +125,8 @@ class ApplicationForm(Form):
 
 
 class SequenceForm(Form):
-    pass
+    def __init__(self, sequence):
+        self.sequence = sequence  # :: FormList
 
 
 # Below this line: _not_ Form, but used as a part of a Form. May still have its own independent history.

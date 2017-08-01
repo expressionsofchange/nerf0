@@ -17,17 +17,25 @@ from dsn.s_expr.construct import construct_x
 from dsn.s_expr.legato import NoteCapo
 
 from dsn.form_analyis.clef import (
+    ApplicationChangeProcedure,
+    ApplicationChangeParameters,
     AtomListDelete,
     AtomListInsert,
     AtomListReplace,
+    BecomeApplication,
     BecomeAtom,
     BecomeDefine,
+    BecomeIf,
     BecomeLambda,
     BecomeMalformed,
     BecomeMalformedAtom,
     BecomeQuote,
     BecomeValue,
     BecomeVariable,
+    BecomeSequence,
+    ChangeIfPredicate,
+    ChangeIfConsequent,
+    ChangeIfAlternative,
     ChangeQuote,
     DefineChangeDefinition,
     DefineChangeSymbol,
@@ -37,7 +45,7 @@ from dsn.form_analyis.clef import (
     LambdaChangeBody,
     LambdaChangeParameters,
 )
-from dsn.form_analyis.structure import QuoteForm, DefineForm, LambdaForm
+from dsn.form_analyis.structure import ApplicationForm, QuoteForm, DefineForm, LambdaForm, SequenceForm, IfForm
 from dsn.form_analysis.legato import (
     AtomNoteCapo,
     AtomNoteSlur,
@@ -65,6 +73,32 @@ def is_string(unicode_):
 
 def parse_string(unicode_):
     return unicode_[1:]   # drop the opening quote
+
+
+def not_quite_play_form_list(m, stores, s_expr_note, previous_form_list, index_shift):
+    """'not_quite', because this function looks a lot like the play* functions, but is specialized w/ index_shift"""
+
+    if isinstance(s_expr_note, Insert) or isinstance(s_expr_note, Replace):
+        _, form_note_nh = construct_form(m, stores, s_expr_note.nout_hash)
+
+    index = s_expr_note.index - index_shift
+
+    if isinstance(s_expr_note, Replace):
+        form_list_note = FormListReplace(index, form_note_nh)
+
+    elif isinstance(s_expr_note, Insert):
+        form_list_note = FormListInsert(index, form_note_nh)
+
+    elif isinstance(s_expr_note, Delete):
+        form_list_note = FormListDelete(index)
+
+    else:
+        raise Exception("Programming Error: Incomplete case-analysis")
+
+    # NOTE: this assumes that we'll store metadata on all 4 types of analysis-[sub]structures.
+    previous_form_list_nh = previous_form_list.metadata.nout_hash
+
+    return stores.form_list_note_nout.add(FormListNoteSlur(form_list_note, previous_form_list_nh))
 
 
 def play_form(m, stores, s_expr_note, previous_s_expr, s_expr, previous_form):
@@ -159,49 +193,85 @@ def play_form(m, stores, s_expr_note, previous_s_expr, s_expr, previous_form):
             # mapped by decrementing the index with 2, deletions on any index < 2 map to deletion of index=0, and
             # insertions to any index < 2 map to some new element (but not necessarily the inserted one) appearing at
             # index=0
-            return BecomeLambda(parameters, concoct_form_list_history(s_expr.children[2:]))
+            return BecomeLambda(parameters, concoct_form_list_history(m, stores, s_expr.children[2:]))
 
         if not isinstance(previous_form, LambdaForm):
-            return BecomeLambda(parameters, concoct_form_list_history(s_expr.children[2:]))
+            return BecomeLambda(parameters, concoct_form_list_history(m, stores, s_expr.children[2:]))
 
-        # Once we've reached this point, we know there's a change to the lambda's body. The mapping is straightforward:
-        # map the types, payload and indices.
-
-        if isinstance(s_expr_note, Insert) or isinstance(s_expr_note, Replace):
-            _, form_note_nh = construct_form(m, stores, s_expr_note.nout_hash)
-
-        index = s_expr_note.index - 2  # ignore lambda-tag & params
-
-        if isinstance(s_expr_note, Replace):
-            form_list_note = FormListReplace(index, form_note_nh)
-
-        elif isinstance(s_expr_note, Insert):
-            form_list_note = FormListInsert(index, form_note_nh)
-
-        elif isinstance(s_expr_note, Delete):
-            form_list_note = FormListDelete(index)
-
-        else:
-            raise Exception("Programming Error: Incomplete case-analysis")
-
-        # Ha! assumption of storage of metatdata on the constructed forms and associated elements (in this case:
-        # formlist). Is this the first time I'm noticing this?
-
-        previous_form_list_nh = previous_form.body.metadata.nout_hash
-
-        form_list_nout_hash = stores.form_list_note_nout.add(FormListNoteSlur(form_list_note, previous_form_list_nh))
+        index_shift = 2  # ignore lambda-tag & params
+        form_list_nout_hash = not_quite_play_form_list(m, stores, s_expr_note, previous_form.body, index_shift)
 
         return LambdaChangeBody(form_list_nout_hash)
 
+    if tagged_list_tag == "begin":
+        if len(s_expr.children) < 2:  # (tag, «sequence-expressions»)  # i.e. we don't allow for empty sequences
+            return BecomeMalformed()
+
+        if not isinstance(previous_form, SequenceForm):
+            # see notes on BecomeLambda's usage of concoct_form_list_history for some reservations.
+            return BecomeSequence(concoct_form_list_history(m, stores, s_expr.children[1:]))
+
+        # Once we've reached this point, we know there's a change to the actual sequence.
+        index_shift = 1  # we ignore the tag 'begin'
+        form_list_nout_hash = not_quite_play_form_list(m, stores, s_expr_note, previous_form.sequence, index_shift)
+
+        return LambdaChangeBody(form_list_nout_hash)
+
+    if tagged_list_tag == "if":
+        if len(s_expr.children) != 4:  # (tag, predicate, consequent, alternative)
+            return BecomeMalformed()
+
+        if not isinstance(previous_form, IfForm):
+            # see notes on BecomeLambda's usage of concoct_form_list_history for some reservations.
+            return BecomeIf(concoct_form_list_history(m, stores, s_expr.children[1:]))
+
+        # (similar thinking as in "define")
+        assert isinstance(s_expr_note, Replace), "An error in Klaas' thinking has been exposed"
+
+        Note = {
+            1: ChangeIfPredicate,
+            2: ChangeIfConsequent,
+            3: ChangeIfAlternative,
+        }[s_expr_note.index]
+
+        _, xx = construct_form(m, stores, s_expr.children[s_expr_note.index].metadata.nout_hash)
+
+        return Note(xx)
+
+    # implied else: if no tag is recognized we assume application
+
+    # if len(s_expr.children) == 0 ... is already guarded above (and documented there)
+
+    _, procedure = construct_form(m, stores, s_expr.children[1].metadata.nout_hash)
+
+    if not isinstance(previous_form, ApplicationForm):
+        # see notes on BecomeLambda's usage of concoct_form_list_history for some reservations.
+        return BecomeApplication(
+            procedure,
+            concoct_form_list_history(m, stores, s_expr.children[1:]))
+
+    if isinstance(s_expr_note, Replace) and s_expr_note.index == 1:
+        return ApplicationChangeProcedure(procedure)
+
+    if s_expr_note.note.index <= 1:
+        # Similar case as for lambda: too much shifting around to make any sense
+        # TODO I wonder how this relates to currying....
+        return BecomeApplication(
+            procedure,
+            concoct_form_list_history(m, stores, s_expr.children[1:]))
+
+    index_shift = 1  # ignore the procedure
+    form_list_nout_hash = not_quite_play_form_list(m, stores, s_expr_note, previous_form.body, index_shift)
+
+    return ApplicationChangeParameters(form_list_nout_hash)
+
     """
     # The below is worth preserving in some comment or notebook:
-
     (Road not taken: trying to be extremely faithful to the paradigm of incrementality, and analyse the s-expr-note
     itself to make statements about whether it might affect your form. I.e. for a list, replace at 0, insert at 0 and
     delete at 0 may change the present Form, but replace at 1 may not. For now we ignore this idea as it is more
     complicated than simply looking at the first element of the result, without actually yielding any better performance
     or clarity)
-
 
     Is het feit dat er geen 1-to-1 mapping is dan niet het bewijs dat clef-gebaseerd werken op de s-expressions
     nutteloos is? nee, om een aantal redenen (een aantal andere staat al in het notebook):
@@ -210,13 +280,6 @@ def play_form(m, stores, s_expr_note, previous_s_expr, s_expr, previous_form):
     * localiteit blijft behouden in die puzzeltjes, d.w.z. de delta-puzzeltjes hoeven maar op kleine expressies
           uitgevoerd te worden
     * de interpretatie idem (should we interpret the present thing as a form, parameter list, or ...?)
-
-    * If
-        changes to parameter-count: (for now: go into malformed mode)
-        changes to either of the 3: recurse
-
-    * Application:
-        Paramcount (of the s-expr) is ≥ 1, of the Form ≥ 0
 
     """
 

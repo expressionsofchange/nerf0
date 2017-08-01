@@ -162,7 +162,7 @@ class LambdaChangeParameters(FormNote):
 class BecomeApplication(FormNote):
 
     def __init__(self, procedure, arguments):
-        self.procedure_note = procedure
+        self.procedure = procedure
         self.arguments = arguments
 
 
