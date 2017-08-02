@@ -8,7 +8,7 @@ I.e. from s-expr notes to form_analysis clef.
 This is different from construct.py, which constructs from notes to structures.
 
 Should this be part of the s-expr module or the current one? Object Oriented programmers would fight over this.
-Functional programmers point out that you can't know; but this is also useless :-)
+Functional programmers point out that you can't know... which is true but not useful in actually making a decision.
 """
 
 from dsn.s_expr.clef import Insert, Replace, Delete
@@ -81,6 +81,7 @@ def not_quite_play_form_list(m, stores, s_expr_note, previous_form_list, index_s
     if isinstance(s_expr_note, Insert) or isinstance(s_expr_note, Replace):
         _, form_note_nh = construct_form(m, stores, s_expr_note.nout_hash)
 
+    assert s_expr_note.index >= index_shift, "function may only be called on s_expr_note with index >= index_shift"
     index = s_expr_note.index - index_shift
 
     if isinstance(s_expr_note, Replace):
@@ -104,7 +105,7 @@ def not_quite_play_form_list(m, stores, s_expr_note, previous_form_list, index_s
 def play_form(m, stores, s_expr_note, previous_s_expr, s_expr, previous_form):
     if isinstance(s_expr, TreeText):
         # Because we don't distinguish between Become & Set yet, we don't have to consider the previous_form at this
-        # point.
+        # point: we always Become anyway.
 
         if is_number(s_expr.unicode_):
             return BecomeValue(s_expr.unicode_)
@@ -112,7 +113,7 @@ def play_form(m, stores, s_expr_note, previous_s_expr, s_expr, previous_form):
         if is_string(s_expr.unicode_):
             return BecomeValue(parse_string(s_expr.unicode_))
 
-        # All other atoms are considered to be symbols.
+        # All other atoms are considered to be variables.
         return BecomeVariable(s_expr.unicode_)
 
     # implied else: isinstance(s_expr, TreeNode)
@@ -144,23 +145,27 @@ def play_form(m, stores, s_expr_note, previous_s_expr, s_expr, previous_form):
         _, s = construct_atom(m, stores, s_expr.children[1].metadata.nout_hash)
         _, d = construct_form(m, stores, s_expr.children[2].metadata.nout_hash)
 
-        # How does brokenness bubble up? TSTTCPW for now is: if any error, just return an error at the present point.
-        # TODO TBD; or not... one might equally convincingly say: the present level is fine, it just happens to
-        # _contain_ an error (rather than be one). I think I had similar design choices on error/brokennes propagation
-        # when constructing malformed histories.
+        # TODO The note below should be lifted to a more general design-document when this is available:
+        # A note on the bubbling up of brokenness: we take the most general approach, of doing as little "automatic"
+        # bubbling up as possible. Particularly: if any given level of the s-expr tree appears to be well-formed, the
+        # mapping to the appropriate form is made, regardless of whether the children of the s-expression are
+        # well-formed.
+        # This allows for as much preservation of meaningful history as possible, while retaining the possibility of (in
+        # an independent, potentially incrementally implemented, phase) determining whether a form and any of its
+        # descendendants is well-formed.
 
         if not isinstance(previous_form, DefineForm):
             return BecomeDefine(s, d)
 
         # At this point, we're "almost sure" that we're dealing with a Replace on either children[1] or children[2]:
         # Any length-changers would not have children's length be 3 both before and after the operation. Which leaves us
-        # with the somewhat pathological case of Replacing the tag with the same tag, which we'll deal with without
+        # with the somewhat pathological case of Replacing the list-tag with the same tag, which we'll deal with without
         # crashing by using Become; All other cases point to an error in my thinking and will dynamically raise an
         # exception.
-
         assert isinstance(s_expr_note, Replace), "An error in Klaas' thinking has been exposed"
 
         if s_expr_note.index == 0:
+            # The pathological case mentioned above.
             return BecomeDefine(s, d)
 
         if s_expr_note.index == 1:
@@ -174,28 +179,29 @@ def play_form(m, stores, s_expr_note, previous_s_expr, s_expr, previous_form):
 
         _, parameters = construct_atom_list(m, stores, s_expr.children[1].metadata.nout_hash)
 
+        if not isinstance(previous_form, LambdaForm):
+            return BecomeLambda(parameters, concoct_form_list_history(m, stores, s_expr.children[2:]))
+
         if isinstance(s_expr_note, Replace) and s_expr_note.index == 1:
             return LambdaChangeParameters(parameters)
 
         if s_expr_note.note.index <= 1:
             # Any other change to a child <= 1 is interpreted as BecomeLambda. Such a change can either be a direct
             # tag-change, or some change that, at the level of s-expr-manipuliation, doesn't respect the natural
-            # boundaries of meaning as they exist on the form-analyis.
+            # boundaries of meaning as they exist on the form-analyis. (i.e. delete/insert at position or 1)
+
             # This is a general property of clef-to-clef mappings: the fact that we have the following 5 valid elements
-            # does not imply we have a meaningful Note on the questionmarks:
+            # does not imply we have a meaningful interpretation of the 6th (the "?")
 
             #               Pre-Structure       Note        Post-Structure
             # Pre-Clef      Yes                 Yes         Yes
-            # Post-Clef     Yes                 ???         Yes
+            # Post-Clef     Yes                  ?          Yes
 
             # NOTE: a more history-preserving way of concocting would be to look at s_expr's history through the window
-            # of children[2:], but this is not entirely trivial (operations to children w/ index >= 2 may simply be
-            # mapped by decrementing the index with 2, deletions on any index < 2 map to deletion of index=0, and
-            # insertions to any index < 2 map to some new element (but not necessarily the inserted one) appearing at
-            # index=0
-            return BecomeLambda(parameters, concoct_form_list_history(m, stores, s_expr.children[2:]))
-
-        if not isinstance(previous_form, LambdaForm):
+            # of children[2:], but this is not entirely trivial. Here's a sketch anyway:
+            # * operations to children w/ index >= 2 may be mapped by decrementing the index with 2
+            # * deletions on any index < 2 map to deletion of index=0
+            # * insertions to any index < 2 map to some new element (but not always the inserted one) at index=0)
             return BecomeLambda(parameters, concoct_form_list_history(m, stores, s_expr.children[2:]))
 
         index_shift = 2  # ignore lambda-tag & params
@@ -208,6 +214,8 @@ def play_form(m, stores, s_expr_note, previous_s_expr, s_expr, previous_form):
             return BecomeMalformed()
 
         if not isinstance(previous_form, SequenceForm):
+            # Note that this implies: a change to index=0 of some sort (this is true for all similar checks... we may
+            # want to lift this comment)
             # see notes on BecomeLambda's usage of concoct_form_list_history for some reservations.
             return BecomeSequence(concoct_form_list_history(m, stores, s_expr.children[1:]))
 
@@ -219,6 +227,9 @@ def play_form(m, stores, s_expr_note, previous_s_expr, s_expr, previous_form):
 
     if tagged_list_tag == "if":
         if len(s_expr.children) != 4:  # (tag, predicate, consequent, alternative)
+            # Note: arguably, the alternative is not required, so a more minimal check here is that the length is either
+            # 3 or 4. (The use case for this is in the imperative context; in the functional context there is no
+            # sensible meaning of an else-less if)
             return BecomeMalformed()
 
         if not isinstance(previous_form, IfForm):
@@ -234,11 +245,11 @@ def play_form(m, stores, s_expr_note, previous_s_expr, s_expr, previous_form):
             3: ChangeIfAlternative,
         }[s_expr_note.index]
 
-        _, xx = construct_form(m, stores, s_expr.children[s_expr_note.index].metadata.nout_hash)
+        _, child_change = construct_form(m, stores, s_expr.children[s_expr_note.index].metadata.nout_hash)
 
-        return Note(xx)
+        return Note(child_change)
 
-    # implied else: if no tag is recognized we assume application
+    # implied else: if no tag is recognized we assume procedure application
 
     # if len(s_expr.children) == 0 ... is already guarded above (and documented there)
 
@@ -255,7 +266,6 @@ def play_form(m, stores, s_expr_note, previous_s_expr, s_expr, previous_form):
 
     if s_expr_note.note.index <= 1:
         # Similar case as for lambda: too much shifting around to make any sense
-        # TODO I wonder how this relates to currying....
         return BecomeApplication(
             procedure,
             concoct_form_list_history(m, stores, s_expr.children[1:]))
@@ -369,9 +379,9 @@ def construct_analysis_note(m, stores, edge_nout_hash, memoization_key, store_ke
         s_expr = construct_x(m, stores, edge_nout)
         constructed_note = play(m, stores, note, previous_s_expr, s_expr, constructed_note)
 
-        # A SIMILAR QUESTION TO EARLIER: will we be needing the metadata of the s_expr's notes in the 1-to-1-mapped
-        # equivalents in the form world? For now: no need has been established. So we won't do it. But we'll leave it
-        # here as a comment: YourOwnHash(edge_nout_hash))
+        # Will we be needing the metadata of the s_expr's notes in the 1-to-1-mapped equivalents in the form world? For
+        # now: no need has been established. So we won't do it. But we'll leave it here as a comment:
+        # YourOwnHash(edge_nout_hash))
 
         constructed_nout = Slur(constructed_note, constructed_nout_hash)
 

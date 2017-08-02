@@ -106,6 +106,12 @@ class ChangeQuote(FormNote):
 
 # IfForm
 class BecomeIf(FormNote):
+    # Note on some "showerthoughts":
+    # Once we introduce case statements, the question arises how If and Case relate to one another. SICP answers this
+    # by implementing Case as a bunch of nested If statements. From the perspective of history-tracing this is not a
+    # satisfactory answer, which points to: implementing If as a special case of a Case statement, namely that one in
+    # which only one case is checked and there is one "otherwise" guard.
+
     def __init__(self, predicate, consequent, alternative):
         # All parameters are of type: form_nout_hash
         self.predicate = predicate
