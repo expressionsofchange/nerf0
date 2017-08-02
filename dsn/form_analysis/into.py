@@ -10,13 +10,14 @@ This is different from construct.py, which constructs from notes to structures.
 Should this be part of the s-expr module or the current one? Object Oriented programmers would fight over this.
 Functional programmers point out that you can't know... which is true but not useful in actually making a decision.
 """
+from utils import pmts
 
 from dsn.s_expr.clef import Insert, Replace, Delete
 from dsn.s_expr.structure import TreeText
-from dsn.s_expr.construct import construct_x
-from dsn.s_expr.legato import NoteCapo
+from dsn.s_expr.construct_x import construct_x
+from dsn.s_expr.legato import NoteCapo, NoteNoutHash
 
-from dsn.form_analyis.clef import (
+from dsn.form_analysis.clef import (
     ApplicationChangeProcedure,
     ApplicationChangeParameters,
     AtomListDelete,
@@ -45,7 +46,7 @@ from dsn.form_analyis.clef import (
     LambdaChangeBody,
     LambdaChangeParameters,
 )
-from dsn.form_analyis.structure import ApplicationForm, QuoteForm, DefineForm, LambdaForm, SequenceForm, IfForm
+from dsn.form_analysis.structure import ApplicationForm, QuoteForm, DefineForm, LambdaForm, SequenceForm, IfForm
 from dsn.form_analysis.legato import (
     AtomNoteCapo,
     AtomNoteSlur,
@@ -188,7 +189,7 @@ def play_form(m, stores, s_expr_note, previous_s_expr, s_expr, previous_form):
         if s_expr_note.note.index <= 1:
             # Any other change to a child <= 1 is interpreted as BecomeLambda. Such a change can either be a direct
             # tag-change, or some change that, at the level of s-expr-manipuliation, doesn't respect the natural
-            # boundaries of meaning as they exist on the form-analyis. (i.e. delete/insert at position or 1)
+            # boundaries of meaning as they exist on the form-analysis. (i.e. delete/insert at position or 1)
 
             # This is a general property of clef-to-clef mappings: the fact that we have the following 5 valid elements
             # does not imply we have a meaningful interpretation of the 6th (the "?")
@@ -340,12 +341,11 @@ def play_atom_list(m, stores, s_expr_note, previous_s_expr_, s_expr_, previous_a
 def construct_analysis_note(m, stores, edge_nout_hash, memoization_key, store_key, play, Capo, Slur):
     """Generic mechanism to construct any of the 4 types of notes from the form-analysis Clef.
 
-    edge_nout_hash :: NoutHash (i.e. s-expr)
-
     returns :: (note, nout_hash) (both of these are of 1 of the 4 analysis clefs)
 
     we do this for convenience (i.e. to avoid unnecessary lookups)
     """
+    pmts(edge_nout_hash, NoteNoutHash)
 
     memoization = getattr(m, memoization_key)
     store = getattr(stores, store_key)
@@ -376,7 +376,7 @@ def construct_analysis_note(m, stores, edge_nout_hash, memoization_key, store_ke
 
         note = edge_nout.note
 
-        s_expr = construct_x(m, stores, edge_nout)
+        s_expr = construct_x(m, stores, edge_nout_hash)
         constructed_note = play(m, stores, note, previous_s_expr, s_expr, constructed_note)
 
         # Will we be needing the metadata of the s_expr's notes in the 1-to-1-mapped equivalents in the form world? For

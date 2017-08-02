@@ -1,0 +1,26 @@
+>>> from hashstore import NoutHashStore
+>>> from memoization import Stores, Memoization
+>>>
+>>> from dsn.s_expr.clef import BecomeNode, TextBecome, Delete
+>>> from dsn.s_expr.legato import NoteNout, NoteCapo, NoteNoutHash
+>>> from dsn.s_expr.test_utils import iinsert, rreplace
+>>> from dsn.s_expr.utils import nouts_for_notes_da_capo
+>>> from dsn.form_analysis.into import construct_form
+>>> from dsn.historiography.legato import HistoriographyNoteNoutHash, HistoriographyNoteNout, HistoriographyNoteCapo
+>>>
+>>>
+>>> # TODO: Factor out mechanisms to create these more easily in tests
+>>> p = NoutHashStore(NoteNoutHash, NoteNout, NoteCapo)
+>>> historiography_note_nout_store = NoutHashStore(HistoriographyNoteNoutHash, HistoriographyNoteNout, HistoriographyNoteCapo)
+>>> stores = Stores(p, historiography_note_nout_store)
+>>>
+>>> m = Memoization()
+>>> capo = NoteCapo()
+>>> hash_capo = p.add(capo)
+>>>
+>>> for nh in nouts_for_notes_da_capo([
+...     BecomeNode(),
+...         ]):
+...     h = p.add(nh.nout)
+...
+>>> construct_form(m, stores, h)

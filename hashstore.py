@@ -38,6 +38,7 @@ class HashStore(object):
         return hash_
 
     def get(self, hash_):
+        pmts(hash_, self.Hash)
         if hash_ not in self.d:
             raise KeyError(repr(hash_))
         return self.ObjClass.from_stream(iter(self.d[hash_]))
@@ -60,6 +61,8 @@ class NoutHashStore(HashStore):
         self.add(NoutCapo())
 
     def all_nhtups_for_nout_hash(self, nout_hash):
+        pmts(nout_hash, self.Hash)
+
         while True:
             nout = self.get(nout_hash)
             if nout == self.NoutCapo():

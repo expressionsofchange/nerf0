@@ -53,24 +53,103 @@ This choice also has an implication on how we deal with FormLists (such as: the 
 application and the list of elements of a sequence). Namely: those are a structure of their own, with their own clef, so
 that we may express things such as "this sequence comes into being with the following history of its elements".
 """
+from utils import pmts, rfs
+from vlq import to_vlq, from_vlq
+
+
+BECOME_MALFORMED = 0
+BECOME_VARIABLE = 1
+BECOME_VALUE = 2
+BECOME_QUOTE = 3
+CHANGE_QUOTE = 4
+BECOME_IF = 5
+BECOME_DEFINE = 6
+DEFINE_CHANGE_SYMBOL = 7
+BECOME_LAMBDA = 8
+LAMBDA_CHANGE_PARAMETERS = 9
+BECOME_APPLICATION = 10
+APPLICATION_CHANGE_PARAMETERS = 11
+BECOME_SEQUENCE = 12
+CHANGE_SEQUENCE = 13
+CHANGE_IF_PREDICATE = 14
+CHANGE_IF_CONSEQUENT = 15
+CHANGE_IF_ALTERNATIVE = 16
+DEFINE_CHANGE_DEFINITION = 17
+LAMBDA_CHANGE_BODY = 18
+APPLICATION_CHANGE_PROCEDURE = 19
+
+
+FORM_LIST_INSERT = 0
+FORM_LIST_DELETE = 1
+FORM_LIST_REPLACE = 2
+
+
+BECOME_ATOM = 0
+BECOME_MALFORMED_ATOM = 1
+
+
+ATOM_LIST_INSERT = 0
+ATOM_LIST_DELETE = 1
+ATOM_LIST_REPLACE = 2
 
 
 class FormNote(object):
-    pass
+
+    @staticmethod
+    def from_stream(byte_stream):
+        byte0 = next(byte_stream)
+        return {
+            BECOME_MALFORMED: BecomeMalformed,
+            BECOME_VARIABLE: BecomeVariable,
+            BECOME_VALUE: BecomeValue,
+            BECOME_QUOTE: BecomeQuote,
+            CHANGE_QUOTE: ChangeQuote,
+            BECOME_IF: BecomeIf,
+            BECOME_DEFINE: BecomeDefine,
+            DEFINE_CHANGE_SYMBOL: DefineChangeSymbol,
+            BECOME_LAMBDA: BecomeLambda,
+            LAMBDA_CHANGE_PARAMETERS: LambdaChangeParameters,
+            BECOME_APPLICATION: BecomeApplication,
+            APPLICATION_CHANGE_PARAMETERS: ApplicationChangeParameters,
+            BECOME_SEQUENCE: BecomeSequence,
+            CHANGE_SEQUENCE: ChangeSequence,
+            CHANGE_IF_PREDICATE: ChangeIfPredicate,
+            CHANGE_IF_CONSEQUENT: ChangeIfConsequent,
+            CHANGE_IF_ALTERNATIVE: ChangeIfAlternative,
+            DEFINE_CHANGE_DEFINITION: DefineChangeDefinition,
+            LAMBDA_CHANGE_BODY: LambdaChangeBody,
+            APPLICATION_CHANGE_PROCEDURE: ApplicationChangeProcedure
+
+        }[byte0].from_stream(byte_stream)
 
 
 class FormChangeNote(FormNote):
     """Abstract base class for Notes that represent, for some Form under consideration the change of a single subfield
     which is also of type Form. Hence, the subfield's change is represented as the replacing of that field with a full
     history of a replacement Form (hence: form_nout_hash)."""
+    TYPE_CONSTANT = NotImplemented
 
     def __init__(self, form_nout_hash):
         self.form_nout_hash = form_nout_hash
 
+    def as_bytes(self):
+        return bytes([self.TYPE_CONSTANT]) + self.form_nout_hash.as_bytes()
+
+    @classmethod
+    def from_stream(cls, byte_stream):
+        from dsn.form_analysis.legato import FormNoteNoutHash  # Avoids circular imports (just like in s_expr.clef)
+        return cls(FormNoteNoutHash.from_stream(byte_stream))
+
 
 # Malformed: Become only (to be Malformed is not to have any meaningful mechanisms for further change)
 class BecomeMalformed(FormNote):
-    pass
+
+    def as_bytes(self):
+        return bytes([BECOME_MALFORMED])
+
+    @staticmethod
+    def from_stream(byte_stream):
+        return BecomeMalformed()
 
 
 # VariableForm:
@@ -84,24 +163,72 @@ class BecomeVariable(FormNote):
         # this apparent inconsistancy is that the present Form is nothing other than its only field, whereas the other
         # examples are all multi-field forms. It is therefore not useful to have a separate history for the form and its
         # only field. (Insert joke about "splitting the atom" here).
-        self.symbol = symbol  # :: unicode
+        pmts(symbol, str)
+        self.symbol = symbol
+
+    def as_bytes(self):
+        utf8 = self.symbol.encode('utf-8')
+        return bytes([BECOME_VARIABLE]) + to_vlq(len(utf8)) + utf8
+
+    @staticmethod
+    def from_stream(byte_stream):
+        length = from_vlq(byte_stream)
+        utf8 = rfs(byte_stream, length)
+        return BecomeVariable(str(utf8, 'utf-8'))
 
 
 # ValueForm:
 class BecomeValue(FormNote):
+    # TODO (potentially): factor out commonalities w/ BecomeVariable.
+    # (that is, unless we diversify values to be more faithful to the underlying object's type)
+
     def __init__(self, value):
-        self.value = value  # :: unicode
+        pmts(value, str)
+        self.value = value
+
+    def as_bytes(self):
+        utf8 = self.value.encode('utf-8')
+        return bytes([BECOME_VALUE]) + to_vlq(len(utf8)) + utf8
+
+    @staticmethod
+    def from_stream(byte_stream):
+        length = from_vlq(byte_stream)
+        utf8 = rfs(byte_stream, length)
+        return BecomeValue(str(utf8, 'utf-8'))
 
 
 # QuoteForm:
 class BecomeQuote(FormNote):
+
     def __init__(self, s_expr_nout_hash):
+        from dsn.s_expr.legato import NoteNoutHash
+        pmts(s_expr_nout_hash, NoteNoutHash)
         self.s_expr_nout_hash = s_expr_nout_hash
+
+    def as_bytes(self):
+        return bytes([BECOME_QUOTE]) + self.s_expr_nout_hash.as_bytes()
+
+    @staticmethod
+    def from_stream(byte_stream):
+        from dsn.s_expr.legato import NoteNoutHash
+        return BecomeQuote(NoteNoutHash.from_stream(byte_stream))
 
 
 class ChangeQuote(FormNote):
+    # NOTE: commonalities w/ BecomeQuote might be factored out. (That is... if they don't diverge)
+
     def __init__(self, s_expr_nout_hash):
+        from dsn.s_expr.legato import NoteNoutHash
+        pmts(s_expr_nout_hash, NoteNoutHash)
         self.s_expr_nout_hash = s_expr_nout_hash
+
+    def as_bytes(self):
+        return bytes([CHANGE_QUOTE]) + self.s_expr_nout_hash.as_bytes()
+
+    @staticmethod
+    def from_stream(byte_stream):
+        from dsn.s_expr.legato import NoteNoutHash
+        return ChangeQuote(NoteNoutHash.from_stream(byte_stream))
 
 
 # IfForm
@@ -113,88 +240,214 @@ class BecomeIf(FormNote):
     # which only one case is checked and there is one "otherwise" guard.
 
     def __init__(self, predicate, consequent, alternative):
-        # All parameters are of type: form_nout_hash
+        from dsn.form_analysis.legato import FormNoteNoutHash
+        for t in [predicate, consequent, alternative]:
+            pmts(t, FormNoteNoutHash)
+
         self.predicate = predicate
         self.consequent = consequent
         self.alternative = alternative
 
+    def as_bytes(self):
+        return (bytes([BECOME_IF]) +
+                self.predicate.as_bytes() +
+                self.consequent.as_bytes() +
+                self.alternative.as_bytes())
+
+    @staticmethod
+    def from_stream(byte_stream):
+        from dsn.form_analysis.legato import FormNoteNoutHash
+        return BecomeIf(FormNoteNoutHash.from_stream(byte_stream), FormNoteNoutHash.from_stream(byte_stream),
+                        FormNoteNoutHash.from_stream(byte_stream))
+
 
 class ChangeIfPredicate(FormChangeNote):
-    pass
+    TYPE_CONSTANT = CHANGE_IF_PREDICATE
 
 
 class ChangeIfConsequent(FormChangeNote):
-    pass
+    TYPE_CONSTANT = CHANGE_IF_CONSEQUENT
 
 
 class ChangeIfAlternative(FormChangeNote):
-    pass
+    TYPE_CONSTANT = CHANGE_IF_ALTERNATIVE
 
 
 # Define:
 class BecomeDefine(FormNote):
     def __init__(self, symbol, definition):
-        self.symbol = symbol  # :: symbol_nout_hash
-        self.definition = definition  # :: form_nout_hash
+        from dsn.form_analysis.legato import AtomNoteNoutHash, FormNoteNoutHash
+
+        pmts(symbol, AtomNoteNoutHash)
+        pmts(definition, FormNoteNoutHash)
+
+        self.symbol = symbol
+        self.definition = definition
+
+    def as_bytes(self):
+        return (bytes([BECOME_DEFINE]) + self.symbol.as_bytes() + self.definition.as_bytes())
+
+    @staticmethod
+    def from_stream(byte_stream):
+        from dsn.form_analysis.legato import AtomNoteNoutHash, FormNoteNoutHash
+        return BecomeDefine(AtomNoteNoutHash.from_stream(byte_stream), FormNoteNoutHash.from_stream(byte_stream))
 
 
 class DefineChangeSymbol(FormNote):
     def __init__(self, symbol):
-        self.symbol = symbol  # :: symbol_nout_hash
+        from dsn.form_analysis.legato import AtomNoteNoutHash
+        pmts(symbol, AtomNoteNoutHash)
+
+        self.symbol = symbol
+
+    def as_bytes(self):
+        return (bytes([DEFINE_CHANGE_SYMBOL]) + self.symbol.as_bytes())
+
+    @staticmethod
+    def from_stream(byte_stream):
+        from dsn.form_analysis.legato import AtomNoteNoutHash
+        return DefineChangeSymbol(AtomNoteNoutHash.from_stream(byte_stream))
 
 
 class DefineChangeDefinition(FormChangeNote):
-    pass
+    TYPE_CONSTANT = DEFINE_CHANGE_DEFINITION
 
 
 # Lambda:
 class BecomeLambda(FormNote):
     def __init__(self, parameters, body):
+        from dsn.form_analysis.legato import AtomListNoteNoutHash, FormListNoteNoutHash
+
+        pmts(parameters, AtomListNoteNoutHash)
+        pmts(body, FormListNoteNoutHash)
+
         self.parameters = parameters
         self.body = body
 
+    def as_bytes(self):
+        return (bytes([BECOME_LAMBDA]) + self.parameters.as_bytes() + self.body.as_bytes())
 
-class LambdaChangeBody(FormChangeNote):
-    def __init__(self, formlist_nout_hash):
-        self.formlist_nout_hash = formlist_nout_hash
+    @staticmethod
+    def from_stream(byte_stream):
+        from dsn.form_analysis.legato import AtomListNoteNoutHash, FormListNoteNoutHash
+        return BecomeLambda(
+            AtomListNoteNoutHash.from_stream(byte_stream), FormListNoteNoutHash.from_stream(byte_stream))
+
+
+class LambdaChangeBody(FormNote):
+
+    def __init__(self, body):
+        self.body = body
+        from dsn.form_analysis.legato import FormListNoteNoutHash
+        pmts(body, FormListNoteNoutHash)
+
+    def as_bytes(self):
+        return (bytes([LAMBDA_CHANGE_BODY]) + self.body.as_bytes())
+
+    @staticmethod
+    def from_stream(byte_stream):
+        from dsn.form_analysis.legato import FormListNoteNoutHash
+        return LambdaChangeBody(FormListNoteNoutHash.from_stream(byte_stream))
 
 
 class LambdaChangeParameters(FormNote):
     def __init__(self, parameters):
-        self.parameters = parameters  # :: atom_list_nout_hash
+        from dsn.form_analysis.legato import AtomListNoteNoutHash
+        pmts(parameters, AtomListNoteNoutHash)
+        self.parameters = parameters
+
+    def as_bytes(self):
+        return (bytes([LAMBDA_CHANGE_PARAMETERS]) + self.parameters.as_bytes())
+
+    @staticmethod
+    def from_stream(byte_stream):
+        from dsn.form_analysis.legato import AtomListNoteNoutHash
+        return LambdaChangeParameters(AtomListNoteNoutHash.from_stream(byte_stream))
 
 
 # Application
 class BecomeApplication(FormNote):
 
-    def __init__(self, procedure, arguments):
+    def __init__(self, procedure, parameters):
+        from dsn.form_analysis.legato import FormNoteNoutHash, FormListNoteNoutHash
+
+        pmts(procedure, FormNoteNoutHash)
+        pmts(parameters, FormListNoteNoutHash)
+
         self.procedure = procedure
-        self.arguments = arguments
+        self.parameters = parameters
+
+    def as_bytes(self):
+        return (bytes([BECOME_APPLICATION]) + self.procedure.as_bytes() + self.parameters.as_bytes())
+
+    @staticmethod
+    def from_stream(byte_stream):
+        from dsn.form_analysis.legato import FormNoteNoutHash, FormListNoteNoutHash
+        return BecomeApplication(
+            FormNoteNoutHash.from_stream(byte_stream), FormListNoteNoutHash.from_stream(byte_stream))
 
 
 class ApplicationChangeProcedure(FormChangeNote):
-    pass
+    TYPE_CONSTANT = APPLICATION_CHANGE_PROCEDURE
 
 
 class ApplicationChangeParameters(FormNote):
-    def __init__(self, formlist_nout_hash):
-        self.formlist_nout_hash = formlist_nout_hash
+    def __init__(self, parameters):
+        from dsn.form_analysis.legato import FormListNoteNoutHash
+        pmts(parameters, FormListNoteNoutHash)
+        self.parameters = parameters
+
+    def as_bytes(self):
+        return (bytes([APPLICATION_CHANGE_PARAMETERS]) + self.parameters.as_bytes())
+
+    @staticmethod
+    def from_stream(byte_stream):
+        from dsn.form_analysis.legato import FormListNoteNoutHash
+        return ApplicationChangeParameters(FormListNoteNoutHash.from_stream(byte_stream))
 
 
 # Sequence
 class BecomeSequence(FormNote):
     def __init__(self, sequence):
-        self.sequence = sequence  # :: form_list_nout_hash
+        from dsn.form_analysis.legato import FormListNoteNoutHash
+        pmts(sequence, FormListNoteNoutHash)
+        self.sequence = sequence
+
+    def as_bytes(self):
+        return (bytes([BECOME_SEQUENCE]) + self.sequence.as_bytes())
+
+    @staticmethod
+    def from_stream(byte_stream):
+        from dsn.form_analysis.legato import FormListNoteNoutHash
+        return BecomeSequence(FormListNoteNoutHash.from_stream(byte_stream))
 
 
 class ChangeSequence(FormNote):
     def __init__(self, sequence):
-        self.sequence = sequence  # :: form_list_nout_hash
+        from dsn.form_analysis.legato import FormListNoteNoutHash
+        pmts(sequence, FormListNoteNoutHash)
+        self.sequence = sequence
+
+    def as_bytes(self):
+        return (bytes([CHANGE_SEQUENCE]) + self.sequence.as_bytes())
+
+    @staticmethod
+    def from_stream(byte_stream):
+        from dsn.form_analysis.legato import FormListNoteNoutHash
+        return ChangeSequence(FormListNoteNoutHash.from_stream(byte_stream))
 
 
 # Below this line: Notes that describe changes to _parts_ of the Forms (in particular: symbols and lists thereof):
 class FormListNote(object):
-    pass
+
+    @staticmethod
+    def from_stream(byte_stream):
+        byte0 = next(byte_stream)
+        return {
+            FORM_LIST_INSERT: FormListInsert,
+            FORM_LIST_DELETE: FormListDelete,
+            FORM_LIST_REPLACE: FormListReplace,
+        }[byte0].from_stream(byte_stream)
 
 
 # Not present here: BecomeFormList, because it is superfluous; whenever a FormList is used it is the only option for
@@ -202,52 +455,154 @@ class FormListNote(object):
 
 class FormListInsert(FormListNote):
     def __init__(self, index, form_nout_hash):
+        from dsn.form_analysis.legato import FormNoteNoutHash
+
+        pmts(index, int)
+        pmts(form_nout_hash, FormNoteNoutHash)
+
         self.index = index
         self.form_nout_hash = form_nout_hash
+
+    def as_bytes(self):
+        return bytes([FORM_LIST_INSERT]) + to_vlq(self.index) + self.form_nout_hash.as_bytes()
+
+    @staticmethod
+    def from_stream(byte_stream):
+        from dsn.form_analysis.legato import FormNoteNoutHash
+        return FormListInsert(from_vlq(byte_stream), FormNoteNoutHash.from_stream(byte_stream))
 
 
 class FormListDelete(FormListNote):
     def __init__(self, index):
+        pmts(index, int)
         self.index = index
+
+    def as_bytes(self):
+        return bytes([FORM_LIST_DELETE]) + to_vlq(self.index)
+
+    @staticmethod
+    def from_stream(byte_stream):
+        return FormListDelete(from_vlq(byte_stream))
 
 
 class FormListReplace(FormListNote):
     def __init__(self, index, form_nout_hash):
+        from dsn.form_analysis.legato import FormNoteNoutHash
+
+        pmts(index, int)
+        pmts(form_nout_hash, FormNoteNoutHash)
+
         self.index = index
         self.form_nout_hash = form_nout_hash
 
+    def as_bytes(self):
+        return bytes([FORM_LIST_REPLACE]) + to_vlq(self.index) + self.form_nout_hash.as_bytes()
+
+    @staticmethod
+    def from_stream(byte_stream):
+        from dsn.form_analysis.legato import FormNoteNoutHash
+        return FormListReplace(from_vlq(byte_stream), FormNoteNoutHash.from_stream(byte_stream))
+
 
 class AtomNote(object):
-    pass
+
+    @staticmethod
+    def from_stream(byte_stream):
+        byte0 = next(byte_stream)
+        return {
+            BECOME_ATOM: BecomeAtom,
+            BECOME_MALFORMED_ATOM: BecomeMalformedAtom,
+        }[byte0].from_stream(byte_stream)
 
 
 class BecomeAtom(AtomNote):
     def __init__(self, unicode_):
+        pmts(unicode_, str)
         self.unicode_ = unicode_
+
+    def as_bytes(self):
+        utf8 = self.symbol.encode('utf-8')
+        return bytes([BECOME_ATOM]) + to_vlq(len(utf8)) + utf8
+
+    @staticmethod
+    def from_stream(byte_stream):
+        length = from_vlq(byte_stream)
+        utf8 = rfs(byte_stream, length)
+        return BecomeAtom(str(utf8, 'utf-8'))
 
 
 class BecomeMalformedAtom(AtomNote):
-    pass
+
+    def as_bytes(self):
+        return bytes([BECOME_MALFORMED_ATOM])
+
+    @staticmethod
+    def from_stream(byte_stream):
+        return BecomeMalformedAtom()
+
+
+class AtomListNote(object):
+
+    @staticmethod
+    def from_stream(byte_stream):
+        byte0 = next(byte_stream)
+        return {
+            ATOM_LIST_INSERT: AtomListInsert,
+            ATOM_LIST_DELETE: AtomListDelete,
+            ATOM_LIST_REPLACE: AtomListReplace,
+        }[byte0].from_stream(byte_stream)
 
 
 # Not present here: BecomeAtomList, because it is superfluous; the only actually AtomList is the param-list; when we
 # have that, it can be nothing else than a list of atoms.
-class AtomListNote(object):
-    pass
 
 
 class AtomListInsert(AtomListNote):
     def __init__(self, index, atom_nout_hash):
+        from dsn.form_analysis.legato import AtomNoteNoutHash
+
+        pmts(index, int)
+        pmts(atom_nout_hash, AtomNoteNoutHash)
+
         self.index = index
         self.atom_nout_hash = atom_nout_hash
+
+    def as_bytes(self):
+        return bytes([ATOM_LIST_INSERT]) + to_vlq(self.index) + self.atom_nout_hash.as_bytes()
+
+    @staticmethod
+    def from_stream(byte_stream):
+        from dsn.form_analysis.legato import AtomNoteNoutHash
+        return AtomListInsert(from_vlq(byte_stream), AtomNoteNoutHash.from_stream(byte_stream))
 
 
 class AtomListDelete(AtomListNote):
     def __init__(self, index):
+        pmts(index, int)
         self.index = index
+
+    def as_bytes(self):
+        return bytes([ATOM_LIST_DELETE]) + to_vlq(self.index)
+
+    @staticmethod
+    def from_stream(byte_stream):
+        return AtomListDelete(from_vlq(byte_stream))
 
 
 class AtomListReplace(AtomListNote):
     def __init__(self, index, atom_nout_hash):
+        from dsn.form_analysis.legato import AtomNoteNoutHash
+
+        pmts(index, int)
+        pmts(atom_nout_hash, AtomNoteNoutHash)
+
         self.index = index
         self.atom_nout_hash = atom_nout_hash
+
+    def as_bytes(self):
+        return bytes([ATOM_LIST_REPLACE]) + to_vlq(self.index) + self.atom_nout_hash.as_bytes()
+
+    @staticmethod
+    def from_stream(byte_stream):
+        from dsn.form_analysis.legato import AtomNoteNoutHash
+        return AtomListReplace(from_vlq(byte_stream), AtomNoteNoutHash.from_stream(byte_stream))

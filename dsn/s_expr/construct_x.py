@@ -1,7 +1,9 @@
 from spacetime import st_become, st_insert, st_replace, st_delete
+from utils import pmts
 from list_operations import l_become, l_insert, l_delete, l_replace
 
 from dsn.s_expr.clef import BecomeNode, Insert, Delete, Replace, TextBecome
+from dsn.s_expr.legato import NoteNoutHash
 from dsn.s_expr.structure import TreeNode, TreeText, YourOwnHash
 
 
@@ -81,6 +83,8 @@ def construct_x(m, stores, edge_nout_hash):
     The fact that this whole idea of Metadata is still somewhat tentative is reflected in the `_x` in the present
     method's name, rather than something more explicit.
     """
+    pmts(edge_nout_hash, NoteNoutHash)
+
     def recurse(nout_hash):
         # This is used for by `play` to construct Trees for nouts, i.e. for Replace & Insert.
         return construct_x(m, stores, nout_hash)

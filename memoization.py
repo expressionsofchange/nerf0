@@ -32,7 +32,21 @@ class Stores(object):
     def __init__(self, note_nout, historiography_note_nout):
         self.note_nout = note_nout
         self.historiography_note_nout = historiography_note_nout
-        # TODO MORE STUFF
+
+        # TODO: the organization of construction of the various NoutHashStores is TBD. I've taken an ad hoc approach of
+        # doing it inline for now
+        from hashstore import NoutHashStore
+        from dsn.form_analysis.legato import FormNoteNoutHash, FormNoteNout, FormNoteCapo
+        self.form_note_nout = NoutHashStore(FormNoteNoutHash, FormNoteNout, FormNoteCapo)
+
+        from dsn.form_analysis.legato import FormListNoteNoutHash, FormListNoteNout, FormListNoteCapo
+        self.form_list_note_nout = NoutHashStore(FormListNoteNoutHash, FormListNoteNout, FormListNoteCapo)
+
+        from dsn.form_analysis.legato import AtomNoteNoutHash, AtomNoteNout, AtomNoteCapo
+        self.form_list_note_nout = NoutHashStore(AtomNoteNoutHash, AtomNoteNout, AtomNoteCapo)
+
+        from dsn.form_analysis.legato import AtomListNoteNoutHash, AtomListNoteNout, AtomListNoteCapo
+        self.form_list_note_nout = NoutHashStore(AtomListNoteNoutHash, AtomListNoteNout, AtomListNoteCapo)
 
 
 class Memoization(object):
@@ -45,3 +59,7 @@ class Memoization(object):
         self.construct_historiography_treenode = {}
         self.view_past_from_present = {}
         self.texture_for_text = {}
+        self.construct_form = {}
+        self.construct_form_list = {}
+        self.construct_atom = {}
+        self.construct_atom_list = {}
