@@ -107,8 +107,8 @@ class IfForm(Form):
 
 class DefineForm(Form):
 
-    def __init__(self, variable, definition):
-        self.variable = variable  # :: Symbol
+    def __init__(self, symbol, definition):
+        self.symbol = symbol  # :: Symbol
         self.definition = definition  # :: Form
 
 
@@ -131,9 +131,9 @@ class SequenceForm(Form):
 
 # Below this line: _not_ Form, but used as a part of a Form. May still have its own independent history.
 class FormList(object):
-    def __init__(self):
-        # pass the list? Probably!
-        pass
+    def __init__(self, the_list, metadata):
+        self.the_list = the_list
+        self.metadata = metadata
 
 
 class Symbol(object):

@@ -130,6 +130,7 @@ class FormChangeNote(FormNote):
     TYPE_CONSTANT = NotImplemented
 
     def __init__(self, form_nout_hash):
+        # NOTE on a drawback of this field-name...
         self.form_nout_hash = form_nout_hash
 
     def as_bytes(self):
@@ -516,9 +517,10 @@ class AtomNote(object):
 
 
 class BecomeAtom(AtomNote):
-    def __init__(self, unicode_):
-        pmts(unicode_, str)
-        self.unicode_ = unicode_
+
+    def __init__(self, symbol):
+        pmts(symbol, str)
+        self.symbol = symbol
 
     def as_bytes(self):
         utf8 = self.symbol.encode('utf-8')

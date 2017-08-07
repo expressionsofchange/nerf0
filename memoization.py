@@ -43,10 +43,10 @@ class Stores(object):
         self.form_list_note_nout = NoutHashStore(FormListNoteNoutHash, FormListNoteNout, FormListNoteCapo)
 
         from dsn.form_analysis.legato import AtomNoteNoutHash, AtomNoteNout, AtomNoteCapo
-        self.form_list_note_nout = NoutHashStore(AtomNoteNoutHash, AtomNoteNout, AtomNoteCapo)
+        self.atom_note_nout = NoutHashStore(AtomNoteNoutHash, AtomNoteNout, AtomNoteCapo)
 
         from dsn.form_analysis.legato import AtomListNoteNoutHash, AtomListNoteNout, AtomListNoteCapo
-        self.form_list_note_nout = NoutHashStore(AtomListNoteNoutHash, AtomListNoteNout, AtomListNoteCapo)
+        self.atom_list_note_nout = NoutHashStore(AtomListNoteNoutHash, AtomListNoteNout, AtomListNoteCapo)
 
 
 class Memoization(object):
@@ -59,6 +59,10 @@ class Memoization(object):
         self.construct_historiography_treenode = {}
         self.view_past_from_present = {}
         self.texture_for_text = {}
+        self.construct_form_note = {}
+        self.construct_form_list_note = {}
+        self.construct_atom_note = {}
+        self.construct_atom_list_note = {}
         self.construct_form = {}
         self.construct_form_list = {}
         self.construct_atom = {}

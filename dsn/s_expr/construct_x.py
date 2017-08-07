@@ -40,7 +40,7 @@ def x_note_play(note, structure, recurse, metadata):
 
         child = recurse(note.nout_hash)
 
-        children = l_insert(structure.children[:], note.index, child)
+        children = l_insert(structure.children, note.index, child)
 
         t2s, s2t = st_insert(structure.t2s, structure.s2t, note.index)
         return TreeNode(children, t2s, s2t, metadata)

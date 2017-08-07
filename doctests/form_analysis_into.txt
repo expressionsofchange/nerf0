@@ -5,7 +5,7 @@
 >>> from dsn.s_expr.legato import NoteNout, NoteCapo, NoteNoutHash
 >>> from dsn.s_expr.test_utils import iinsert, rreplace
 >>> from dsn.s_expr.utils import nouts_for_notes_da_capo
->>> from dsn.form_analysis.into import construct_form
+>>> from dsn.form_analysis.into import construct_form_note
 >>> from dsn.historiography.legato import HistoriographyNoteNoutHash, HistoriographyNoteNout, HistoriographyNoteCapo
 >>>
 >>>
@@ -23,4 +23,48 @@
 ...         ]):
 ...     h = p.add(nh.nout)
 ...
->>> construct_form(m, stores, h)
+>>> a, b = construct_form_note(m, stores, h)
+>>> type(a).__name__
+'BecomeMalformed'
+
+>>> for nh in nouts_for_notes_da_capo([
+...     BecomeNode(),
+...     iinsert(p, 0, [TextBecome("define")]),
+...     iinsert(p, 1, [TextBecome("a")]),
+...     iinsert(p, 2, [TextBecome("0")]),
+...         ]):
+...     h = p.add(nh.nout)
+
+>>> a, b = construct_form_note(m, stores, h)
+>>> type(a).__name__
+'BecomeDefine'
+
+>>> for nh in nouts_for_notes_da_capo([
+...     BecomeNode(),
+...     iinsert(p, 0, [TextBecome("define")]),
+...     iinsert(p, 1, [TextBecome("a")]),
+...     iinsert(p, 2, [TextBecome("0")]),
+...     rreplace(p, 2, [TextBecome("1")]),
+...         ]):
+...     h = p.add(nh.nout)
+
+>>> a, b = construct_form_note(m, stores, h)
+>>> type(a).__name__
+'DefineChangeDefinition'
+
+
+>>> for nh in nouts_for_notes_da_capo([
+...     BecomeNode(),
+...     iinsert(p, 0, [TextBecome("+")]),
+...     iinsert(p, 1, [TextBecome("0")]),
+...     rreplace(p, 0, [TextBecome("-")]),
+...         ]):
+...     h = p.add(nh.nout)
+
+>>> a, b = construct_form_note(m, stores, h)
+>>> for n in reversed([tup.nout.note for tup in  stores.form_note_nout.all_nhtups_for_nout_hash(b)]):
+...     print(type(n).__name__)
+BecomeMalformed
+BecomeApplication
+ApplicationChangeParameters
+ApplicationChangeProcedure

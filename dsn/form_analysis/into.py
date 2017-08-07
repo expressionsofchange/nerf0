@@ -13,7 +13,7 @@ Functional programmers point out that you can't know... which is true but not us
 from utils import pmts
 
 from dsn.s_expr.clef import Insert, Replace, Delete
-from dsn.s_expr.structure import TreeText
+from dsn.s_expr.structure import TreeText, YourOwnHash
 from dsn.s_expr.construct_x import construct_x
 from dsn.s_expr.legato import NoteCapo, NoteNoutHash
 
@@ -46,7 +46,23 @@ from dsn.form_analysis.clef import (
     LambdaChangeBody,
     LambdaChangeParameters,
 )
-from dsn.form_analysis.structure import ApplicationForm, QuoteForm, DefineForm, LambdaForm, SequenceForm, IfForm
+
+from dsn.form_analysis.construct import (
+    play_form_note,
+    play_atom_note,
+    # play_form_list_note, NOTE why assymmetriccally not imported here...
+    play_atom_list_note,
+)
+from dsn.form_analysis.structure import (
+    ApplicationForm,
+    DefineForm,
+    Form,
+    FormList,
+    IfForm,
+    LambdaForm,
+    QuoteForm,
+    SequenceForm,
+)
 from dsn.form_analysis.legato import (
     AtomNoteCapo,
     AtomNoteSlur,
@@ -79,8 +95,10 @@ def parse_string(unicode_):
 def not_quite_play_form_list(m, stores, s_expr_note, previous_form_list, index_shift):
     """'not_quite', because this function looks a lot like the play* functions, but is specialized w/ index_shift"""
 
+    pmts(previous_form_list, FormList)
+
     if isinstance(s_expr_note, Insert) or isinstance(s_expr_note, Replace):
-        _, form_note_nh = construct_form(m, stores, s_expr_note.nout_hash)
+        _, form_note_nh = construct_form_note(m, stores, s_expr_note.nout_hash)
 
     assert s_expr_note.index >= index_shift, "function may only be called on s_expr_note with index >= index_shift"
     index = s_expr_note.index - index_shift
@@ -104,6 +122,8 @@ def not_quite_play_form_list(m, stores, s_expr_note, previous_form_list, index_s
 
 
 def play_form(m, stores, s_expr_note, previous_s_expr, s_expr, previous_form):
+    previous_form is None or pmts(previous_form, Form)
+
     if isinstance(s_expr, TreeText):
         # Because we don't distinguish between Become & Set yet, we don't have to consider the previous_form at this
         # point: we always Become anyway.
@@ -143,8 +163,8 @@ def play_form(m, stores, s_expr_note, previous_s_expr, s_expr, previous_form):
         if len(s_expr.children) != 3:  # (tag, symbol, definition)
             return BecomeMalformed()
 
-        _, s = construct_atom(m, stores, s_expr.children[1].metadata.nout_hash)
-        _, d = construct_form(m, stores, s_expr.children[2].metadata.nout_hash)
+        _, s = construct_atom_note(m, stores, s_expr.children[1].metadata.nout_hash)
+        _, d = construct_form_note(m, stores, s_expr.children[2].metadata.nout_hash)
 
         # TODO The note below should be lifted to a more general design-document when this is available:
         # A note on the bubbling up of brokenness: we take the most general approach, of doing as little "automatic"
@@ -178,7 +198,7 @@ def play_form(m, stores, s_expr_note, previous_s_expr, s_expr, previous_form):
         if len(s_expr.children) < 3:  # (tag, parameters, «body-expressions»)
             return BecomeMalformed()
 
-        _, parameters = construct_atom_list(m, stores, s_expr.children[1].metadata.nout_hash)
+        _, parameters = construct_atom_list_note(m, stores, s_expr.children[1].metadata.nout_hash)
 
         if not isinstance(previous_form, LambdaForm):
             return BecomeLambda(parameters, concoct_form_list_history(m, stores, s_expr.children[2:]))
@@ -246,7 +266,7 @@ def play_form(m, stores, s_expr_note, previous_s_expr, s_expr, previous_form):
             3: ChangeIfAlternative,
         }[s_expr_note.index]
 
-        _, child_change = construct_form(m, stores, s_expr.children[s_expr_note.index].metadata.nout_hash)
+        _, child_change = construct_form_note(m, stores, s_expr.children[s_expr_note.index].metadata.nout_hash)
 
         return Note(child_change)
 
@@ -254,7 +274,7 @@ def play_form(m, stores, s_expr_note, previous_s_expr, s_expr, previous_form):
 
     # if len(s_expr.children) == 0 ... is already guarded above (and documented there)
 
-    _, procedure = construct_form(m, stores, s_expr.children[1].metadata.nout_hash)
+    _, procedure = construct_form_note(m, stores, s_expr.children[0].metadata.nout_hash)
 
     if not isinstance(previous_form, ApplicationForm):
         # see notes on BecomeLambda's usage of concoct_form_list_history for some reservations.
@@ -262,17 +282,17 @@ def play_form(m, stores, s_expr_note, previous_s_expr, s_expr, previous_form):
             procedure,
             concoct_form_list_history(m, stores, s_expr.children[1:]))
 
-    if isinstance(s_expr_note, Replace) and s_expr_note.index == 1:
+    if isinstance(s_expr_note, Replace) and s_expr_note.index == 0:
         return ApplicationChangeProcedure(procedure)
 
-    if s_expr_note.note.index <= 1:
+    if s_expr_note.index == 0:
         # Similar case as for lambda: too much shifting around to make any sense
         return BecomeApplication(
             procedure,
             concoct_form_list_history(m, stores, s_expr.children[1:]))
 
     index_shift = 1  # ignore the procedure
-    form_list_nout_hash = not_quite_play_form_list(m, stores, s_expr_note, previous_form.body, index_shift)
+    form_list_nout_hash = not_quite_play_form_list(m, stores, s_expr_note, previous_form.arguments, index_shift)
 
     return ApplicationChangeParameters(form_list_nout_hash)
 
@@ -300,11 +320,10 @@ def concoct_form_list_history(m, stores, s_expr_list):
     of histories, and our output is the history of a list. This missing information is why the need to concoct exists.
     The implementation of concocting is simply to construct inserts in spatial order."""
 
-    form_list_note = FormListNoteCapo()
-    form_list_nh = stores.form_list_note_nout.add(form_list_note)
+    form_list_nh = stores.form_list_note_nout.add(FormListNoteCapo())
 
     for i, s_expr in enumerate(s_expr_list):
-        form_note, form_nh = construct_form(m, stores, s_expr.metadata.nout_history)
+        form_note, form_nh = construct_form_note(m, stores, s_expr.metadata.nout_hash)
 
         form_list_note = FormListInsert(i, form_nh)
 
@@ -325,7 +344,7 @@ def play_atom_list(m, stores, s_expr_note, previous_s_expr_, s_expr_, previous_a
     if isinstance(s_expr_note, Delete):
         return AtomListDelete(s_expr_note.index)
 
-    a, a_nh = construct_atom(m, stores, s_expr_note.nout_hash)
+    a, a_nh = construct_atom_note(m, stores, s_expr_note.nout_hash)
 
     if isinstance(s_expr_note, Replace):
         return AtomListReplace(s_expr_note.index, a_nh)
@@ -338,8 +357,12 @@ def play_atom_list(m, stores, s_expr_note, previous_s_expr_, s_expr_, previous_a
     raise Exception("Case analysis fail")
 
 
-def construct_analysis_note(m, stores, edge_nout_hash, memoization_key, store_key, play, Capo, Slur):
+def construct_analysis_note(
+        m, stores, edge_nout_hash, memoization_key, store_key, play, play_note, empty_structure, Capo, Slur):
     """Generic mechanism to construct any of the 4 types of notes from the form-analysis Clef.
+
+    * play: the mechanism of constructing analysis* notes out of s_expr notes
+    * play_note: the mechanism of constructing, for analysis* notes, the associated structure.
 
     returns :: (note, nout_hash) (both of these are of 1 of the 4 analysis clefs)
 
@@ -352,6 +375,8 @@ def construct_analysis_note(m, stores, edge_nout_hash, memoization_key, store_ke
 
     # In the beginning, there is nothing, which we model as `None`
     constructed_note = None
+    constructed_structure = empty_structure
+
     # the below is just a quick & dirty way of constructing the first nout_hash. Because any NoutHashStore contains the
     # Capo, this is actually a side-effect-free operation.
     constructed_nout_hash = store.add(Capo())
@@ -360,6 +385,8 @@ def construct_analysis_note(m, stores, edge_nout_hash, memoization_key, store_ke
     for tup in stores.note_nout.all_nhtups_for_nout_hash(edge_nout_hash):
         if tup.nout_hash in memoization:
             constructed_note, constructed_nout_hash = memoization[tup.nout_hash]
+            constructed_structure = play_note(
+                m, stores, constructed_structure, constructed_note, YourOwnHash(constructed_nout_hash))
             break
 
         todo.append(tup)
@@ -377,16 +404,22 @@ def construct_analysis_note(m, stores, edge_nout_hash, memoization_key, store_ke
         note = edge_nout.note
 
         s_expr = construct_x(m, stores, edge_nout_hash)
-        constructed_note = play(m, stores, note, previous_s_expr, s_expr, constructed_note)
+
+        constructed_note = play(m, stores, note, previous_s_expr, s_expr, constructed_structure)
 
         # Will we be needing the metadata of the s_expr's notes in the 1-to-1-mapped equivalents in the form world? For
         # now: no need has been established. So we won't do it. But we'll leave it here as a comment:
         # YourOwnHash(edge_nout_hash))
+        # The above remark still stands, but since then we _did_ in fact find a usage for YourOwnHash in the present
+        # function.
 
         constructed_nout = Slur(constructed_note, constructed_nout_hash)
 
-        # NOTE: We _add_ to the store here! i.e. we have some side-effects (albeit of a rather constrained class)
+        # NOTE: We _add_ to the store here! i.e. we have some side-effects (albeit of a rather constrained sort)
         constructed_nout_hash = store.add(constructed_nout)
+
+        constructed_structure = play_note(
+            m, stores, constructed_structure, constructed_note, YourOwnHash(constructed_nout_hash))
 
         memoization[edge_nout_hash] = constructed_note, constructed_nout_hash
 
@@ -395,17 +428,19 @@ def construct_analysis_note(m, stores, edge_nout_hash, memoization_key, store_ke
     return constructed_note, constructed_nout_hash
 
 
-def construct_form(m, stores, edge_nout_hash):
+def construct_form_note(m, stores, edge_nout_hash):
     return construct_analysis_note(
-        m, stores, edge_nout_hash, 'construct_form', 'form_note_nout', play_form, FormNoteCapo, FormNoteSlur)
+        m, stores, edge_nout_hash, 'construct_form_note', 'form_note_nout', play_form, play_form_note,
+        None, FormNoteCapo, FormNoteSlur)
 
 
-def construct_atom(m, stores, edge_nout_hash):
+def construct_atom_note(m, stores, edge_nout_hash):
     return construct_analysis_note(
-        m, stores, edge_nout_hash, 'construct_atom', 'atom_note_nout', play_atom, AtomNoteCapo, AtomNoteSlur)
+        m, stores, edge_nout_hash, 'construct_atom_note', 'atom_note_nout', play_atom, play_atom_note,
+        None, AtomNoteCapo, AtomNoteSlur)
 
 
-def construct_atom_list(m, stores, edge_nout_hash):
+def construct_atom_list_note(m, stores, edge_nout_hash):
     return construct_analysis_note(
-        m, stores, edge_nout_hash, 'construct_atom_list', 'atom_list_note_nout', play_atom_list, AtomListNoteCapo,
-        AtomListNoteSlur)
+        m, stores, edge_nout_hash, 'construct_atom_list_note', 'atom_list_note_nout', play_atom_list,
+        some_list, play_atom_list_note, AtomListNoteCapo, AtomListNoteSlur)
