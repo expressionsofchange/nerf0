@@ -91,6 +91,7 @@ BECOME_MALFORMED_ATOM = 1
 ATOM_LIST_INSERT = 0
 ATOM_LIST_DELETE = 1
 ATOM_LIST_REPLACE = 2
+ATOM_LIST_BECOME = 3
 
 
 class FormNote(object):
@@ -549,14 +550,30 @@ class AtomListNote(object):
     def from_stream(byte_stream):
         byte0 = next(byte_stream)
         return {
+            ATOM_LIST_BECOME: AtomListBecome,
             ATOM_LIST_INSERT: AtomListInsert,
             ATOM_LIST_DELETE: AtomListDelete,
             ATOM_LIST_REPLACE: AtomListReplace,
         }[byte0].from_stream(byte_stream)
 
 
-# Not present here: BecomeAtomList, because it is superfluous; the only actually AtomList is the param-list; when we
-# have that, it can be nothing else than a list of atoms.
+class AtomListBecome(AtomListNote):
+    """Historic note and assymmetry w/ FormListBecome: I used to think that it was not necessary to have AtomListBecome,
+    because in all locations where atom lists are actually used (i.e. parameter lists), the existance of a list is
+    implied.
+
+    Since then, I have identified 2 reasons to have AtomListBecome anyway:
+    * Such a note allows us to retain the 1-to-1 relationship with the s-expr clef.
+    * The existance of a _valid_ list of atoms is not always a given; AtomListBecome is thus the constrast to
+            AtomListBecomeMalformed
+    """
+
+    def as_bytes(self):
+        return bytes([ATOM_LIST_BECOME])
+
+    @staticmethod
+    def from_stream(byte_stream):
+        return AtomListBecome()
 
 
 class AtomListInsert(AtomListNote):

@@ -12,7 +12,7 @@ Functional programmers point out that you can't know... which is true but not us
 """
 from utils import pmts
 
-from dsn.s_expr.clef import Insert, Replace, Delete
+from dsn.s_expr.clef import BecomeNode, Insert, Replace, Delete
 from dsn.s_expr.structure import TreeText, YourOwnHash
 from dsn.s_expr.construct_x import construct_x
 from dsn.s_expr.legato import NoteCapo, NoteNoutHash
@@ -20,6 +20,7 @@ from dsn.s_expr.legato import NoteCapo, NoteNoutHash
 from dsn.form_analysis.clef import (
     ApplicationChangeProcedure,
     ApplicationChangeParameters,
+    AtomListBecome,
     AtomListDelete,
     AtomListInsert,
     AtomListReplace,
@@ -34,6 +35,7 @@ from dsn.form_analysis.clef import (
     BecomeValue,
     BecomeVariable,
     BecomeSequence,
+    ChangeSequence,
     ChangeIfPredicate,
     ChangeIfConsequent,
     ChangeIfAlternative,
@@ -50,8 +52,12 @@ from dsn.form_analysis.clef import (
 from dsn.form_analysis.construct import (
     play_form_note,
     play_atom_note,
-    # play_form_list_note, NOTE why assymmetriccally not imported here...
     play_atom_list_note,
+    # play_form_list_note, NOTE why assymmetriccally not imported here...
+
+    construct_form,
+    construct_atom,
+    construct_atom_list,
 )
 from dsn.form_analysis.structure import (
     ApplicationForm,
@@ -93,7 +99,33 @@ def parse_string(unicode_):
 
 
 def not_quite_play_form_list(m, stores, s_expr_note, previous_form_list, index_shift):
-    """'not_quite', because this function looks a lot like the play* functions, but is specialized w/ index_shift"""
+    """
+    This looks somewhat similar to e.g. play_form, but it's not quite symmetric with the other play* functions. The
+    differences are described below; once these are more thoroughly understood, a better name for the present function
+    may arise as well.
+
+    The regular play* functions take an s-expr note, and translate it into a note in another clef (the one indicated by
+    what's in the place of the "*").
+    The assumption is that each note instance in the s-expr side will be translated into a note in the other clef; we
+    build on this assumption in the construct_*_note functions, which send each consecutive s-expr note to the play*
+    functions, and construct a nout-connected equivalent on the other side out of it.
+
+    The translation of s-expr notes into form_list_notes has a slightly different shape.
+
+    As far as I can see this is not a fundamental property of form_lists, but a somewhat coincidental consequence of
+    where they are used in practice. Namely: as part of 'begin', 'lambda' and function application. In all 3 cases, the
+    created formlists do not have a 1-to-1 correspondance to a single s-expr, but rather are just one of the parts of a
+    form. I.e. (begin «the list»), (lambda (params) «the list») and so on.
+
+    In other words: at the places where the present function is called, we check whether the s-expr note's index is
+    greater than a certain threshold. If it isn't, it is treated specially (e.g. lambda's params). Only if it is, the
+    present function is called, and the threshold (index_shift) is passed. Which means that the present function is not
+    always called for each not in the s-expr (no 1-to-1 correspondance)
+
+    This lack of 1-to-1 correspondance is further reflected in the fact that the connecting of resulting notes into
+    nouts is done in the present function, as opposed to automatically in a construct* function. That in turn is
+    reflected in the type-signature: we don't return a Note, but rather return a hash here.
+    """
 
     pmts(previous_form_list, FormList)
 
@@ -113,7 +145,7 @@ def not_quite_play_form_list(m, stores, s_expr_note, previous_form_list, index_s
         form_list_note = FormListDelete(index)
 
     else:
-        raise Exception("Programming Error: Incomplete case-analysis")
+        raise Exception("Programming Error: Incomplete case-analysis: %s" % type(s_expr_note))
 
     # NOTE: this assumes that we'll store metadata on all 4 types of analysis-[sub]structures.
     previous_form_list_nh = previous_form_list.metadata.nout_hash
@@ -206,7 +238,7 @@ def play_form(m, stores, s_expr_note, previous_s_expr, s_expr, previous_form):
         if isinstance(s_expr_note, Replace) and s_expr_note.index == 1:
             return LambdaChangeParameters(parameters)
 
-        if s_expr_note.note.index <= 1:
+        if s_expr_note.index <= 1:
             # Any other change to a child <= 1 is interpreted as BecomeLambda. Such a change can either be a direct
             # tag-change, or some change that, at the level of s-expr-manipuliation, doesn't respect the natural
             # boundaries of meaning as they exist on the form-analysis. (i.e. delete/insert at position or 1)
@@ -244,7 +276,7 @@ def play_form(m, stores, s_expr_note, previous_s_expr, s_expr, previous_form):
         index_shift = 1  # we ignore the tag 'begin'
         form_list_nout_hash = not_quite_play_form_list(m, stores, s_expr_note, previous_form.sequence, index_shift)
 
-        return LambdaChangeBody(form_list_nout_hash)
+        return ChangeSequence(form_list_nout_hash)
 
     if tagged_list_tag == "if":
         if len(s_expr.children) != 4:  # (tag, predicate, consequent, alternative)
@@ -253,18 +285,26 @@ def play_form(m, stores, s_expr_note, previous_s_expr, s_expr, previous_form):
             # sensible meaning of an else-less if)
             return BecomeMalformed()
 
+        note_type_for_child_index = {
+            1: ChangeIfPredicate,
+            2: ChangeIfConsequent,
+            3: ChangeIfAlternative,
+        }
+
         if not isinstance(previous_form, IfForm):
-            # see notes on BecomeLambda's usage of concoct_form_list_history for some reservations.
-            return BecomeIf(concoct_form_list_history(m, stores, s_expr.children[1:]))
+            HASH = 1
+
+            args = [
+                construct_form_note(m, stores, s_expr.children[i].metadata.nout_hash)[HASH]
+                for i in note_type_for_child_index.keys()
+                ]
+
+            return BecomeIf(*args)
 
         # (similar thinking as in "define")
         assert isinstance(s_expr_note, Replace), "An error in Klaas' thinking has been exposed"
 
-        Note = {
-            1: ChangeIfPredicate,
-            2: ChangeIfConsequent,
-            3: ChangeIfAlternative,
-        }[s_expr_note.index]
+        Note = note_type_for_child_index[s_expr_note.index]
 
         _, child_change = construct_form_note(m, stores, s_expr.children[s_expr_note.index].metadata.nout_hash)
 
@@ -340,11 +380,18 @@ def play_atom(m_, stores_, s_expr_note_, previous_s_expr_, s_expr, previous_atom
     return BecomeAtom(s_expr.unicode_)
 
 
-def play_atom_list(m, stores, s_expr_note, previous_s_expr_, s_expr_, previous_atom_list_):
+def play_atom_list(m, stores, s_expr_note, previous_s_expr_, s_expr, previous_atom_list_):
+    if isinstance(s_expr_note, BecomeNode):
+        return AtomListBecome()
+
+    # STEAL FROM CONSTRUCT_X !
     if isinstance(s_expr_note, Delete):
         return AtomListDelete(s_expr_note.index)
 
-    a, a_nh = construct_atom_note(m, stores, s_expr_note.nout_hash)
+    if isinstance(s_expr_note, Delete):
+        return AtomListDelete(s_expr_note.index)
+
+    a, a_nh = construct_atom_note(m, stores, s_expr.metadata.nout_hash)
 
     if isinstance(s_expr_note, Replace):
         return AtomListReplace(s_expr_note.index, a_nh)
@@ -354,11 +401,24 @@ def play_atom_list(m, stores, s_expr_note, previous_s_expr_, s_expr_, previous_a
 
     # By the way: perhaps there's an issue w/ BecomeNode existing in the s-expression Clef, but not here? If so, it will
     # show up soon enough.
-    raise Exception("Case analysis fail")
+
+    # Indeed there is :-D
+    # I will think of a solution over coffee
+
+    # Related question: I haven't yet seen the similar problem on the form list.
+    #
+
+    # Something must give.... let's enumerate the options.
+    # Not having a 1-to-1 correspondence between the s_expr clef and the atom-list-clef. Meh, for many reasons
+    #       1-to-1 correspondence useful everywhere. e.g. in the UI later on
+    #       assymmetry is always bad, spreads like an olievlek
+
+    raise Exception("Case analysis fail %s" % type(s_expr_note))
 
 
 def construct_analysis_note(
-        m, stores, edge_nout_hash, memoization_key, store_key, play, play_note, empty_structure, Capo, Slur):
+        m, stores, edge_nout_hash, memoization_key, store_key, play, play_note, construct_structure, empty_structure,
+        Capo, Slur):
     """Generic mechanism to construct any of the 4 types of notes from the form-analysis Clef.
 
     * play: the mechanism of constructing analysis* notes out of s_expr notes
@@ -385,8 +445,9 @@ def construct_analysis_note(
     for tup in stores.note_nout.all_nhtups_for_nout_hash(edge_nout_hash):
         if tup.nout_hash in memoization:
             constructed_note, constructed_nout_hash = memoization[tup.nout_hash]
-            constructed_structure = play_note(
-                m, stores, constructed_structure, constructed_note, YourOwnHash(constructed_nout_hash))
+
+            # NOTE on why we need to construct from first principles.... rather than taking a single step using "play".
+            constructed_structure = construct_structure(m, stores, constructed_nout_hash)
             break
 
         todo.append(tup)
@@ -431,16 +492,16 @@ def construct_analysis_note(
 def construct_form_note(m, stores, edge_nout_hash):
     return construct_analysis_note(
         m, stores, edge_nout_hash, 'construct_form_note', 'form_note_nout', play_form, play_form_note,
-        None, FormNoteCapo, FormNoteSlur)
+        construct_form, None, FormNoteCapo, FormNoteSlur)
 
 
 def construct_atom_note(m, stores, edge_nout_hash):
     return construct_analysis_note(
         m, stores, edge_nout_hash, 'construct_atom_note', 'atom_note_nout', play_atom, play_atom_note,
-        None, AtomNoteCapo, AtomNoteSlur)
+        construct_atom, None, AtomNoteCapo, AtomNoteSlur)
 
 
 def construct_atom_list_note(m, stores, edge_nout_hash):
     return construct_analysis_note(
         m, stores, edge_nout_hash, 'construct_atom_list_note', 'atom_list_note_nout', play_atom_list,
-        some_list, play_atom_list_note, AtomListNoteCapo, AtomListNoteSlur)
+        play_atom_list_note, construct_atom_list, None, AtomListNoteCapo, AtomListNoteSlur)

@@ -114,7 +114,7 @@ class DefineForm(Form):
 
 class LambdaForm(Form):
     def __init__(self, parameters, body):
-        self.parameters = parameters  # :: [Symbol]
+        self.parameters = parameters  # :: AtomList
         self.body = body  # :: Form
 
 
@@ -146,6 +146,6 @@ class Symbol(object):
 
 
 class SymbolList(object):
-    def __init__(self):
-        # pass the list? Probably!
-        pass
+    def __init__(self, the_list, metadata):
+        self.the_list = the_list
+        self.metadata = metadata

@@ -7,10 +7,13 @@ from dsn.s_expr.structure import YourOwnHash  # NOTE this appears to be more gen
 from dsn.form_analysis.legato import (
     FormNoteNoutHash,
     FormListNoteNoutHash,
+    FormListNoteCapo,
     AtomNoteNoutHash,
+    AtomListNoteNoutHash,
 )
 
 from dsn.form_analysis.structure import (
+    SymbolList,
     ApplicationForm,
     DefineForm,
     FormList,
@@ -27,6 +30,7 @@ from dsn.form_analysis.structure import (
 from dsn.form_analysis.clef import (
     ApplicationChangeProcedure,
     ApplicationChangeParameters,
+    AtomListBecome,
     AtomListDelete,
     AtomListInsert,
     AtomListReplace,
@@ -41,6 +45,7 @@ from dsn.form_analysis.clef import (
     BecomeValue,
     BecomeVariable,
     BecomeSequence,
+    ChangeSequence,
     ChangeIfPredicate,
     ChangeIfConsequent,
     ChangeIfAlternative,
@@ -52,9 +57,6 @@ from dsn.form_analysis.clef import (
     FormListReplace,
     LambdaChangeBody,
     LambdaChangeParameters,
-)
-from dsn.form_analysis.legato import (
-    FormListNoteCapo,
 )
 
 
@@ -90,9 +92,28 @@ def play_form_note(m, stores, structure, note, metadata_NOT_YET_USED):
 
         return ApplicationForm(procedure, parameters)
 
-    # More become...
+    if isinstance(note, BecomeIf):
+        predicate = construct_form(m, stores, note.predicate)
+        consequent = construct_form(m, stores, note.consequent)
+        alternative = construct_form(m, stores, note.alternative)
 
-    # In all of the below: # TODO CHECK EXISITNG
+        return IfForm(predicate, consequent, alternative)
+
+    if isinstance(note, BecomeLambda):
+        parameters = construct_atom_list(m, stores, note.parameters)
+        body = construct_form_list(m, stores, note.body)
+
+        return LambdaForm(parameters, body)
+
+    if isinstance(note, BecomeSequence):
+        sequence = construct_form_list(m, stores, note.sequence)
+        return SequenceForm(sequence)
+
+    # In all of the below: # TODO CHECK EXISITNG Type matches the change.
+
+    if isinstance(note, ChangeQuote):
+        s_expr = construct_x(m, stores, note.s_expr_nout_hash)
+        return QuoteForm(s_expr)
 
     if isinstance(note, DefineChangeDefinition):
         definition = construct_form(m, stores, note.form_nout_hash)
@@ -111,30 +132,41 @@ def play_form_note(m, stores, structure, note, metadata_NOT_YET_USED):
 
         return ApplicationForm(procedure, structure.arguments)
 
+    if type(note) in [ChangeIfPredicate, ChangeIfConsequent, ChangeIfAlternative]:
+        args = [structure.predicate, structure.consequent, structure.alternative]
+
+        i = {
+            ChangeIfPredicate: 0,
+            ChangeIfConsequent: 1,
+            ChangeIfAlternative: 2,
+        }[type(note)]
+
+        args[i] = construct_form(m, stores, note.form_nout_hash)
+
+        return IfForm(*args)
+
+    if isinstance(note, LambdaChangeBody):
+        body = construct_form_list(m, stores, note.body)
+
+        return LambdaForm(structure.parameters, body)
+
+    if isinstance(note, LambdaChangeParameters):
+        parameters = construct_atom_list(m, stores, note.parameters)
+
+        return LambdaForm(parameters, structure.body)
+
+    if isinstance(note, ChangeSequence):
+        sequence = construct_form_list(m, stores, note.sequence)
+        return SequenceForm(sequence)
+
     raise Exception("Not implemented type %s", type(note).__name__)
-
-    BecomeIf,
-    BecomeLambda,
-    BecomeSequence,
-
-    IfForm,
-    LambdaForm,
-    SequenceForm,
-
-    ChangeIfPredicate,
-    ChangeIfConsequent,
-    ChangeIfAlternative,
-
-    ChangeQuote,
-
-    LambdaChangeBody,
-    LambdaChangeParameters,
 
 
 def play_atom_note(m, stores, structure, note, metadata_NOT_YET_USED):
     if isinstance(note, BecomeMalformedAtom):
+        # TODO fully determine how to model this
         # First thoughts: either as a separate class, as a separate attribute, or by having the symbol None
-        raise Exception("Modelling TBD")
+        return Symbol(None)
 
     if isinstance(note, BecomeAtom):
         # NOTE the incongruency in naming here!
@@ -147,10 +179,34 @@ def play_atom_note(m, stores, structure, note, metadata_NOT_YET_USED):
     raise Exception("Unknown note: %s" % type(note).__name__)
 
 
-def play_atom_list_note(*args):
-    AtomListDelete,
-    AtomListInsert,
-    AtomListReplace,
+def play_atom_list_note(m, stores, structure, note, metadata):
+    if isinstance(note, AtomListBecome):
+        if structure is not None:
+            raise Exception("You can only AtomListBecome out of nothingness")
+
+        return SymbolList([], metadata)
+
+    if structure is None:
+        raise Exception("Dat is raar... %s" % type(note))
+
+    if isinstance(note, AtomListInsert):
+        if not (0 <= note.index <= len(structure.the_list)):  # Note: insert _at_ len(..) is ok (a.k.a. append)
+            raise Exception("Out of bounds: %s" % note.index)
+
+        element = construct_atom(m, stores, note.atom_nout_hash)
+        return SymbolList(l_insert(structure.the_list, note.index, element), metadata)
+
+    if not (0 <= note.index <= len(structure.the_list) - 1):  # For Delete/Replace the check is "inside bounds"
+        raise Exception("Out of bounds: %s" % note.index)
+
+    if isinstance(note, AtomListDelete):
+        return SymbolList(l_delete(structure.the_list, note.index), metadata)
+
+    if isinstance(note, AtomListReplace):
+        element = construct_atom(m, stores, note.atom_nout_hash)
+        return SymbolList(l_replace(structure.the_list, note.index, element), metadata)
+
+    raise Exception("Unknown note %s" % type(note).__name__)
 
 
 def play_form_list_note(m, stores, structure, note, metadata):
@@ -161,7 +217,7 @@ def play_form_list_note(m, stores, structure, note, metadata):
         element = construct_form(m, stores, note.form_nout_hash)
         return FormList(l_insert(structure.the_list, note.index, element), metadata)
 
-    if not (0 <= note.index <= len(structure) - 1):  # For Delete/Replace the check is "inside bounds"
+    if not (0 <= note.index <= len(structure.the_list) - 1):  # For Delete/Replace the check is "inside bounds"
         raise Exception("Out of bounds: %s" % note.index)
 
     if isinstance(note, FormListDelete):
@@ -225,4 +281,11 @@ def construct_form_list(m, stores, edge_nout_hash):
 def construct_atom(m, stores, edge_nout_hash):
     return construct(
         AtomNoteNoutHash, None, 'construct_atom', 'atom_note_nout', play_atom_note,
+        m, stores, edge_nout_hash)
+
+
+def construct_atom_list(m, stores, edge_nout_hash):
+    return construct(
+        AtomListNoteNoutHash, None, 'construct_atom_list', 'atom_list_note_nout',
+        play_atom_list_note,
         m, stores, edge_nout_hash)

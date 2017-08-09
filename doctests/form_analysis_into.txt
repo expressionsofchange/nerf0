@@ -29,6 +29,22 @@
 
 >>> for nh in nouts_for_notes_da_capo([
 ...     BecomeNode(),
+...     iinsert(p, 0, [TextBecome("quote")]),
+...     iinsert(p, 1, [TextBecome("a")]),
+...     rreplace(p, 1, [TextBecome("b")]),
+...         ]):
+...     h = p.add(nh.nout)
+
+>>> a, b = construct_form_note(m, stores, h)
+>>> for n in reversed([tup.nout.note for tup in  stores.form_note_nout.all_nhtups_for_nout_hash(b)]):
+...     print(type(n).__name__)
+BecomeMalformed
+BecomeMalformed
+BecomeQuote
+ChangeQuote
+
+>>> for nh in nouts_for_notes_da_capo([
+...     BecomeNode(),
 ...     iinsert(p, 0, [TextBecome("define")]),
 ...     iinsert(p, 1, [TextBecome("a")]),
 ...     iinsert(p, 2, [TextBecome("0")]),
@@ -68,3 +84,69 @@ BecomeMalformed
 BecomeApplication
 ApplicationChangeParameters
 ApplicationChangeProcedure
+
+
+
+>>> for nh in nouts_for_notes_da_capo([
+...     BecomeNode(),
+...     iinsert(p, 0, [TextBecome("if")]),
+...     iinsert(p, 1, [TextBecome("true")]),
+...     iinsert(p, 2, [TextBecome("1")]),
+...     iinsert(p, 3, [TextBecome("2")]),
+...     rreplace(p, 2, [TextBecome("9")]),
+...     rreplace(p, 1, [TextBecome("false")]),
+...         ]):
+...     h = p.add(nh.nout)
+
+>>> a, b = construct_form_note(m, stores, h)
+>>> for n in reversed([tup.nout.note for tup in  stores.form_note_nout.all_nhtups_for_nout_hash(b)]):
+...     print(type(n).__name__)
+BecomeMalformed
+BecomeMalformed
+BecomeMalformed
+BecomeMalformed
+BecomeIf
+ChangeIfConsequent
+ChangeIfPredicate
+
+
+>>> for nh in nouts_for_notes_da_capo([
+...     BecomeNode(),
+...     iinsert(p, 0, [TextBecome("lambda")]),
+...     iinsert(p, 1, [BecomeNode(),
+...                    iinsert(p, 0, [TextBecome("a")])
+...                    ]),
+...     iinsert(p, 2, [TextBecome("a")]),
+...     rreplace(p, 2, [TextBecome("b")]),
+...     rreplace(p, 1, [BecomeNode(),
+...                    iinsert(p, 0, [TextBecome("b")])
+...                    ]),
+...         ]):
+...     h = p.add(nh.nout)
+
+>>> a, b = construct_form_note(m, stores, h)
+>>> for n in reversed([tup.nout.note for tup in  stores.form_note_nout.all_nhtups_for_nout_hash(b)]):
+...     print(type(n).__name__)
+BecomeMalformed
+BecomeMalformed
+BecomeMalformed
+BecomeLambda
+LambdaChangeBody
+LambdaChangeParameters
+
+
+>>> for nh in nouts_for_notes_da_capo([
+...     BecomeNode(),
+...     iinsert(p, 0, [TextBecome("begin")]),
+...     iinsert(p, 1, [TextBecome("a")]),
+...     iinsert(p, 2, [TextBecome("b")]),
+...         ]):
+...     h = p.add(nh.nout)
+
+>>> a, b = construct_form_note(m, stores, h)
+>>> for n in reversed([tup.nout.note for tup in  stores.form_note_nout.all_nhtups_for_nout_hash(b)]):
+...     print(type(n).__name__)
+BecomeMalformed
+BecomeMalformed
+BecomeSequence
+ChangeSequence
