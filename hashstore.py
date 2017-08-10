@@ -66,7 +66,7 @@ class NoutHashStore(HashStore):
         while True:
             nout = self.get(nout_hash)
             if nout == self.NoutCapo():
-                raise StopIteration()
+                return
 
             yield NoutAndHash(nout, nout_hash)
             nout_hash = nout.previous_hash
