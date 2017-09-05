@@ -1052,7 +1052,7 @@ class TreeWidget(FocusBehavior, Widget):
 
         kw = {
             'font_size': pt(14),
-            'font_name': 'Oxygen',
+            # 'font_name': 'Oxygen',
             'bold': False,
             'anchor_x': 'left',
             'anchor_y': 'top',
