@@ -70,4 +70,3 @@
 # This last solution I like best.
 # I'll just store the full editor_ds object for starters; noting that, if we're ever to make the editor's score using
 # Nouts and such, we can do further optimizations.
-

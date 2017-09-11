@@ -51,7 +51,7 @@ is_valid_double_edge(m, stores, last_shared_hash, nout_hash_0, nout_hash_0)
 shared_history = nouts_for_notes_da_capo([
     BecomeNode(),
     iinsert(p, 0, [TextBecome("reference")]),
-        ])
+    ])
 
 for nh in shared_history:
     p.add(nh.nout)
@@ -143,7 +143,7 @@ shared_history = nouts_for_notes_da_capo([
     iinsert(p, 2, [TextBecome("2")]),
     iinsert(p, 3, [TextBecome("3")]),
     iinsert(p, 4, [TextBecome("4")]),
-        ])
+    ])
 
 for nh in shared_history:
     p.add(nh.nout)

@@ -83,9 +83,9 @@ def play_viewport_note(note, structure):
             vrtc, structure.context.cursor_position)
 
         bounded_viewport_position = bounded_viewport(
-                structure.context.document_size,
-                structure.context.viewport_size,
-                unbounded_viewport_position)
+            structure.context.document_size,
+            structure.context.viewport_size,
+            unbounded_viewport_position)
 
         bounded_vrtc = vrtc_for_viewport_position_and_cursor_position(
             bounded_viewport_position, structure.context.cursor_position)

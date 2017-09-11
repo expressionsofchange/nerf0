@@ -7,6 +7,7 @@ class Generator:
     """When (doc)testing decomposed generators, we want to be able to independently inspect the returned and yielded
     values. Writing this as try/except blocks is cumbersome; hence we created the below.
     """
+
     def __init__(self, gen):
         self.gen = gen
         initial_result = self.send(None)

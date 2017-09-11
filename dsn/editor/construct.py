@@ -211,7 +211,7 @@ def edit_note_play(structure, edit_note):
             NoteSlur(Replace(replace_at_index, hash_enclosure), replace_on_hash))
 
         posacts = [p_capo, p_create, p_enclosure, p_replace] + bubble_history_up(
-                hash_replace, structure.tree, parent_s_address)
+            hash_replace, structure.tree, parent_s_address)
 
         # We jump the cursor to the newly enclosed location:
         new_cursor = structure.s_cursor + [0]
