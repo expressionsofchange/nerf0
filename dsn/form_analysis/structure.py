@@ -86,9 +86,8 @@ class VariableForm(Form):
 
 
 class ValueForm(Form):
-    def __init__(self, value):
-        # Type: TBD (any of: underlying 's-expr' text atom or something more close to the actual value. Whether we
-        # attempt to already make the step from pieces of text to e.g. numbers is TBD (probably not))
+    def __init__(self, type_, value):
+        self.type_ = type_
         self.value = value
 
 

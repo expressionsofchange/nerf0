@@ -27,8 +27,11 @@ arranged most significant first in a stream.
 
 """
 
+from utils import pmts
+
 
 def to_vlq(i):
+    pmts(i, int)
     needed_bytes = 1
     result = b''
 

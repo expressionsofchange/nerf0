@@ -17,6 +17,7 @@ from dsn.s_expr.structure import TreeText, YourOwnHash
 from dsn.s_expr.construct_x import construct_x
 from dsn.s_expr.legato import NoteCapo, NoteNoutHash
 
+from dsn.form_analysis.constants import VT_INTEGER, VT_STRING
 from dsn.form_analysis.clef import (
     ApplicationChangeProcedure,
     ApplicationChangeParameters,
@@ -161,10 +162,10 @@ def play_form(m, stores, s_expr_note, previous_s_expr, s_expr, previous_form):
         # point: we always Become anyway.
 
         if is_number(s_expr.unicode_):
-            return BecomeValue(s_expr.unicode_)
+            return BecomeValue(VT_INTEGER, int(s_expr.unicode_))
 
         if is_string(s_expr.unicode_):
-            return BecomeValue(parse_string(s_expr.unicode_))
+            return BecomeValue(VT_STRING, parse_string(s_expr.unicode_))
 
         # All other atoms are considered to be variables.
         return BecomeVariable(s_expr.unicode_)

@@ -71,7 +71,7 @@ def play_form_note(m, stores, structure, note, metadata_NOT_YET_USED):
         return MalformedForm()
 
     if isinstance(note, BecomeValue):
-        return ValueForm(note.value)
+        return ValueForm(note.type_, note.value)
 
     if isinstance(note, BecomeVariable):
         return VariableForm(note.symbol)

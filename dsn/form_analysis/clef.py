@@ -55,6 +55,7 @@ that we may express things such as "this sequence comes into being with the foll
 """
 from utils import pmts, rfs
 from vlq import to_vlq, from_vlq
+from dsn.form_analysis.constants import VT_STRING, VT_INTEGER
 
 
 BECOME_MALFORMED = 0
@@ -181,22 +182,32 @@ class BecomeVariable(FormNote):
 
 # ValueForm:
 class BecomeValue(FormNote):
-    # TODO (potentially): factor out commonalities w/ BecomeVariable.
-    # (that is, unless we diversify values to be more faithful to the underlying object's type)
 
-    def __init__(self, value):
-        pmts(value, str)
+    def __init__(self, type_, value):
+        pmts(value, {VT_INTEGER: int, VT_STRING: str}[type_])
+
+        self.type_ = type_
         self.value = value
 
     def as_bytes(self):
+        if self.type_ == VT_INTEGER:
+            return bytes([BECOME_VALUE]) + to_vlq(self.type_) + to_vlq(self.value)
+
+        # Implied else: VT_STRING
         utf8 = self.value.encode('utf-8')
-        return bytes([BECOME_VALUE]) + to_vlq(len(utf8)) + utf8
+        return bytes([BECOME_VALUE]) + to_vlq(self.type_) + to_vlq(len(utf8)) + utf8
 
     @staticmethod
     def from_stream(byte_stream):
+        type_ = from_vlq(byte_stream)
+
+        if type_ == VT_INTEGER:
+            return BecomeValue(type_, from_vlq(byte_stream))
+
+        # Implied else: VT_STRING
         length = from_vlq(byte_stream)
         utf8 = rfs(byte_stream, length)
-        return BecomeValue(str(utf8, 'utf-8'))
+        return BecomeValue(type_, str(utf8, 'utf-8'))
 
 
 # QuoteForm:
