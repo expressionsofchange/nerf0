@@ -1,0 +1,38 @@
+This isn't (by any means) a full test of construct.py
+Rather, it's a construct that cuts through a number of Types (Form, FormList, SymbolList, Symbol)
+to help me wrap my head around those in the context of a dynamically typed language.
+ 
+>>> from hashstore import NoutHashStore
+>>> from memoization import Stores, Memoization
+>>> 
+>>> from dsn.s_expr.legato import NoteNout, NoteCapo, NoteNoutHash
+>>> 
+>>> from dsn.s_expr.clef import BecomeNode, TextBecome
+>>> from dsn.s_expr.utils import nouts_for_notes_da_capo
+>>> from dsn.s_expr.test_utils import iinsert, rreplace
+>>> from dsn.historiography.legato import HistoriographyNoteNoutHash, HistoriographyNoteNout, HistoriographyNoteCapo
+>>> from dsn.form_analysis.into import construct_form_note
+>>> from dsn.form_analysis.construct import construct_form
+>>> 
+>>> 
+>>> m = Memoization()
+>>> p = NoutHashStore(NoteNoutHash, NoteNout, NoteCapo)
+>>> historiography_note_nout_store = NoutHashStore(HistoriographyNoteNoutHash, HistoriographyNoteNout, HistoriographyNoteCapo)
+>>> stores = Stores(p, historiography_note_nout_store)
+>>> 
+>>> for nh in nouts_for_notes_da_capo([
+...     BecomeNode(),
+...     iinsert(p, 0, [TextBecome("lambda")]),
+...     iinsert(p, 1, [BecomeNode(),
+...                    iinsert(p, 0, [TextBecome("a")])
+...                    ]),
+...     iinsert(p, 2, [TextBecome("a")]),
+...         ]):
+...     h = p.add(nh.nout)
+... 
+>>> 
+>>> form_note, form_note_nout_hash = construct_form_note(m, stores, h)
+>>> form = construct_form(m, stores, form_note_nout_hash)
+>>> 
+>>> form.parameters.the_list[0].symbol
+'a'
