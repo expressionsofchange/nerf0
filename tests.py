@@ -32,6 +32,7 @@ def load_tests(loader, tests, ignore):
     tests.addTests(doctest.DocFileSuite("doctests/unambiguous_weaving.txt"))
     tests.addTests(doctest.DocFileSuite("doctests/form_analysis_into.txt"))
     tests.addTests(doctest.DocFileSuite("doctests/form_analysis_construct.txt"))
+    tests.addTests(doctest.DocFileSuite("doctests/evaluator.txt"))
 
     return tests
 

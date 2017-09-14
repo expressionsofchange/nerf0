@@ -59,6 +59,8 @@ We call the present phase "Static Form Analysis". This is more precise than the 
 analysis" or "semantic analysis", of which the present phase is a part.
 """
 
+from utils import pmts
+
 
 class Form(object):
 
@@ -131,6 +133,7 @@ class SequenceForm(Form):
 # Below this line: _not_ Form, but used as a part of a Form. May still have its own independent history.
 class FormList(object):
     def __init__(self, the_list, metadata=None):
+        pmts(the_list, list)
         self.the_list = the_list
         self.metadata = metadata
 
@@ -151,5 +154,6 @@ class Symbol(object):
 
 class SymbolList(object):
     def __init__(self, the_list, metadata=None):
+        pmts(the_list, list)
         self.the_list = the_list
         self.metadata = metadata
