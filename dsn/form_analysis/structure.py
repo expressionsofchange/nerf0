@@ -114,7 +114,7 @@ class DefineForm(Form):
 class LambdaForm(Form):
     def __init__(self, parameters, body):
         self.parameters = parameters  # :: AtomList
-        self.body = body  # :: Form
+        self.body = body  # :: FormList
 
 
 class ApplicationForm(Form):
@@ -130,9 +130,12 @@ class SequenceForm(Form):
 
 # Below this line: _not_ Form, but used as a part of a Form. May still have its own independent history.
 class FormList(object):
-    def __init__(self, the_list, metadata):
+    def __init__(self, the_list, metadata=None):
         self.the_list = the_list
         self.metadata = metadata
+
+    def __iter__(self):
+        return self.the_list.__iter__()
 
 
 class Symbol(object):
@@ -147,6 +150,6 @@ class Symbol(object):
 
 
 class SymbolList(object):
-    def __init__(self, the_list, metadata):
+    def __init__(self, the_list, metadata=None):
         self.the_list = the_list
         self.metadata = metadata
