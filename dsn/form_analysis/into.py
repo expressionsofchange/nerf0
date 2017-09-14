@@ -385,10 +385,6 @@ def play_atom_list(m, stores, s_expr_note, previous_s_expr_, s_expr, previous_at
     if isinstance(s_expr_note, BecomeNode):
         return AtomListBecome()
 
-    # STEAL FROM CONSTRUCT_X !
-    if isinstance(s_expr_note, Delete):
-        return AtomListDelete(s_expr_note.index)
-
     if isinstance(s_expr_note, Delete):
         return AtomListDelete(s_expr_note.index)
 
@@ -399,20 +395,6 @@ def play_atom_list(m, stores, s_expr_note, previous_s_expr_, s_expr, previous_at
 
     if isinstance(s_expr_note, Insert):
         return AtomListInsert(s_expr_note.index, a_nh)
-
-    # By the way: perhaps there's an issue w/ BecomeNode existing in the s-expression Clef, but not here? If so, it will
-    # show up soon enough.
-
-    # Indeed there is :-D
-    # I will think of a solution over coffee
-
-    # Related question: I haven't yet seen the similar problem on the form list.
-    #
-
-    # Something must give.... let's enumerate the options.
-    # Not having a 1-to-1 correspondence between the s_expr clef and the atom-list-clef. Meh, for many reasons
-    #       1-to-1 correspondence useful everywhere. e.g. in the UI later on
-    #       assymmetry is always bad, spreads like an olievlek
 
     raise Exception("Case analysis fail %s" % type(s_expr_note))
 
