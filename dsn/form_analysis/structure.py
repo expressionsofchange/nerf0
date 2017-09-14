@@ -136,12 +136,14 @@ class FormList(object):
 
 
 class Symbol(object):
-    # A single symbol,
 
     def __init__(self, symbol):
-        # Type: TBD (any of: underlying 's-expr' text atom or something more close to the actual value)
-        # In the end it doesn't matter much what we choose here.
-        self.symbol = symbol
+        self.symbol = symbol  # :: string (or None, which has the special meaning "a malformed symbol")
+
+    def __repr__(self):
+        if self.symbol is None:
+            return "<Symbol of malformed type>"
+        return "<Symbol %s>" % self.symbol
 
 
 class SymbolList(object):

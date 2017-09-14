@@ -164,8 +164,6 @@ def play_form_note(m, stores, structure, note, metadata_NOT_YET_USED):
 
 def play_atom_note(m, stores, structure, note, metadata_NOT_YET_USED):
     if isinstance(note, BecomeMalformedAtom):
-        # TODO fully determine how to model this
-        # First thoughts: either as a separate class, as a separate attribute, or by having the symbol None
         return Symbol(None)
 
     if isinstance(note, BecomeAtom):
