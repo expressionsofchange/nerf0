@@ -1,0 +1,2 @@
+VT_INTEGER = 0
+VT_STRING = 1
