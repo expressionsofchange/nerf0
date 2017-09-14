@@ -20,7 +20,7 @@ class HashStore(object):
         self.ObjClass = ObjClass
 
     def __repr__(self):
-        return "<HashStore of %s>" % type(self.Nout).__name__
+        return "<HashStore of %s>" % self.ObjClass.__name__
 
     def add(self, serializable):
         pmts(serializable, self.ObjClass)
