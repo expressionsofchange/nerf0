@@ -392,7 +392,7 @@ def play_atom_list(m, stores, s_expr_note, previous_s_expr_, s_expr, previous_at
     if isinstance(s_expr_note, Delete):
         return AtomListDelete(s_expr_note.index)
 
-    a, a_nh = construct_atom_note(m, stores, s_expr.metadata.nout_hash)
+    a, a_nh = construct_atom_note(m, stores, s_expr.children[s_expr_note.index].metadata.nout_hash)
 
     if isinstance(s_expr_note, Replace):
         return AtomListReplace(s_expr_note.index, a_nh)
