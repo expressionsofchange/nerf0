@@ -33,6 +33,7 @@ def load_tests(loader, tests, ignore):
     tests.addTests(doctest.DocFileSuite("doctests/form_analysis_into.txt"))
     tests.addTests(doctest.DocFileSuite("doctests/form_analysis_construct.txt"))
     tests.addTests(doctest.DocFileSuite("doctests/evaluator.txt"))
+    tests.addTests(doctest.DocFileSuite("doctests/free_variables.txt"))
 
     return tests
 

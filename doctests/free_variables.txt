@@ -1,0 +1,26 @@
+>>> from dsn.form_analysis.structure import MalformedForm, ValueForm, VariableForm, QuoteForm, DefineForm, IfForm, LambdaForm, SequenceForm, ApplicationForm
+>>> from dsn.form_analysis.structure import FormList, Symbol, SymbolList
+
+>>> from dsn.form_analysis.free_variables import free_variables
+>>> from dsn.form_analysis.constants import VT_INTEGER
+
+>>> free_variables(ValueForm(VT_INTEGER, 32))
+set()
+
+>>> free_variables(VariableForm(Symbol("a")))
+{'a'}
+
+>>> sorted(free_variables(SequenceForm(FormList([
+...     VariableForm(Symbol("a")),
+...     VariableForm(Symbol("b")),
+... ]))))
+['a', 'b']
+
+>>> free_variables(LambdaForm(
+...         SymbolList([Symbol("bound_by_param")]),
+...         FormList([
+...             DefineForm(Symbol("bound_by_define"), VariableForm(Symbol("a"))),
+...             VariableForm(Symbol("bound_by_param")),
+...             VariableForm(Symbol("bound_by_define")),
+...         ])))
+{'a'}

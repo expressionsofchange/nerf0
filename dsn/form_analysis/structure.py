@@ -157,3 +157,6 @@ class SymbolList(object):
         pmts(the_list, list)
         self.the_list = the_list
         self.metadata = metadata
+
+    def __iter__(self):
+        return self.the_list.__iter__()
