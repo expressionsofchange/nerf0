@@ -71,7 +71,7 @@ def evaluate(form, environment):
         return form.value
 
     if isinstance(form, VariableForm):
-        return environment.lookup(form.symbol)
+        return environment.lookup(form.symbol.symbol)
 
     if isinstance(form, QuoteForm):
         return form.data

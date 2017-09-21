@@ -10,7 +10,7 @@ Traceback (most recent call last):
 Exception: Cannot evaluate MalformedForm
 >>> evaluate(ValueForm(VT_INTEGER, 7), Frame(None))
 7
->>> evaluate(VariableForm("undefined"), Frame(None))
+>>> evaluate(VariableForm(Symbol("undefined")), Frame(None))
 Traceback (most recent call last):
   File "<stdin>", line 1, in <module>
   File "...", line 74, in evaluate
@@ -18,14 +18,14 @@ Traceback (most recent call last):
   File "...", line 33, in lookup
     raise KeyError("No such symbol: '%s'" % symbol)
 KeyError: "No such symbol: 'undefined'"
->>> evaluate(VariableForm("a"), Frame(None, {'a': 6}))
+>>> evaluate(VariableForm(Symbol("a")), Frame(None, {'a': 6}))
 6
 >>> 
 >>> # QuoteForm... later
 ... 
 >>> evaluate(SequenceForm(FormList([
 ...     DefineForm(Symbol("a"), ValueForm(VT_INTEGER, 3)),
-...     VariableForm("a"),
+...     VariableForm(Symbol("a")),
 ... ])), Frame(None))
 3
 >>> 
@@ -33,11 +33,11 @@ KeyError: "No such symbol: 'undefined'"
 ... 
 >>> evaluate(SequenceForm(FormList([
 ...     DefineForm(Symbol("a"), ValueForm(VT_INTEGER, 3)),
-...     VariableForm("a"),
+...     VariableForm(Symbol("a")),
 ... ])), Frame(None))
 3
 >>> 
->>> evaluate(ApplicationForm(LambdaForm(SymbolList([Symbol("a")]), FormList([VariableForm("a")])), FormList([ValueForm(VT_INTEGER, 2)])), Frame(None))
+>>> evaluate(ApplicationForm(LambdaForm(SymbolList([Symbol("a")]), FormList([VariableForm(Symbol("a"))])), FormList([ValueForm(VT_INTEGER, 2)])), Frame(None))
 2
 >>> 
 >>> builtins = {
@@ -50,19 +50,19 @@ KeyError: "No such symbol: 'undefined'"
 >>> evaluate(
 ...     SequenceForm(FormList([
 ...         DefineForm(Symbol("fact"), LambdaForm(SymbolList([Symbol("n")]), FormList([IfForm(
-...             ApplicationForm(VariableForm("="), FormList([VariableForm("n"), ValueForm(VT_INTEGER, 1)])),
+...             ApplicationForm(VariableForm(Symbol("=")), FormList([VariableForm(Symbol("n")), ValueForm(VT_INTEGER, 1)])),
 ...             ValueForm(VT_INTEGER, 1),
-...             ApplicationForm(VariableForm("*"), FormList([
-...                 VariableForm("n"),
-...                 ApplicationForm(VariableForm("fact"), FormList([
-...                     ApplicationForm(VariableForm("-"), FormList([
-...                         VariableForm("n"),
+...             ApplicationForm(VariableForm(Symbol("*")), FormList([
+...                 VariableForm(Symbol("n")),
+...                 ApplicationForm(VariableForm(Symbol("fact")), FormList([
+...                     ApplicationForm(VariableForm(Symbol("-")), FormList([
+...                         VariableForm(Symbol("n")),
 ...                         ValueForm(VT_INTEGER, 1),
 ...                     ]))
 ...                 ]))
 ...             ]))
 ...         )]))),
-...         ApplicationForm(VariableForm("fact"), FormList([ValueForm(VT_INTEGER, 6)])),
+...         ApplicationForm(VariableForm(Symbol("fact")), FormList([ValueForm(VT_INTEGER, 6)])),
 ...     ])),
 ...     Frame(None, builtins))
 720
