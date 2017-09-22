@@ -1,0 +1,15 @@
+>>> from dsn.form_analysis.structure import ValueForm, VariableForm, DefineForm, LambdaForm
+>>> from dsn.form_analysis.structure import FormList, Symbol, SymbolList
+
+>>> from dsn.form_analysis.name_dependencies import name_dependencies
+>>> from dsn.form_analysis.constants import VT_INTEGER
+
+>>> the_lambda = LambdaForm(
+...         SymbolList([Symbol("a")]),
+...         FormList([
+...             DefineForm(Symbol("b"), VariableForm(Symbol("a"))),
+...             DefineForm(Symbol("c"), ValueForm(VT_INTEGER, 2)),
+...         ]))
+
+>>> sorted(name_dependencies(the_lambda).items())
+[('a', set()), ('b', {'a'}), ('c', set())]
