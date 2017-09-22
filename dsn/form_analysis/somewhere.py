@@ -40,5 +40,5 @@ from dsn.form_analysis.structure import DefineForm
 
 
 def collect_definitions(lambda_form):
-    # TODO: determine type (list of forms, FormList, something else?)
+    # :: [form]; this is subject to change though
     return [f for f in lambda_form.body if isinstance(f, DefineForm)]

@@ -1,0 +1,18 @@
+>>> from dsn.form_analysis.structure import MalformedForm, ValueForm, VariableForm, QuoteForm, DefineForm, IfForm, LambdaForm, SequenceForm, ApplicationForm
+>>> from dsn.form_analysis.structure import FormList, Symbol, SymbolList
+
+>>> from dsn.form_analysis.unused_definitions import unused_definitions, unused_parameters
+>>> from dsn.form_analysis.constants import VT_INTEGER
+
+
+>>> the_lambda = LambdaForm(
+...         SymbolList([Symbol("used_parameter"), Symbol("unused_parameter")]),
+...         FormList([
+...             DefineForm(Symbol("used_definition"), VariableForm(Symbol("used_parameter"))),
+...             DefineForm(Symbol("unused_definition"), VariableForm(Symbol("used_definition"))),
+...         ]))
+
+>>> unused_definitions(the_lambda)
+{'unused_definition'}
+>>> unused_parameters(the_lambda)
+{'unused_parameter'}
