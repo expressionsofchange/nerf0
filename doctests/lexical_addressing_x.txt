@@ -1,0 +1,18 @@
+>>> from dsn.form_analysis.structure import ValueForm, VariableForm, DefineForm, LambdaForm
+>>> from dsn.form_analysis.structure import FormList, Symbol, SymbolList
+
+>>> from dsn.form_analysis.lexical_addressing_x import lexical_addressing_x
+
+>>> the_lambda = LambdaForm(
+...         SymbolList([Symbol("param")]),
+...         FormList([
+...             DefineForm(Symbol("definition"), VariableForm(Symbol("a"))),
+...             VariableForm(Symbol("b")),
+...             VariableForm(Symbol("param")),
+...             VariableForm(Symbol("definition")),
+...         ]))
+
+>>> the_context = {'a': None, 'b': 2}
+
+>>> sorted(lexical_addressing_x(the_context, the_lambda).items())
+[('a', None), ('b', 3), ('definition', 0), ('param', 0)]

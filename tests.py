@@ -36,6 +36,7 @@ def load_tests(loader, tests, ignore):
     tests.addTests(doctest.DocFileSuite("doctests/free_variables.txt"))
     tests.addTests(doctest.DocFileSuite("doctests/unused_definitions.txt"))
     tests.addTests(doctest.DocFileSuite("doctests/name_dependencies.txt"))
+    tests.addTests(doctest.DocFileSuite("doctests/lexical_addressing_x.txt"))
 
     return tests
 
