@@ -1,12 +1,8 @@
 from dsn.form_analysis.structure import (
     VariableForm,
     LambdaForm,
-    IfForm,
-    DefineForm,
-    ApplicationForm,
-    SequenceForm,
 )
-
+from dsn.form_analysis.utils import general_means_of_collection
 from dsn.form_analysis.somewhere import collect_definitions
 
 
@@ -51,30 +47,6 @@ def free_variables(form):
     # In any case, I'm settling on "no special treatment of Define's LHS" for now.
 
     return general_means_of_collection(form, free_variables, lambda l: set.union(*l), set())
-
-
-def general_means_of_collection(form, f, combine, identity):
-    # Apply thing_to_do on all this form's child (but no lower descendants) forms.
-
-    # The behavior for MalformedForm is TBD; in any case it has no child forms
-    # VariableForm, ValueForm & QuoteForm have no child-forms
-
-    if isinstance(form, IfForm):
-        return combine([f(form.predicate), f(form.consequent), f(form.alternative)])
-
-    if isinstance(form, DefineForm):
-        return f(form.definition)
-
-    if isinstance(form, LambdaForm):
-        return combine([f(child) for child in form.body])
-
-    if isinstance(form, ApplicationForm):
-        return combine([f(form.procedure)] + [f(child) for child in form.arguments])
-
-    if isinstance(form, SequenceForm):
-        return combine([f(child) for child in form.sequence])
-
-    return identity
 
 
 # ## Incremental analysis

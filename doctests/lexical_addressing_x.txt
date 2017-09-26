@@ -1,7 +1,7 @@
->>> from dsn.form_analysis.structure import ValueForm, VariableForm, DefineForm, LambdaForm
+>>> from dsn.form_analysis.structure import ValueForm, VariableForm, DefineForm, LambdaForm, SequenceForm
 >>> from dsn.form_analysis.structure import FormList, Symbol, SymbolList
 
->>> from dsn.form_analysis.lexical_addressing_x import lexical_addressing_x
+>>> from dsn.form_analysis.lexical_addressing_x import lexical_addressing_x, find_lambda_children
 
 >>> the_lambda = LambdaForm(
 ...         SymbolList([Symbol("param")]),
@@ -16,3 +16,23 @@
 
 >>> sorted(lexical_addressing_x(the_context, the_lambda).items())
 [('a', None), ('b', 3), ('definition', 0), ('param', 0)]
+
+>>> nested_lambdas = SequenceForm(FormList([
+...             LambdaForm(SymbolList([]), FormList([
+...                 LambdaForm(SymbolList([]), FormList([])),
+...                 SequenceForm(FormList([LambdaForm(SymbolList([]), FormList([
+...                     LambdaForm(SymbolList([]), FormList([])),
+...                 ]))])),
+...             ]))
+...         ]))
+
+>>> find_lambda_children(nested_lambdas)
+[[<dsn.form_analysis.structure.LambdaForm object at 0x000000000000>]]
+
+>>> [nested_lambdas.sequence.the_list[0]]
+
+>>> find_lambda_children(nested_lambdas.sequence.the_list[0].body.the_list[0])
+[[<dsn.form_analysis.structure.LambdaForm object at 0x000000000000>]]
+
+>>> find_lambda_children(nested_lambdas.sequence.the_list[0].body.the_list[1])
+asdf
