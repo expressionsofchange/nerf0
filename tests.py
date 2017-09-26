@@ -10,6 +10,7 @@ import s_address
 import vim
 
 from dsn.s_expr import utils as s_expr_utils
+from dsn.s_expr import from_python as s_expr_from_python
 from dsn.viewports import utils as viewports_utils
 
 
@@ -24,6 +25,7 @@ def load_tests(loader, tests, ignore):
     tests.addTests(doctest.DocTestSuite(s_expr_utils))
     tests.addTests(doctest.DocTestSuite(vim))
     tests.addTests(doctest.DocTestSuite(viewports_utils))
+    tests.addTests(doctest.DocTestSuite(s_expr_from_python))
 
     # Some tests in the doctests style are too large to nicely fit into a docstring; better to keep them separate:
     tests.addTests(doctest.DocFileSuite("doctests/construct_x.txt"))
