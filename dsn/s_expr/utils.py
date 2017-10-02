@@ -38,6 +38,12 @@ def calc_actuality(nout_hash):
 # TODO In the below (nouts_for_notes_*, some_cut_paste*), we're not consistent in whether we're returning Possibilities,
 # Nouts, NoutAndHash tuples etc. I'm confident that consistency will emerge once we know what good defaults are.
 
+def stored_nouts_for_notes_da_capo(hashstore, notes):
+    for nh in nouts_for_notes_da_capo(notes):
+        hashstore.add(nh.nout)
+        yield nh
+
+
 def nouts_for_notes_da_capo(notes):
     """Given notes without prior history, connect them as Nouts"""
     possibility, previous_hash = calc_possibility(NoteCapo())

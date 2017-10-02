@@ -1,0 +1,18 @@
+>>> from hashstore import NoutHashStore
+>>> from memoization import Stores, Memoization
+>>> from dsn.historiography.legato import HistoriographyNoteNoutHash, HistoriographyNoteNout, HistoriographyNoteCapo
+>>> from dsn.s_expr.legato import NoteNout, NoteCapo, NoteNoutHash
+
+>>> from dsn.s_expr.from_python import s_expr_from_python
+>>> from dsn.s_expr.construct_x import construct_x
+>>> from dsn.s_expr.concoct import concoct_history
+
+>>> p = NoutHashStore(NoteNoutHash, NoteNout, NoteCapo)
+>>> historiography_note_nout_store = NoutHashStore(HistoriographyNoteNoutHash, HistoriographyNoteNout, HistoriographyNoteCapo)
+>>> stores = Stores(p, historiography_note_nout_store)
+>>> m = Memoization()
+
+>>> s_expr = s_expr_from_python(("foo", ("bar",)))
+>>> result = concoct_history(m, stores, s_expr)
+>>> construct_x(m, stores, result[-1].nout_hash)
+(foo (bar))
