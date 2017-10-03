@@ -113,7 +113,7 @@ class ValueForm(Form):
         self.value = value
 
     def as_s_expr(self):
-        return TreeText(self.symbol.symbol, metadata=None)
+        return TreeText(repr(self.value), metadata=None)
 
 
 class QuoteForm(Form):
