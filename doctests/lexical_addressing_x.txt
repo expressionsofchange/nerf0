@@ -3,6 +3,7 @@
 >>> from dsn.form_analysis.structure import FormList, Symbol, SymbolList
 
 >>> from dsn.form_analysis.lexical_addressing_x import lexical_addressing_x, find_lambda_children, some_lambda_tree
+>>> from dsn.form_analysis.from_s_expr import from_s_expr
 
 >>> the_lambda = LambdaForm(
 ...         SymbolList([Symbol("param")]),
@@ -18,23 +19,20 @@
 >>> sorted(lexical_addressing_x(the_context, the_lambda).items())
 [('a', None), ('b', 3), ('definition', 0), ('param', 0)]
 
->>> nested_lambdas = SequenceForm(FormList([
-...             LambdaForm(SymbolList([]), FormList([
-...                 LambdaForm(SymbolList([]), FormList([])),
-...                 SequenceForm(FormList([LambdaForm(SymbolList([]), FormList([
-...                     LambdaForm(SymbolList([]), FormList([])),
-...                 ]))])),
-...             ]))
-...         ]))
+>>> nested_lambdas = from_s_expr(s_expr_from_python(
+... ("begin",
+...     ("lambda", (), ("lambda", (), "1"),
+...                    ("begin",
+...                        ("lambda", (), ("lambda", (), "2"),),),),)))
 
 >>> find_lambda_children(nested_lambdas)
-[(lambda () (lambda ()) (begin (lambda () (lambda ()))))]
+[(lambda () (lambda () 1) (begin (lambda () (lambda () 2))))]
 
 >>> find_lambda_children(nested_lambdas.sequence.the_list[0].body.the_list[0])
-[(lambda ())]
+[(lambda () 1)]
 
 >>> find_lambda_children(nested_lambdas.sequence.the_list[0].body.the_list[1])
-[(lambda () (lambda ()))]
+[(lambda () (lambda () 2))]
 
 >>> some_lambda_tree(nested_lambdas.sequence.the_list[0])
 (L [(L []), (L [(L [])])])
