@@ -74,7 +74,7 @@ def play_form_note(m, stores, structure, note, metadata_NOT_YET_USED):
         return ValueForm(note.type_, note.value)
 
     if isinstance(note, BecomeVariable):
-        return VariableForm(note.symbol)
+        return VariableForm(Symbol(note.symbol))
 
     if isinstance(note, BecomeQuote):
         s_expr = construct_x(m, stores, note.s_expr_nout_hash)

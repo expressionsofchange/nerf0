@@ -101,7 +101,8 @@ class MalformedForm(Form):
 class VariableForm(Form):
 
     def __init__(self, symbol):
-        self.symbol = symbol  # :: Symbol
+        pmts(symbol, Symbol)
+        self.symbol = symbol
 
     def as_s_expr(self):
         return TreeText(self.symbol.symbol, metadata=None)
