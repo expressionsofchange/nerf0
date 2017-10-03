@@ -23,7 +23,8 @@ def dict_union(l):
 def add_lists(*args):
     result = []
     for arg in args:
-        result += arg
+        for elem in arg:
+            result += elem
     return result
 
 
