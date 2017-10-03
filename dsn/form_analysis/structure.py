@@ -60,6 +60,7 @@ analysis" or "semantic analysis", of which the present phase is a part.
 """
 
 from utils import pmts
+from dsn.s_expr.structure import TreeText, TreeNode
 
 
 class Form(object):
@@ -67,6 +68,15 @@ class Form(object):
     def __init__(self):
         pass
 
+    def __repr__(self):
+        return repr(self.as_s_expr())
+
+    def as_s_expr(self):
+        """(At least for now): for debugging purposes, i.e. not thoroughly implemented.
+
+        Prime example: The returned s_expr has no historic awareness (no nout_hash in the metadata).
+        """
+        raise NotImplemented()
 
 # TODO Open question: will we store any history in these Forms too? In the end: Probably we will. Compare what's done
 # with the s-expressions themselves (which also do this)
@@ -80,11 +90,21 @@ class MalformedForm(Form):
     # simply a case of an application without either a procedure nor any arguments. I.e. a non-3-lambda.
     pass
 
+    def as_s_expr(self):
+        # Note: the introduction of the `as_s_expr` method raises the following question: should the MalformedForm know
+        # what the underlying (malformed) s_expr is, so that it may reproduce that when asked? If we want Malformed
+        # s_expressions to be returned unchanged from as_s_expr(to_form(...)) we indeed need to store. For now, this
+        # isn't done.
+        return TreeText("MALFORMED", None)
+
 
 class VariableForm(Form):
 
     def __init__(self, symbol):
         self.symbol = symbol  # :: Symbol
+
+    def as_s_expr(self):
+        return TreeText(self.symbol.symbol, metadata=None)
 
 
 class ValueForm(Form):
@@ -92,10 +112,16 @@ class ValueForm(Form):
         self.type_ = type_
         self.value = value
 
+    def as_s_expr(self):
+        return TreeText(self.symbol.symbol, metadata=None)
+
 
 class QuoteForm(Form):
     def __init__(self, data):
         self.data = data  # :: SExpr
+
+    def as_s_expr(self):
+        return TreeNode([TreeText("quote", None), self.data])
 
 
 class IfForm(Form):
@@ -105,6 +131,13 @@ class IfForm(Form):
         self.consequent = consequent  # :: Form
         self.alternative = alternative  # :: Form
 
+    def as_s_expr(self):
+        return TreeNode([
+            TreeText("if", None),
+            self.predicate.as_s_expr(),
+            self.consequent.as_s_expr(),
+            self.alternative.as_s_expr(), ])
+
 
 class DefineForm(Form):
 
@@ -112,11 +145,24 @@ class DefineForm(Form):
         self.symbol = symbol  # :: Symbol
         self.definition = definition  # :: Form
 
+    def as_s_expr(self):
+        return TreeNode([
+            TreeText("define", None),
+            TreeText(self.symbol.symbol, None),
+            self.definition.as_s_expr(),
+            ])
+
 
 class LambdaForm(Form):
     def __init__(self, parameters, body):
         self.parameters = parameters  # :: AtomList
         self.body = body  # :: FormList
+
+    def as_s_expr(self):
+        return TreeNode([
+            TreeText("lambda", None),
+            TreeNode([TreeText(s.symbol, None) for s in self.parameters]),
+            ] + [f.as_s_expr() for f in self.body])
 
 
 class ApplicationForm(Form):
@@ -124,10 +170,20 @@ class ApplicationForm(Form):
         self.procedure = procedure  # :: Form
         self.arguments = arguments  # :: FormList
 
+    def as_s_expr(self):
+        return TreeNode([
+            self.procedure.as_s_expr(),
+            ] + [a.as_s_expr() for a in self.arguments])
+
 
 class SequenceForm(Form):
     def __init__(self, sequence):
         self.sequence = sequence  # :: FormList
+
+    def as_s_expr(self):
+        return TreeNode([
+            TreeText("begin", None),
+            ] + [e.as_s_expr() for e in self.sequence])
 
 
 # Below this line: _not_ Form, but used as a part of a Form. May still have its own independent history.

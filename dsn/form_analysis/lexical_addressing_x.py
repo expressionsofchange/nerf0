@@ -84,6 +84,9 @@ class LambdaTree(object):
         self.lambda_form = lambda_form
         self.children = children
 
+    def __repr__(self):
+        return "(L " + repr(self.children) + ")"
+
 
 def some_lambda_tree(lambda_form):
     lambda_children = add_lists([find_lambda_children(f) for f in lambda_form.body])
