@@ -2,7 +2,15 @@
 >>> from dsn.form_analysis.structure import ValueForm, VariableForm, DefineForm, LambdaForm, SequenceForm
 >>> from dsn.form_analysis.structure import FormList, Symbol, SymbolList
 
->>> from dsn.form_analysis.lexical_addressing_x import lexical_addressing_x, find_lambda_children, some_lambda_tree
+>>> from dsn.form_analysis.lexical_addressing_x import (
+...     lexical_addressing_x,
+...     find_lambda_children,
+...     construct_lambda_tree,
+...     construct_lexically_addressed_lambda_tree,
+...     construct_most_complete_lambda_tree,
+...     calculate_name_closure,
+...     sset,
+... )
 >>> from dsn.form_analysis.from_s_expr import from_s_expr
 
 >>> the_lambda = from_s_expr(s_expr_from_python(
@@ -31,29 +39,67 @@
 >>> find_lambda_children(nested_lambdas.sequence.the_list[0].body.the_list[1])
 [(lambda () (lambda () 2))]
 
->>> some_lambda_tree(nested_lambdas.sequence.the_list[0])
+>>> construct_lambda_tree(nested_lambdas.sequence.the_list[0])
 (L [(L []), (L [(L [])])])
+
+
+>>> lambda_tree = construct_lambda_tree(from_s_expr(s_expr_from_python(
+... ("lambda", ("param",), ("define", "procedure", ("lambda", ("inner_param",),
+...                        ("procedure",),
+...                        ("param",),
+...                        ("inner_param",)))))))
+
+>>> construct_lexically_addressed_lambda_tree(lambda_tree)
+(L {'param': 0, 'procedure': 0} [(L {'inner_param': 0, 'param': 1, 'procedure': 1} [])])
 
 
 The recursion as defined in the examples below is non-sensical from the perspective of evaluation (i.e. in a real-life
 example the dependency on other variables would more likely be wrapped in both a lambda and an if-expression) but it's
 the simplest thing for the question at hand (that of static dependency analysis).
 
-
 These examples work on a single scope:
 
->>> single_scope = s_expr_from_python(("lambda", (),
+>>> single_scope = construct_lambda_tree(from_s_expr(s_expr_from_python(("lambda", (),
 ...     ("define", "a", "9"),
 ...     ("define", "rec", "rec"),
 ...     ("define", "mut-rec-a", "mut-rec-b"),
 ...     ("define", "mut-rec-b", "mut-rec-a"),
-... ))
+... ))))
+
+>>> one = construct_most_complete_lambda_tree(single_scope)
+>>> one
+(L {'mut-rec-a': 0, 'mut-rec-b': 0, 'rec': 0} / {'a': {}, 'mut-rec-a': {'mut-rec-b'}, 'mut-rec-b': {'mut-rec-a'}, 'rec': {'rec'}} [])
+
+'a' depends on nothing:
+
+>>> calculate_name_closure(one, "a")
+set()
+
+'rec' depends on itself
+>>> calculate_name_closure(one, "rec")
+{('rec', 0)}
+
+'mut-rec-a' depends on itself and on 'mut-rec-b'
+>>> sset(calculate_name_closure(one, "mut-rec-a"))
+"{('mut-rec-a', 0), ('mut-rec-b', 0)}"
+
 
 This is an example that shows cross-scope deps; it also demonstrates the shadowing of "y"
 
->>> scope_in_scope = s_expr_from_python(("lambda", (), (
+>>> scope_in_scope = construct_lambda_tree(from_s_expr(s_expr_from_python(("lambda", (), 
 ...     ("define", "x", ("lambda", ("y",),
 ...         ("ignore-args", "x", "y"))),
 ...     ("define", "ignore-args", ("lambda", ("a", "b",), "0")),
 ...     ("define", "y", "8"),
-... )))
+... ))))
+
+>>> two = construct_most_complete_lambda_tree(scope_in_scope)
+>>> two
+(L {'ignore-args': 0, 'x': 0} / {'ignore-args': {}, 'x': {'ignore-args', 'x'}, 'y': {}} [(L {'ignore-args': 1, 'x': 1, 'y': 0} / {'y': {}} []), (L {} / {'a': {}, 'b': {}} [])])
+
+'x' depends on ignore-args and on "x"
+>>> sset(calculate_name_closure(two, "x"))
+"{('ignore-args', 0), ('x', 0)}"
+
+>>> sset(calculate_name_closure(two.children[0], "x"))
+"{('ignore-args', 1), ('x', 1)}"
