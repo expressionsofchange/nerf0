@@ -5,14 +5,11 @@
 >>> from dsn.form_analysis.lexical_addressing_x import lexical_addressing_x, find_lambda_children, some_lambda_tree
 >>> from dsn.form_analysis.from_s_expr import from_s_expr
 
->>> the_lambda = LambdaForm(
-...         SymbolList([Symbol("param")]),
-...         FormList([
-...             DefineForm(Symbol("definition"), VariableForm(Symbol("a"))),
-...             VariableForm(Symbol("b")),
-...             VariableForm(Symbol("param")),
-...             VariableForm(Symbol("definition")),
-...         ]))
+>>> the_lambda = from_s_expr(s_expr_from_python(
+... ("lambda", ("param",), ("define", "definition", "a"),
+...                        ("b",),
+...                        ("param",),
+...                        ("definition",))))
 
 >>> the_context = {'a': None, 'b': 2}
 
