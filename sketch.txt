@@ -1,0 +1,80 @@
+
+
+
+Here are some ideas concerning multiple loosely related analyses.
+
+In particular: 
+
+* how to express their relationships.
+* if/when this is possible incrementally: ibid.
+* a relationship w/ a means of visualisation (i.e. UX / UI)
+
+
+The context of all this is "lexical analysis", as of Oct 6; 9d85cbea45d0
+
+So far, I've identified a number of analyses:
+
+* free variable analysis (both: lambda-body and lambda-whole)
+* definitions
+* name-dependencies
+* lexical-analysis ( free-var => levels-up )
+* full name-closure
+
+
+
+The solution (so far):
+
+The various analyses form their own DAG. (We might statically, or pre-execution, check for non-circularity of this graph).
+Further properties of this graph are:
+
+* each analysis may depend on itself in a particular direction (up or down the tree), but not both.
+* each analysis may depend on other analyses, but only same-level.
+
+to depend on means to take the output of another analysis as a part of your input.
+
+Modelling: we might model the dependencies (edges) separately, or as part of the analyses.
+
+There is a single "source" analysis. From the perspective of our algorithm, it has no inputs, it simply _is_ the single input.
+
+Single source? -> let's do it; multi-source could always be rewritten to single-source, by bunching the various sources into a single source, and writing analyses that split out a particular source each.
+Each change to this single source forms a clock-tick to our algorithm.
+
+The thing we operate on is the scope tree. (the "lambda tree").
+How to deal with changes to the shape of this tree itself is still a bit of an open question.
+A fall-back solution is full reconstruction, which is always available (though not elegant)
+
+The first "win" is that you may be able to see which outputs don't change, stopping propagation of data.
+
+TODO: Something about being able to introduce the incremental properties later.
+
+
+The algorithm looks somewhat like this:
+
+We assume: that the result of each analysis of the previous "clock tick" for each node is known.
+    if it is not, we can always redo the analysis, marking it as "fresh".
+
+We set the source as the "current analysis".
+The source affects a set of nodes. We update the output of the source analysis for those nodes.
+We also note for each of the _actually_, i.e. changed, outputs that they are currently changed, noting for others that they're not.
+    alternatively: we have a tick-counter, and set this to the current tick if there is a change.
+
+Since we don't have to actually do any analysing, we can skip straight to the "propagation" step.
+
+a possible mechanisms for propagation is:
+
+* keep track of which analyses have been done
+* keep track of which analyses have led to a changed output.
+* calculate the set of analyses which: have not yet been done this step, have all input analyses completed (∀) and at least one input analysis with a changed output (∃)
+    pick one of them, it doesn't matter.
+
+On the level of a single analysis, there are 3 possible algorithms:
+* no relationship in the tree - does an arbitrary treewalk; foreach input-analysis: if it's marked as changed, redo your analysis.
+* up - post-order traversal; same thingie with inputs; providing the "children outputs" (and whether any of them has changed) as an extra input.
+* down - pre-order traversal; same thingie with inputs; providing the "parent outputs" (and whether it has changed) as an extra input.
+
+
+The algorithm above is precisely what you want to make visual: when some analysis has a change to its output on a given clock-tick, on a given node, you want to see which of its inputs (child/parent, other-analyses) have changed, all following the links to the source.
+
+One way to display this is: column-based, where each analysis has a column and time flows down. The displayed columns are: the closure over the analyses-dependencies. (The thing that's not very clear in that presentation is: how to show intra-analysis data-flow, i.e. when data comes from above or below - note that this can happen at any given column).
+
+
