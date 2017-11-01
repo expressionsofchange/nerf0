@@ -1,4 +1,4 @@
-from dsn.form_analysis.somewhere import collect_definitions
+from dsn.form_analysis.collect_definitions import collect_definitions
 from dsn.form_analysis.free_variables import free_variables
 
 

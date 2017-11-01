@@ -1,5 +1,3 @@
-# `somewhere.py` means: I don't know how to organize these functions into modules yet.
-
 # ## Define - restrictions on where it can appear:
 
 # With respect to MIT Scheme, we restrict the locations where "define" is a legal form; in particular:

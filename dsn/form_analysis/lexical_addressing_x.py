@@ -5,7 +5,7 @@ from utils import pmts
 
 from dsn.form_analysis.free_variables import free_variables
 from dsn.form_analysis.name_dependencies import name_dependencies
-from dsn.form_analysis.somewhere import collect_definitions
+from dsn.form_analysis.collect_definitions import collect_definitions
 from dsn.form_analysis.utils import general_means_of_collection
 from dsn.form_analysis.structure import (
     LambdaForm,
