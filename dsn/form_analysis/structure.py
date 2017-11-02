@@ -88,7 +88,6 @@ class MalformedForm(Form):
 
     # For now, the only actual malformed s-expression I can think of is: the empty list. One could also say: that's
     # simply a case of an application without either a procedure nor any arguments. I.e. a non-3-lambda.
-    pass
 
     def as_s_expr(self):
         # Note: the introduction of the `as_s_expr` method raises the following question: should the MalformedForm know
@@ -96,6 +95,9 @@ class MalformedForm(Form):
         # s_expressions to be returned unchanged from as_s_expr(to_form(...)) we indeed need to store. For now, this
         # isn't done.
         return TreeText("MALFORMED", None)
+
+    def __eq__(self, other):
+        return isinstance(other, MalformedForm)
 
 
 class VariableForm(Form):
@@ -107,6 +109,9 @@ class VariableForm(Form):
     def as_s_expr(self):
         return TreeText(self.symbol.symbol, metadata=None)
 
+    def __eq__(self, other):
+        return isinstance(other, VariableForm) and self.symbol == other.symbol
+
 
 class ValueForm(Form):
     def __init__(self, type_, value):
@@ -116,6 +121,9 @@ class ValueForm(Form):
     def as_s_expr(self):
         return TreeText(repr(self.value), metadata=None)
 
+    def __eq__(self, other):
+        return isinstance(other, ValueForm) and self.type_ == other.type_ and self.value == other.value
+
 
 class QuoteForm(Form):
     def __init__(self, data):
@@ -123,6 +131,9 @@ class QuoteForm(Form):
 
     def as_s_expr(self):
         return TreeNode([TreeText("quote", None), self.data])
+
+    def __eq__(self, other):
+        return isinstance(other, QuoteForm) and self.data == other.data
 
 
 class IfForm(Form):
@@ -139,6 +150,12 @@ class IfForm(Form):
             self.consequent.as_s_expr(),
             self.alternative.as_s_expr(), ])
 
+    def __eq__(self, other):
+        return isinstance(other, IfForm) and (
+            self.predicate == other.predicate and
+            self.consequent == other.consequent and
+            self.alternative == other.alternative)
+
 
 class DefineForm(Form):
 
@@ -153,6 +170,11 @@ class DefineForm(Form):
             self.definition.as_s_expr(),
             ])
 
+    def __eq__(self, other):
+        return isinstance(other, DefineForm) and (
+            self.symbol == other.symbol and
+            self.definition == other.definition)
+
 
 class LambdaForm(Form):
     def __init__(self, parameters, body):
@@ -165,6 +187,11 @@ class LambdaForm(Form):
             TreeNode([TreeText(s.symbol, None) for s in self.parameters]),
             ] + [f.as_s_expr() for f in self.body])
 
+    def __eq__(self, other):
+        return isinstance(other, LambdaForm) and (
+            self.parameters == other.parameters and
+            self.body == other.body)
+
 
 class ApplicationForm(Form):
     def __init__(self, procedure, arguments):
@@ -176,6 +203,11 @@ class ApplicationForm(Form):
             self.procedure.as_s_expr(),
             ] + [a.as_s_expr() for a in self.arguments])
 
+    def __eq__(self, other):
+        return isinstance(other, ApplicationForm) and (
+            self.procedure == other.procedure and
+            self.arguments == other.arguments)
+
 
 class SequenceForm(Form):
     def __init__(self, sequence):
@@ -185,6 +217,9 @@ class SequenceForm(Form):
         return TreeNode([
             TreeText("begin", None),
             ] + [e.as_s_expr() for e in self.sequence])
+
+    def __eq__(self, other):
+        return isinstance(other, SequenceForm) and self.sequence == other.sequence
 
 
 # Below this line: _not_ Form, but used as a part of a Form. May still have its own independent history.
@@ -197,6 +232,10 @@ class FormList(object):
     def __iter__(self):
         return self.the_list.__iter__()
 
+    def __eq__(self, other):
+        return isinstance(other, FormList) and len(self.the_list) == len(other.the_list) and all(
+            a == b for (a, b) in zip(self.the_list, other.the_list))
+
 
 class Symbol(object):
 
@@ -208,6 +247,9 @@ class Symbol(object):
             return "<Symbol of malformed type>"
         return "<Symbol %s>" % self.symbol
 
+    def __eq__(self, other):
+        return isinstance(other, Symbol) and self.symbol == other.symbol
+
 
 class SymbolList(object):
     def __init__(self, the_list, metadata=None):
@@ -217,3 +259,8 @@ class SymbolList(object):
 
     def __iter__(self):
         return self.the_list.__iter__()
+
+    def __eq__(self, other):
+        #  TBD: should metadata be part of equality-test?
+        return isinstance(other, SymbolList) and len(self.the_list) == len(other.the_list) and all(
+            a == b for (a, b) in zip(self.the_list, other.the_list))

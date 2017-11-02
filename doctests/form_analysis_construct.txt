@@ -36,3 +36,7 @@ to help me wrap my head around those in the context of a dynamically typed langu
 >>> 
 >>> form.parameters.the_list[0].symbol
 'a'
+
+Testing various __eq__ instances indirectly (arguably, this test should be moved to an independent location)
+>>> form_note == form_note
+True

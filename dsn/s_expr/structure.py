@@ -29,6 +29,10 @@ class TreeNode(SExpr):
     def __repr__(self):
         return pp_flat(self)
 
+    def __eq__(self, other):
+        """NOTE:  __eq__ ignores any time-aspects (i.e. metadata, t2s), only eqqing on the present structure"""
+        return isinstance(other, TreeNode) and self.children == other.children and self.broken == other.broken
+
     def as_bytes(self):
         # as of yet unused
         return bytes([TREE_NODE]) + to_vlq(len(self.children)) + b''.join([c.as_bytes() for c in self.children])
@@ -49,6 +53,10 @@ class TreeText(SExpr):
 
     def __repr__(self):
         return pp_flat(self)
+
+    def __eq__(self, other):
+        """NOTE:  __eq__ ignores any time-aspects (i.e. metadata), only eqqing on the present structure"""
+        return isinstance(other, TreeText) and self.unicode_ == other.unicode_ and self.broken == other.broken
 
     def as_bytes(self):
         # as of yet unused
