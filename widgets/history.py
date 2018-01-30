@@ -55,6 +55,7 @@ from colorscheme import (
     WHITE,
 )
 from widgets.layout_constants import (
+    get_font_size,
     MARGIN,
     PADDING,
 )
@@ -444,7 +445,7 @@ class HistoryWidget(FocusBehavior, Widget):
             return self.m.texture_for_text[text]
 
         kw = {
-            'font_size': pt(14),
+            'font_size': pt(get_font_size()),
             # 'font_name': 'Oxygen',
             'bold': False,
             'anchor_x': 'left',

@@ -60,6 +60,8 @@ from widgets.utils import (
 )
 
 from widgets.layout_constants import (
+    get_font_size,
+    set_font_size,
     MARGIN,
     PADDING,
 )
@@ -427,6 +429,18 @@ class TreeWidget(FocusBehavior, Widget):
 
         elif textual_code in ['z']:
             self.z_pressed = True
+
+        elif textual_code in ['-']:
+            # quick & dirty all-around
+            set_font_size(get_font_size() - 1)
+            self.m.texture_for_text = {}
+            self.invalidate()
+
+        elif textual_code in ['+']:
+            # quick & dirty all-around
+            set_font_size(get_font_size() + 1)
+            self.m.texture_for_text = {}
+            self.invalidate()
 
         elif textual_code in ['left', 'h']:
             self._handle_edit_note(CursorParent())
@@ -1045,7 +1059,7 @@ class TreeWidget(FocusBehavior, Widget):
             return self.m.texture_for_text[text]
 
         kw = {
-            'font_size': pt(14),
+            'font_size': pt(get_font_size()),
             # 'font_name': 'Oxygen',
             'bold': False,
             'anchor_x': 'left',
