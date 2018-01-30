@@ -14,6 +14,7 @@ Analysis = namedtuple('Analysis', ['direction', 'dependencies', 'f'])
 TimedOutput = namedtuple('TimedOutput', ['time', 'output'])
 
 
+# TODO as a global variable ?! meh.
 analysis_graph = {
     'analysis-1': Analysis(UP, ['source'], analysis_1),
     'analysis-2': Analysis(DOWN, ['analysis_1'], analysis_2),
@@ -61,7 +62,7 @@ def the_algo(tree, current_time):
     while next_analyses != []:
         current_analysis = next_analyses[0]
 
-        something_changed = do_analysis(all_kinnds_iof_stuff)
+        something_changed = do_analysis(all_kinds_of_stuff)
 
         analyses_done.add(current_analysis)
         if something_changed:
@@ -72,11 +73,11 @@ def the_algo(tree, current_time):
 
 def do_analysis(analysis, other_stuff):
     if analysis.direction == NONE:
-        do_undirected_analysis(analysis)
-    elif analysis.direction == UP:
-        do_upwards_analysis(analysis)
-    else:
-        do_downwards_analysis(analysis)
+        return do_undirected_analysis(analysis)
+    if analysis.direction == UP:
+        return do_upwards_analysis(analysis)
+    raise NotImplemented("The below has the wrong / a different return-type")
+    return do_downwards_analysis(analysis)  # TODO  return types don't match...
 
 
 def do_undirected_analysis(analysis, node, current_time):

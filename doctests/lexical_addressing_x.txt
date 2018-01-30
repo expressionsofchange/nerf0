@@ -103,3 +103,17 @@ This is an example that shows cross-scope deps; it also demonstrates the shadowi
 
 >>> sset(calculate_name_closure(two.children[0], "x"))
 "{('ignore-args', 1), ('x', 1)}"
+
+
+# THIS IS AD HOC; SHOULD BE MOVED OUT.
+>>> from dsn.form_analysis.lc.scope import consolidated_form
+
+>>> xxx = from_s_expr(s_expr_from_python(("lambda", (), 
+...     ("define", "x", ("lambda", ("y",),
+...         ("ignore-args", "x", "y"))),
+...     ("define", "ignore-args", ("lambda", ("a", "b",), "0")),
+...     ("define", "y", "8"),
+... )))
+
+>>> consolidated_form(xxx)
+COPY/PASTE THE CORRECT THING HERE
