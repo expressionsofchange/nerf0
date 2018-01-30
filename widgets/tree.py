@@ -921,15 +921,10 @@ class TreeWidget(FocusBehavior, Widget):
         # we get some more cases of "how is the selection actually used?"
         is_selection = s_address in [self.selection_ds.edge_0, self.selection_ds.edge_1]
 
-        # The lispy stuff is commented out in favor of the` _nt_for_node_as_todo_list`. This was the fastest route to
-        # starting to use the editor myself. It also means that all the IRI annotations are ignored. Obviously: not a
-        # permanent solution.
-
-        f = self._nt_for_node_as_todo_list
-        # if iri_annotated_node.annotation.multiline_mode == LISPY:
-        #     f = self._nt_for_node_as_lispy_layout
-        # else:  # SINGLE_LINE
-        #     f = self._nt_for_node_single_line
+        if iri_annotated_node.annotation.multiline_mode == LISPY:
+            f = self._nt_for_node_as_lispy_layout
+        else:  # SINGLE_LINE
+            f = self._nt_for_node_single_line
 
         return f(iri_annotated_node, children_nts, is_cursor, is_selection)
 
