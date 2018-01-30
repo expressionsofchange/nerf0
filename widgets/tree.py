@@ -33,7 +33,7 @@ from dsn.editor.structure import EditStructure
 from annotated_tree import annotated_node_factory
 from posacts import Possibility, Actuality
 
-from dsn.pp.structure import PPNone, PPSingleLine
+from dsn.pp.structure import PPSingleLine
 from dsn.pp.clef import PPUnset, PPSetSingleLine, PPSetLispy
 from dsn.pp.construct import construct_pp_tree
 
@@ -134,8 +134,7 @@ def construct_lispy_iri_top_down(pp_annotated_node, inherited_information):
 
     my_information = inherited_information
 
-    if type(pp_annotated_node.annotation) in [PPSingleLine, PPNone]:
-        # "no hint" is currently interpreted as "Single line"; this might change in the future.
+    if type(pp_annotated_node.annotation) in [PPSingleLine]:
         my_information = InheritedRenderingInformation(SINGLE_LINE)
 
     for i, child in enumerate(children):
