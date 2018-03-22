@@ -151,7 +151,7 @@ class HistoryWidget(FocusBehavior, Widget):
 
     def receive_from_parent(self, data):
         # data :: Possibility | Actuality
-        # there is no else branch: Possibility only travels _to_ the channel;
+        # there is no else branch: we take no interest in any Possibilities that might be broadcast on the channel
         if isinstance(data, Actuality):
             self.update_nout_hash(data.nout_hash)
 

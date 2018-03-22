@@ -27,7 +27,7 @@ from dsn.editor.clef import (
     SwapSibbling,
 )
 
-from dsn.editor.construct import edit_note_play, bubble_history_up
+from dsn.editor.construct import edit_note_play
 from dsn.editor.structure import EditStructure
 
 from annotated_tree import annotated_node_factory
@@ -42,6 +42,7 @@ from spacetime import t_address_for_s_address, best_s_address_for_t_address, get
 
 from dsn.s_expr.structure import SExpr, TreeNode, TreeText
 from dsn.s_expr.construct_x import construct_x
+from dsn.s_expr.utils import bubble_history_up
 
 from vim import Vim, DONE_SAVE, DONE_CANCEL
 
@@ -213,7 +214,7 @@ class TreeWidget(FocusBehavior, Widget):
     # ## Section for channel-communication
     def receive_from_channel(self, data):
         # data :: Possibility | Actuality
-        # there is no else branch: Possibility only travels _to_ the channel;
+        # there is no else branch: we take no interest in any Possibilities that might be broadcast on the channel
         if isinstance(data, Actuality):
             t_cursor = t_address_for_s_address(self.ds.tree, self.ds.s_cursor)
 
@@ -228,9 +229,7 @@ class TreeWidget(FocusBehavior, Widget):
             # selected t_cursor is no longer valid)
             self.broadcast_cursor_update(t_address_for_s_address(self.ds.tree, self.ds.s_cursor))
 
-            # Note: in general the playing of SelectionNotes may affect the main structure too... but
-            # SelectionContextChange is guaranteed not to have that option (which makes it easier to think about the
-            # dataflow, because it's always unidirectional _per case_)
+            # See the note "SelectionContextChange does not affect the main structure" elsewhere.
             self.selection_ds = selection_note_play(SelectionContextChange(self.ds), self.selection_ds)
             self._construct_box_structure()
             self._update_viewport_for_change(user_moved_cursor=False)
@@ -293,6 +292,13 @@ class TreeWidget(FocusBehavior, Widget):
         self.invalidate()
 
     def _update_internal_state_for_posacts(self, posacts, new_s_cursor, user_moved_cursor):
+        # Refactoring notes: _update_internal_state_for_posacts does exactly that: it updates the internal state for
+        # some posacts. It was factored out when we created the multi-window approach, and `receive_from_child`, since
+        # both children and edit notes communicate in terms of posacts.
+
+        # Since that time this method has grown considerably, as has `receive_from_channel`, and both in very similar
+        # ways. We could wonder whether these 2 should not somehow find some common ground.
+
         last_actuality = None
 
         for posact in posacts:
@@ -314,9 +320,12 @@ class TreeWidget(FocusBehavior, Widget):
             construct_pp_tree(new_tree, self.ds.pp_annotations)
         )
 
-        # Note: in general the playing of SelectionNotes may affect the main structure too... but SelectionContextChange
-        # is guaranteed not to have that option (which makes it easier to think about the dataflow, because it's always
-        # unidirectional _per case_)
+        # SelectionContextChange does not affect the main structure:
+        # In the general case, playing SelectionNotes may affect the main structure. (E.g. moving a selection affects
+        # the structure it's operating on). Playing the note SelectionContextChange, however, does by definition _not_
+        # affect the main structure: it represents precisely the case in which we notify the selection that the
+        # surrounding context has changed. `selection_note_play(SelectionContextChange...` is the only case of
+        # selection_note_play which needs not be followed by handling of state-changes to the wrapped main structure.
         self.selection_ds = selection_note_play(SelectionContextChange(self.ds), self.selection_ds)
 
         # TODO we only really need to broadcast the new t_cursor if it has changed.
@@ -594,9 +603,7 @@ class TreeWidget(FocusBehavior, Widget):
             pp_tree,
         )
 
-        # Note: in general the playing of SelectionNotes may affect the main structure too... but SelectionContextChange
-        # is guaranteed not to have that option (which makes it easier to think about the dataflow, because it's always
-        # unidirectional _per case_)
+        # See the note "SelectionContextChange does not affect the main structure" elsewhere.
         self.selection_ds = selection_note_play(SelectionContextChange(self.ds), self.selection_ds)
         self._construct_box_structure()
 
@@ -898,6 +905,9 @@ class TreeWidget(FocusBehavior, Widget):
         return self.bottom_up_construct(self._nt_for_iri, iri_annotated_node, [])
 
     def bottom_up_construct_with_exception(self, f, exception, node, s_address):
+        """like bottom_up_construct, but with a special case ("exception") for a single s_address.
+        In other words: a hack to enable the rendering of "current vim node" """
+
         exception_s_address, exception_type, exception_value = exception
 
         # If we're not on the exception's branch, we proceed as usual.
@@ -918,6 +928,20 @@ class TreeWidget(FocusBehavior, Widget):
         return f(node, constructed_children, s_address)
 
     def bottom_up_construct(self, f, node, s_address):
+        """Somewhat similar to a generalized catamorphism over s_expr nodes, but not quite.
+
+        In particular: `f` is like the algebra; which is called over already-transformed children (and also given the
+        node)
+
+        Not quite, because in the process of recursing down the tree we construct a s_address, which is also passed to
+        the algebra.
+
+        Alternative solution: split out the top-down construction of the s_address, and do a pure catamorphism after
+        that.
+
+        But because the whole reason for that (displaying of cursor, selection) is subject to future change that's not
+        worthwhile now.
+        """
         children = [self.bottom_up_construct(f, child, s_address + [i]) for i, child in enumerate(node.children)]
         return f(node, children, s_address)
 
